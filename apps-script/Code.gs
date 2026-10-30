@@ -132,10 +132,42 @@ function resetAdminPassword() {
   Logger.log('Логин: admin  Новый пароль: ' + pass);
 }
 
+/**
+ * Удаляет тестовые записи: тренеров и учеников, чьё ФИО начинается с «ТЕСТ»,
+ * а также их абонементы, занятия, записи, логины, договоры и акты (файлы актов — в корзину).
+ */
+function removeTestData() {
+  ensureSchema_();
+  const isT = s => /^ТЕСТ/i.test(String(s || '').trim());
+  const tr = tbl_('trainers').rows.filter(t => isT(t.name)).map(t => t.id);
+  const cl = tbl_('clients').rows.filter(c => isT(c.name)).map(c => c.id);
+  const has = (arr, id) => arr.indexOf(id) >= 0;
+  const acts = tbl_('acts').rows.filter(a => has(tr, a.trainerId));
+  acts.forEach(a => [a.docUrl, a.pdfUrl].forEach(u => {
+    const m = String(u || '').match(/\/d\/([-\w]+)/);
+    if (m) { try { DriveApp.getFileById(m[1]).setTrashed(true); } catch (e) { /* уже удалён */ } }
+  }));
+  const n = {};
+  n.acts = del_('acts', acts.map(a => a.id));
+  n.lessons = del_('lessons', tbl_('lessons').rows.filter(l => has(tr, l.trainerId) || has(cl, l.clientId)).map(l => l.id));
+  n.subs = del_('subs', tbl_('subs').rows.filter(s => has(cl, s.clientId) || has(tr, s.trainerId)).map(s => s.id));
+  n.events = del_('events', tbl_('events').rows.filter(e => ids_(e.trainerIds).every(t => has(tr, t))).map(e => e.id));
+  const slots = tbl_('slots').rows.filter(s => has(tr, s.trainerId)).map(s => s.id);
+  n.bookings = del_('bookings', tbl_('bookings').rows.filter(b => has(slots, b.slotId) || has(cl, b.clientId)).map(b => b.id));
+  n.slots = del_('slots', slots);
+  n.users = del_('users', tbl_('users').rows.filter(u => has(tr, u.trainerId) || has(cl, u.clientId)).map(u => u.id));
+  n.contracts = del_('contracts', tbl_('contracts').rows.filter(c => has(tr, c.partyId) || has(cl, c.partyId)).map(c => c.id));
+  n.trainers = del_('trainers', tr);
+  n.clients = del_('clients', cl);
+  if (!tbl_('acts').rows.length) setSetting_('next_act', 1);
+  Logger.log('Удалено: ' + JSON.stringify(n));
+}
+
 /** Единая точка вызова из интерфейса. */
 function api(token, action, payload) {
   try {
     payload = payload || {};
+    prefetch_(Object.keys(TABLES).filter(k => k !== 'messages' || /Message/.test(action)));
     if (action === 'login') return { ok: true, data: login_(payload) };
     if (action === 'ping') return { ok: true, data: { club: CLUB_NAME } };
     const user = auth_(token);
@@ -144,6 +176,11 @@ function api(token, action, payload) {
     if (!h) throw new Error('Неизвестное действие: ' + action);
     if (h.roles.indexOf(user.role) < 0) throw new Error('Недостаточно прав');
     const data = h.write ? withLock_(() => h.fn(user, payload)) : h.fn(user, payload);
+    if (h.write && payload.__snap) {
+      // свежие данные в том же ответе — интерфейсу не нужен второй запрос
+      const fresh = auth_(token);
+      return { ok: true, data: { __snap: 1, result: data === undefined ? null : data, snap: fresh ? load_(fresh) : null } };
+    }
     return { ok: true, data: data === undefined ? null : data };
   } catch (e) {
     return { ok: false, error: 'ERR', message: (e && e.message) || String(e) };
@@ -231,21 +268,42 @@ function norm_(v, type) {
     if (type === 'd') return Utilities.formatDate(v, tz_(), 'yyyy-MM-dd');
     return Utilities.formatDate(v, tz_(), 'yyyy-MM-dd HH:mm:ss');
   }
-  return v === null || v === undefined ? '' : String(v);
+  if (v === null || v === undefined) return '';
+  const s = String(v);
+  if (type === 'd') { const m = s.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})/); if (m) return m[3] + '-' + ('0' + m[2]).slice(-2) + '-' + ('0' + m[1]).slice(-2); }
+  if (type === 't') { const m = s.match(/^(\d{1,2}):(\d{2})/); if (m) return ('0' + m[1]).slice(-2) + ':' + m[2]; }
+  return s;
 }
 
 function tbl_(key) {
   if (_cache[key]) return _cache[key];
+  const sh = ss_().getSheetByName(TABLES[key][0]);
+  if (!sh) throw new Error('Нет листа «' + TABLES[key][0] + '». Запустите setup().');
+  return (_cache[key] = buildTbl_(key, sh.getDataRange().getValues(), sh));
+}
+
+/** Читает все нужные листы ОДНИМ запросом к Sheets API (если сервис подключён). */
+function prefetch_(keys) {
+  keys = keys.filter(k => !_cache[k]);
+  if (!keys.length || typeof Sheets === 'undefined') return;
+  try {
+    const res = Sheets.Spreadsheets.Values.batchGet(ss_().getId(), {
+      ranges: keys.map(k => "'" + TABLES[k][0] + "'"),
+      valueRenderOption: 'UNFORMATTED_VALUE', dateTimeRenderOption: 'FORMATTED_STRING'
+    });
+    (res.valueRanges || []).forEach((vr, i) => { _cache[keys[i]] = buildTbl_(keys[i], vr.values || [], null); });
+  } catch (e) { /* нет сервиса или листа — читаем по одному */ }
+}
+
+function buildTbl_(key, values, sheet) {
   const [name, cols] = TABLES[key];
-  const sh = ss_().getSheetByName(name);
-  if (!sh) throw new Error('Нет листа «' + name + '». Запустите setup().');
-  const values = sh.getDataRange().getValues();
   const header = (values[0] || []).map(String);
   const idx = {};
   cols.forEach(c => { idx[c[0]] = header.indexOf(c[1]); });
   const rows = [];
   for (let r = 1; r < values.length; r++) {
-    const raw = values[r];
+    const raw = (values[r] || []).slice();
+    while (raw.length < header.length) raw.push('');
     if (raw.every(x => x === '' || x === null)) continue;
     const o = {};
     cols.forEach(c => { o[c[0]] = norm_(idx[c[0]] >= 0 ? raw[idx[c[0]]] : '', c[2]); });
@@ -253,7 +311,10 @@ function tbl_(key) {
     Object.defineProperty(o, '_raw', { value: raw, writable: true, enumerable: false });
     rows.push(o);
   }
-  return (_cache[key] = { key, name, cols, sh, header, idx, rows });
+  return {
+    key, name, cols, header, idx, rows, _sh: sheet,
+    get sh() { return this._sh || (this._sh = ss_().getSheetByName(name)); }
+  };
 }
 
 function rowFor_(t, o, raw) {

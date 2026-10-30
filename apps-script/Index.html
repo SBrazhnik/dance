@@ -238,7 +238,10 @@ const monthName = ymd => MONTHS[+ymd.slice(5, 7) - 1] + ' ' + ymd.slice(0, 4);
 
 // ---------- связь с сервером ----------
 let pending = 0;
+const NO_SNAP = ['login', 'logout', 'load', 'report', 'clientHistory', 'getMessages', 'postMessage', 'changePassword', 'ping'];
 function call(action, payload, quiet) {
+  payload = Object.assign({}, payload || {});
+  if (!NO_SNAP.includes(action)) payload.__snap = true;
   if (!quiet) { pending++; showLoading(); }
   return new Promise((resolve, reject) => {
     const done = r => {
@@ -248,7 +251,9 @@ function call(action, payload, quiet) {
         if (r.error === 'AUTH') { logoutLocal(); return reject(new Error(r.message)); }
         return reject(new Error(r.message || 'Ошибка'));
       }
-      resolve(r.data);
+      const d = r.data;
+      if (d && d.__snap) { if (d.snap) S.snap = d.snap; return resolve(d.result); }
+      resolve(d);
     };
     const fail = e => { if (!quiet) { pending--; showLoading(); } reject(new Error((e && e.message) || 'Нет связи с сервером')); };
     if (window.google && google.script && google.script.run) {
@@ -271,7 +276,7 @@ function toast(msg, err) {
 const fail = e => toast(e.message || String(e), true);
 
 async function reload() {
-  S.D = await call('load');
+  if (S.snap) { S.D = S.snap; S.snap = null; } else S.D = await call('load');
   S.user = S.D.user;
   index();
   render();
