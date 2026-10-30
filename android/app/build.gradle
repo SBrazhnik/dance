@@ -4,7 +4,8 @@ plugins {
 
 // Адрес веб-приложения Apps Script. Передаётся при сборке: -PappUrl=https://script.google.com/macros/s/.../exec
 // Если пусто — приложение спросит адрес при первом запуске.
-def appUrl = (project.findProperty('appUrl') ?: '').toString().trim()
+def defaultUrl = 'https://script.google.com/macros/s/AKfycbxiFk2Vp8ES7BW8Y6WUnfSHbBkS3w0lxnHS2lmuf2qPfLxGLo5NsJ2rpdlHRA8XDNYI_g/exec'
+def appUrl = (project.findProperty('appUrl') ?: '').toString().trim() ?: defaultUrl
 def ksFile = System.getenv('KEYSTORE_FILE') ?: 'club.keystore'
 def ksPass = System.getenv('KEYSTORE_PASSWORD') ?: 'danceclub'
 def ksAlias = System.getenv('KEY_ALIAS') ?: 'club'
