@@ -1,0 +1,48 @@
+plugins {
+    id 'com.android.application'
+}
+
+// Адрес веб-приложения Apps Script. Передаётся при сборке: -PappUrl=https://script.google.com/macros/s/.../exec
+// Если пусто — приложение спросит адрес при первом запуске.
+def appUrl = (project.findProperty('appUrl') ?: '').toString().trim()
+def ksFile = System.getenv('KEYSTORE_FILE') ?: 'club.keystore'
+def ksPass = System.getenv('KEYSTORE_PASSWORD') ?: 'danceclub'
+def ksAlias = System.getenv('KEY_ALIAS') ?: 'club'
+def ksKeyPass = System.getenv('KEY_PASSWORD') ?: ksPass
+
+android {
+    namespace 'ru.danceclub.app'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId 'ru.danceclub.app'
+        minSdk 23
+        targetSdk 34
+        versionCode((System.getenv('GITHUB_RUN_NUMBER') ?: '1') as int)
+        versionName "1.0.${System.getenv('GITHUB_RUN_NUMBER') ?: '0'}"
+        buildConfigField 'String', 'APP_URL', "\"${appUrl}\""
+    }
+
+    signingConfigs {
+        release {
+            storeFile file(ksFile)
+            storePassword ksPass
+            keyAlias ksAlias
+            keyPassword ksKeyPass
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            signingConfig signingConfigs.release
+        }
+    }
+
+    buildFeatures { buildConfig true }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
