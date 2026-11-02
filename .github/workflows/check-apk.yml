@@ -45,7 +45,7 @@ jobs:
         if: always()
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: apk-check
+          tag_name: apk-check-${{ github.run_number }}
           name: Проверка APK (служебное)
           prerelease: true
           make_latest: false
