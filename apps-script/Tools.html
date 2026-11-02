@@ -1,0 +1,360 @@
+<style>
+.tl-tabs{margin-bottom:14px}
+.tl-pick{display:flex;gap:10px;align-items:end;flex-wrap:wrap;margin-bottom:14px}
+.tl-pick>div{min-width:220px;flex:1;max-width:420px}
+.tl-score{height:6px;background:var(--soft);border-radius:6px;overflow:hidden;margin:8px 0 6px}
+.tl-score i{display:block;height:100%;background:linear-gradient(90deg,var(--gold),var(--navy3));border-radius:6px}
+.tl-tags{display:flex;flex-wrap:wrap;gap:5px;margin-top:6px}
+.tl-tag{font-size:12px;padding:2px 8px;border-radius:12px;background:var(--okbg);color:var(--ok)}
+.tl-tag.w{background:var(--soft);color:var(--muted)}
+.tl-lv{display:flex;gap:4px;margin-top:6px}
+.tl-lv i{flex:1;height:8px;border-radius:4px;background:var(--soft)}
+.tl-lv i.on{background:var(--gold)}
+.tl-dance{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:10px}
+.tl-dance .card{padding:12px 14px}
+.tl-rank{width:30px;height:30px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-weight:700;background:var(--soft);color:var(--navy);flex:none}
+.tl-rank.r1{background:#f3d77d;color:#6b4f00}.tl-rank.r2{background:#dfe3ea;color:#3a4252}.tl-rank.r3{background:#ecc29a;color:#6a3f15}
+.tl-lg{display:flex;flex-direction:column;gap:8px}
+.tl-lg .row{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 12px}
+.tl-pts{font-size:20px;font-weight:700;color:var(--navy);font-variant-numeric:tabular-nums}
+.tl-diary{border-left:3px solid var(--gold);padding:6px 0 6px 12px;margin:10px 0}
+.tl-step{counter-reset:s;padding-left:0;list-style:none;margin:8px 0}
+.tl-step li{counter-increment:s;position:relative;padding-left:30px;margin:8px 0}
+.tl-step li:before{content:counter(s);position:absolute;left:0;top:0;width:22px;height:22px;border-radius:50%;background:var(--navy);color:#fff;font-size:12px;display:flex;align-items:center;justify-content:center}
+.tl-link{word-break:break-all;background:var(--soft);padding:10px 12px;border-radius:8px;font-family:ui-monospace,Consolas,monospace;font-size:13px}
+.tl-sw{display:flex;align-items:center;gap:8px;cursor:pointer}
+</style>
+<script>
+// ===================== Модуль «Инструменты» =====================
+// Отдельный файл: подключается в Index.html одной строкой и не меняет остальные экраны.
+I.spark = '<path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/>';
+I.send = '<path d="M22 2L11 13M22 2l-7 20-4-9-9-4z"/>';
+(function () {
+  const i = PAGES.findIndex(p => p.k === 'help');
+  PAGES.splice(i < 0 ? PAGES.length : i, 0, {k: 'tools', t: 'Инструменты', i: 'spark', r: ['admin', 'manager', 'trainer', 'client']});
+})();
+
+const TL = {
+  tabs() {
+    const r = role();
+    if (r === 'client') return [['my', 'Мой прогресс'], ['league', 'Лига'], ['tg', 'Telegram']];
+    if (r === 'trainer') return [['pair', 'Подбор пары'], ['passport', 'Паспорт танцора'], ['league', 'Лига'], ['tg', 'Telegram']];
+    return [['pair', 'Подбор пары'], ['passport', 'Паспорт танцора'], ['league', 'Корпоративная лига'], ['hr', 'Отчёт для HR'], ['bot', 'Telegram-бот']];
+  },
+  async load(force) {
+    if (S.T && !force) return S.T;
+    S.T = await call('toolsLoad', {}, true);
+    return S.T;
+  },
+  clients() { return (S.D.clients || []).filter(c => c.active !== false).slice().sort((a, b) => a.name.localeCompare(b.name)); },
+  levelName(n) { return (S.T.levels || [])[+n] || '—'; },
+  levelBar(n) { return `<div class="tl-lv">${[1, 2, 3, 4, 5].map(k => `<i class="${k <= n ? 'on' : ''}"></i>`).join('')}</div>`; },
+  current(clientId) {
+    const cur = {};
+    (S.T.progress || []).filter(p => p.clientId === clientId).sort((a, b) => (a.date + a.createdAt).localeCompare(b.date + b.createdAt)).forEach(p => { cur[p.dance] = p; });
+    return cur;
+  },
+  dancer(clientId) { return (S.T.dancers || []).find(d => d.clientId === clientId) || {}; },
+  wireChips(root) { $$('.chips input[type=checkbox]', root).forEach(c => c.onchange = () => c.parentNode.classList.toggle('on', c.checked)); },
+};
+
+VIEWS.tools = tab => {
+  const tabs = TL.tabs();
+  const cur = tabs.find(t => t[0] === tab) ? tab : tabs[0][0];
+  $('#main').innerHTML = `<div class="head"><h1>Инструменты</h1></div>
+    <div class="tabs tl-tabs">${tabs.map(t => `<a data-tt="${t[0]}" class="${t[0] === cur ? 'on' : ''}">${t[1]}</a>`).join('')}</div>
+    <div id="tlb">${empty('Загрузка…')}</div>`;
+  $$('[data-tt]').forEach(a => a.onclick = () => go('tools', a.dataset.tt));
+  const my = S.pageSeq;
+  TL.load().then(() => { if (S.pageSeq !== my || !$('#tlb')) return; TLV[cur](); }).catch(fail);
+};
+async function tlRefresh() { await TL.load(true); if (S.route[0] === 'tools' && $('#tlb')) TLV[S.route[1] || TL.tabs()[0][0]](); }
+
+// ---------- анкета танцора ----------
+function dancerForm(clientId, after) {
+  const d = TL.dancer(clientId);
+  const c = S.m.clients[clientId] || {};
+  const bg = modal('Анкета: ' + esc(c.name || ''), `<div class="fg">
+    ${fld('Рост, см', inp('height', +d.height || '', 'type="number" min="120" max="220"'))}
+    ${fld('Уровень', sel('level', S.T.levels.map((n, i) => [i, n]), +d.level || 0))}
+    ${fld('Пол', `<div class="small" style="padding-top:8px">${c.gender === 'М' ? 'мужской' : c.gender === 'Ж' ? 'женский' : '<span class="muted">не указан — заполните в карточке ученика</span>'}</div>`)}
+    ${fld('Программы', chipsMulti('programs', dictList('program').map(p => p.name), progs(d.programs), 'Программы задаются в настройках'), 'full')}
+    ${fld('Удобные дни', chipsMulti('days', S.T.days, progs(d.days)), 'full')}
+    <div class="full">${chk('seek', 'Ищет партнёра / партнёршу', d.seek)}</div>
+    ${fld('Заметка', inp('note', d.note || '', 'placeholder="Например: хочет готовиться к турниру весной"'), 'full')}
+  </div>`, [{t: 'Отмена'}, {t: 'Сохранить', cls: 'pri', fn: async m => {
+    const v = vals(m); v.clientId = clientId;
+    await call('saveDancer', v); toast('Анкета сохранена'); await TL.load(true); if (after) after();
+  }}], {wide: true});
+  TL.wireChips(bg);
+}
+
+const TLV = {};
+
+// ---------- 1. Подбор пары ----------
+TLV.pair = () => {
+  const ui = S.ui.tlp || (S.ui.tlp = {c: ''});
+  const seekers = (S.T.dancers || []).filter(d => d.seek && S.m.clients[d.clientId]);
+  $('#tlb').innerHTML = `<p class="small muted" style="margin-top:0">Выберите ученика — система предложит партнёров по полу, росту (партнёр выше на 5–20 см), программе, уровню и удобным дням, а также подходящих тренеров. Чем полнее анкеты, тем точнее подбор.</p>
+    <div class="tl-pick"><div>${fld('Ученик', sel('tlc', [['', '— выберите —']].concat(TL.clients().map(c => [c.id, c.name + (TL.dancer(c.id).seek ? ' · ищет пару' : '')])), ui.c, 'id="tlc"'))}</div>
+      <button class="btn" id="tld" ${ui.c ? '' : 'disabled'}>${ic('edit')}Анкета</button></div>
+    <div id="tlm">${ui.c ? empty('Подбираю…') : `<div class="card">${seekers.length ? `<h2 style="margin-top:0">Ищут пару</h2><div class="tl-tags">${seekers.map(d => `<span class="chip" data-pick="${d.clientId}">${esc(S.m.clients[d.clientId].name)}</span>`).join('')}</div>` : empty('Выберите ученика. Отметьте в анкетах тех, кто ищет пару, — они появятся здесь.')}</div>`}</div>`;
+  $('#tlc').onchange = e => { ui.c = e.target.value; TLV.pair(); };
+  $$('[data-pick]').forEach(x => x.onclick = () => { ui.c = x.dataset.pick; TLV.pair(); });
+  if ($('#tld')) $('#tld').onclick = () => dancerForm(ui.c, TLV.pair);
+  if (!ui.c) return;
+  const my = S.pageSeq;
+  call('toolsMatch', {clientId: ui.c}, true).then(r => {
+    if (S.pageSeq !== my || !$('#tlm')) return;
+    const d = r.me.dancer || {};
+    const filled = (+d.height ? 1 : 0) + (progs(d.programs).length ? 1 : 0) + (+d.level ? 1 : 0) + (progs(d.days).length ? 1 : 0) + (r.me.gender ? 1 : 0);
+    const max = Math.max(1, ...r.pairs.map(p => p.score));
+    const card = p => `<div class="card tight"><div class="row"><div class="avatar c" style="width:36px;height:36px;font-size:13px">${initials(p.name)}</div>
+        <div class="grow"><b>${esc(p.name)}</b><div class="small muted">${[p.company, p.height ? p.height + ' см' : '', p.level ? TL.levelName(p.level) : ''].filter(Boolean).map(esc).join(' · ')}</div></div>
+        ${p.seek ? '<span class="badge gold">ищет пару</span>' : ''}</div>
+      <div class="tl-score"><i style="width:${Math.round(p.score / max * 100)}%"></i></div>
+      <div class="tl-tags">${p.reasons.map(x => `<span class="tl-tag">${esc(x)}</span>`).join('')}${p.warn.map(x => `<span class="tl-tag w">${esc(x)}</span>`).join('')}</div></div>`;
+    $('#tlm').innerHTML = `${filled < 4 ? `<div class="card tight" style="background:var(--gold2);border-color:transparent;margin-bottom:12px">Анкета заполнена на ${filled} из 5: ${[!r.me.gender && 'пол', !+d.height && 'рост', !progs(d.programs).length && 'программы', !+d.level && 'уровень', !progs(d.days).length && 'дни'].filter(Boolean).join(', ')}. Заполните — подбор станет точнее. <button class="btn sm" id="tld2">Заполнить</button></div>` : ''}
+      <h2>Кандидаты в пару</h2>
+      ${r.pairs.length ? `<div class="grid">${r.pairs.map(card).join('')}</div>` : `<div class="card">${empty('Подходящих кандидатов нет. Проверьте, что у учеников указан пол.')}</div>`}
+      <h2 class="sect">Подходящие тренеры</h2>
+      <div class="grid">${r.trainers.map(t => `<div class="card tight"><div class="row"><div class="avatar" style="width:36px;height:36px;font-size:13px">${initials(t.name)}</div>
+        <div class="grow"><b>${esc(t.name)}</b><div class="small muted">${[t.height ? t.height + ' см' : '', t.programs].filter(Boolean).map(esc).join(' · ')}</div></div></div>
+        <div class="tl-tags">${t.reasons.map(x => `<span class="tl-tag ${/учеников/.test(x) ? 'w' : ''}">${esc(x)}</span>`).join('')}</div></div>`).join('')}</div>`;
+    if ($('#tld2')) $('#tld2').onclick = () => dancerForm(ui.c, TLV.pair);
+  }).catch(fail);
+};
+
+// ---------- 2. Паспорт танцора ----------
+function passportHtml(clientId, opts) {
+  opts = opts || {};
+  const cur = TL.current(clientId);
+  const dances = S.T.dances.concat(Object.keys(cur).filter(k => !S.T.dances.includes(k)));
+  const hist = (S.T.progress || []).filter(p => p.clientId === clientId).sort((a, b) => (b.date + b.createdAt).localeCompare(a.date + a.createdAt));
+  const diary = (S.T.diary || []).filter(p => p.clientId === clientId).sort((a, b) => (b.date + b.createdAt).localeCompare(a.date + a.createdAt));
+  const done = Object.keys(cur).length;
+  const avg = done ? Object.values(cur).reduce((a, p) => a + (+p.level || 0), 0) / done : 0;
+  return `<div class="kpis" style="margin-bottom:14px"><div class="kpi"><b>${done}</b><span>танцев в работе</span></div>
+      <div class="kpi"><b>${avg ? fh(Math.round(avg * 10) / 10) : '—'}</b><span>средний уровень из 5</span></div>
+      <div class="kpi"><b>${hist.length}</b><span>отметок прогресса</span></div><div class="kpi"><b>${diary.length}</b><span>записей в дневнике</span></div></div>
+    <div class="row"><h2 class="grow" style="margin:0">Уровни по танцам</h2>${opts.edit ? `<button class="btn sm pri" id="tlpl">${ic('plus')}Отметить уровень</button>` : ''}</div>
+    <div class="tl-dance" style="margin-top:10px">${dances.map(dn => { const p = cur[dn]; return `<div class="card ${opts.edit ? 'click' : ''}" ${opts.edit ? `data-dn="${esc(dn)}"` : ''} style="${p ? '' : 'opacity:.6'}">
+      <div class="row"><b class="grow">${esc(dn)}</b><span class="small ${p ? '' : 'muted'}">${p ? esc(TL.levelName(p.level)) : 'не начат'}</span></div>
+      ${TL.levelBar(p ? +p.level : 0)}${p ? `<div class="small muted" style="margin-top:6px">${fd(p.date)}${p.note ? ' · ' + esc(p.note) : ''}</div>` : ''}</div>`; }).join('')}</div>
+    <div class="row sect"><h2 class="grow" style="margin:0">Дневник занятий</h2>${opts.edit ? `<button class="btn sm pri" id="tlpd">${ic('plus')}Запись</button>` : ''}</div>
+    <div class="card" style="margin-top:10px">${diary.length ? diary.slice(0, 40).map(x => `<div class="tl-diary ${opts.edit ? 'click' : ''}" ${opts.edit ? `data-di="${x.id}"` : ''}>
+      <div class="small muted">${fd(x.date)} · ${esc(x.trainerName || x.createdBy)}</div><div>${esc(x.text)}</div>
+      ${x.video ? `<a href="${esc(x.video)}" target="_blank" rel="noopener" class="small">▶ Видео с занятия</a>` : ''}</div>`).join('') : empty(opts.edit ? 'После занятия запишите одной строкой, что отработали и над чем работать дальше.' : 'Тренер ещё не делал записей')}</div>
+    ${hist.length ? `<h2 class="sect">История уровней</h2><div class="tw"><table class="t"><thead><tr><th>Дата</th><th>Танец</th><th>Уровень</th><th>Кто отметил</th><th>Заметка</th>${opts.del ? '<th></th>' : ''}</tr></thead><tbody>
+      ${hist.map(h => `<tr><td class="nowrap">${fd(h.date)}</td><td>${esc(h.dance)}</td><td>${esc(TL.levelName(h.level))}</td><td>${esc(h.trainerName)}</td><td>${esc(h.note)}</td>${opts.del ? `<td><button class="btn sm" data-pdel="${h.id}">${ic('trash')}</button></td>` : ''}</tr>`).join('')}
+    </tbody></table></div>` : ''}`;
+}
+function progressForm(clientId, dance) {
+  const cur = TL.current(clientId)[dance];
+  modal('Уровень: ' + esc((S.m.clients[clientId] || {}).name || ''), `<div class="fg">
+    ${fld('Танец', sel('dance', S.T.dances.map(x => [x, x]), dance || S.T.dances[0]), 'full')}
+    ${fld('Уровень', sel('level', S.T.levels.slice(1).map((n, i) => [i + 1, n]), cur ? Math.min(5, +cur.level + 1) : 1))}
+    ${fld('Дата', inp('date', today(), 'type="date"'))}
+    ${fld('Заметка', inp('note', '', 'placeholder="Например: уверенно держит раму"'), 'full')}
+  </div>`, [{t: 'Отмена'}, {t: 'Сохранить', cls: 'pri', fn: async m => {
+    const v = vals(m); v.clientId = clientId; await call('saveProgress', v); toast('Уровень отмечен'); await tlRefresh();
+  }}]);
+}
+function diaryForm(clientId, o) {
+  o = o || {};
+  modal(o.id ? 'Запись в дневнике' : 'Новая запись в дневнике', `<div class="fg">
+    ${fld('Дата', inp('date', o.date || today(), 'type="date"'))}
+    ${fld('Что отработали, над чем работать', txt('text', o.text), 'full')}
+    ${fld('Ссылка на видео (Google Диск, YouTube…)', inp('video', o.video || '', 'placeholder="https://"'), 'full')}
+  </div>`, [o.id ? {t: ic('trash') + 'Удалить', cls: 'danger', left: 1, fn: async () => { await call('deleteDiary', {id: o.id}); toast('Удалено'); await tlRefresh(); }} : null,
+    {t: 'Отмена'}, {t: 'Сохранить', cls: 'pri', fn: async m => {
+      const v = vals(m); v.clientId = clientId; v.id = o.id; await call('saveDiary', v); toast('Запись сохранена'); await tlRefresh();
+    }}].filter(Boolean));
+}
+function printPassport(clientId) {
+  const c = S.m.clients[clientId] || {};
+  const cur = TL.current(clientId);
+  const diary = (S.T.diary || []).filter(p => p.clientId === clientId).sort((a, b) => b.date.localeCompare(a.date)).slice(0, 20);
+  showDoc('Паспорт танцора — ' + c.name, `<h1>Паспорт танцора</h1><div><b>${esc(c.name)}</b>${c.company ? ' · ' + esc(c.company) : ''}</div>
+    <h2>Уровни по танцам</h2><table><thead><tr><th>Танец</th><th>Уровень</th><th>С какого числа</th></tr></thead><tbody>
+    ${Object.keys(cur).map(k => `<tr><td>${esc(k)}</td><td>${esc(TL.levelName(cur[k].level))} (${cur[k].level} из 5)</td><td>${fd(cur[k].date)}</td></tr>`).join('') || '<tr><td colspan="3">Пока нет отметок</td></tr>'}</tbody></table>
+    ${diary.length ? `<h2>Дневник</h2><table><thead><tr><th>Дата</th><th>Тренер</th><th>Что отработали</th></tr></thead><tbody>${diary.map(x => `<tr><td class="nowrap">${fd(x.date)}</td><td>${esc(x.trainerName || x.createdBy)}</td><td>${esc(x.text)}</td></tr>`).join('')}</tbody></table>` : ''}`);
+}
+TLV.passport = () => {
+  const ui = S.ui.tlpp || (S.ui.tlpp = {c: ''});
+  $('#tlb').innerHTML = `<div class="tl-pick"><div>${fld('Ученик', sel('tlc', [['', '— выберите —']].concat(TL.clients().map(c => [c.id, c.name])), ui.c, 'id="tlc"'))}</div>
+    ${ui.c ? `<button class="btn" id="tlpp">${ic('print')}Печать</button>` : ''}</div><div id="tlpv">${ui.c ? passportHtml(ui.c, {edit: true, del: role() !== 'trainer'}) : `<div class="card">${empty('Выберите ученика, чтобы увидеть и отметить его прогресс по танцам')}</div>`}</div>`;
+  $('#tlc').onchange = e => { ui.c = e.target.value; TLV.passport(); };
+  if (!ui.c) return;
+  $('#tlpp').onclick = () => printPassport(ui.c);
+  $('#tlpl').onclick = () => progressForm(ui.c);
+  $('#tlpd').onclick = () => diaryForm(ui.c);
+  $$('[data-dn]').forEach(x => x.onclick = () => progressForm(ui.c, x.dataset.dn));
+  $$('[data-di]').forEach(x => x.onclick = () => diaryForm(ui.c, S.T.diary.find(d => d.id === x.dataset.di)));
+  $$('[data-pdel]').forEach(b => b.onclick = async e => { e.stopPropagation(); try { await call('deleteProgress', {id: b.dataset.pdel}); toast('Удалено'); await tlRefresh(); } catch (er) { fail(er); } });
+};
+TLV.my = () => {
+  const cid = S.user.clientId;
+  const d = TL.dancer(cid);
+  $('#tlb').innerHTML = `<div class="card tight row" style="margin-bottom:14px"><div class="grow"><b>Ищу пару</b><div class="small muted">Отметьте, и тренеры предложат вам партнёра по росту, уровню и расписанию.</div></div>
+      <label class="tl-sw"><input type="checkbox" id="tlseek" ${d.seek ? 'checked' : ''}> ${d.seek ? 'ищу' : 'не ищу'}</label><button class="btn sm" id="tlan">${ic('edit')}Анкета</button></div>
+    ${passportHtml(cid, {})}`;
+  $('#tlseek').onchange = async e => {
+    try { await call('saveDancer', Object.assign({}, d, {clientId: cid, seek: e.target.checked, programs: progs(d.programs), days: progs(d.days)})); await tlRefresh(); toast(e.target.checked ? 'Тренеры увидят, что вы ищете пару' : 'Сохранено'); } catch (er) { fail(er); }
+  };
+  $('#tlan').onclick = () => dancerForm(cid, tlRefresh);
+};
+
+// ---------- 3. Корпоративная лига ----------
+TLV.league = () => {
+  const staff = ['admin', 'manager'].includes(role());
+  const my = S.pageSeq;
+  $('#tlb').innerHTML = empty('Считаю баллы…');
+  call('leagueTable', {}, true).then(r => {
+    if (S.pageSeq !== my || !$('#tlb')) return;
+    const max = Math.max(1, ...r.companies.map(c => c.points));
+    const rk = i => `<span class="tl-rank ${i < 3 ? 'r' + (i + 1) : ''}">${i + 1}</span>`;
+    const awards = (S.T.awards || []).slice().sort((a, b) => b.date.localeCompare(a.date));
+    $('#tlb').innerHTML = `<div class="row" style="margin-bottom:6px"><div class="grow"><h2 style="margin:0">${esc(r.name)}</h2>
+        <div class="small muted">Сезон ${fd(r.from)} — ${fd(r.to)} · баллы: ${r.rules.pH} за час занятий, ${r.rules.pE} за турнир, ${r.rules.pL} за новый уровень, плюс награды</div></div>
+        ${staff ? `<button class="btn" id="tlaw">${ic('plus')}Баллы</button><button class="btn" id="tlrules">${ic('cog')}Правила</button><button class="btn" id="tllp">${ic('print')}Печать</button>` : ''}</div>
+      ${r.me ? `<div class="card tight row" style="margin:10px 0;background:var(--gold2);border-color:transparent"><span class="tl-rank r1">${r.me.place}</span><div class="grow"><b>Ваше место</b><div class="small">${fh(r.me.hours)} ч занятий · турниров: ${r.me.events} · новых уровней: ${r.me.levels}</div></div><span class="tl-pts">${fh(r.me.points)}</span></div>` : ''}
+      <div id="tllg"><h2 class="sect">Компании</h2>
+      ${r.companies.length ? `<div class="tl-lg">${r.companies.map((c, i) => `<div class="row">${rk(i)}<div class="grow"><b>${esc(c.name)}</b>
+          <div class="bar" style="margin:6px 0"><i style="width:${Math.round(c.points / max * 100)}%;background:${i === 0 ? 'var(--gold)' : 'var(--navy3)'}"></i></div>
+          <div class="small muted">${c.people} чел. · ${fh(c.hours)} ч · турниров: ${c.events} · уровней: ${c.levels} · в среднем ${fh(c.avg)} на человека</div></div>
+          <span class="tl-pts">${fh(c.points)}</span></div>`).join('')}</div>` : `<div class="card">${empty('В этом сезоне баллов пока нет')}</div>`}
+      ${r.people && r.people.length ? `<h2 class="sect">Лучшие танцоры</h2><div class="tw"><table class="t"><thead><tr><th>#</th><th>Имя</th><th>Компания</th>${staff || role() === 'trainer' ? '<th class="n">Часы</th><th class="n">Турниры</th><th class="n">Уровни</th><th class="n">Награды</th>' : ''}<th class="n">Баллы</th></tr></thead><tbody>
+        ${r.people.slice(0, 20).map((p, i) => `<tr><td>${p.place || i + 1}</td><td>${esc(p.name)}</td><td>${esc(p.company)}</td>${staff || role() === 'trainer' ? `<td class="n">${fh(p.hours)}</td><td class="n">${p.events}</td><td class="n">${p.levels}</td><td class="n">${fh(p.awards)}</td>` : ''}<td class="n"><b>${fh(p.points)}</b></td></tr>`).join('')}
+      </tbody></table></div>` : ''}</div>
+      ${staff && awards.length ? `<h2 class="sect">Начисленные баллы</h2><div class="tw"><table class="t"><thead><tr><th>Дата</th><th>Ученик</th><th>За что</th><th class="n">Баллы</th><th></th></tr></thead><tbody>
+        ${awards.slice(0, 50).map(a => `<tr><td class="nowrap">${fd(a.date)}</td><td>${esc(a.clientName)}</td><td>${esc(a.title)}</td><td class="n">${fh(a.points)}</td><td><button class="btn sm" data-awd="${a.id}">${ic('trash')}</button></td></tr>`).join('')}
+      </tbody></table></div>` : ''}`;
+    if (!staff) return;
+    $('#tlaw').onclick = () => modal('Начислить баллы', `<div class="fg">
+        ${fld('Ученик', sel('clientId', clOpts(null, '— выберите —'), ''), 'full')}
+        ${fld('За что', inp('title', '', 'placeholder="1 место на Кубке Москвы, привёл коллегу…"'), 'full')}
+        ${fld('Баллы', inp('points', 10, 'type="number"'))}${fld('Дата', inp('date', today(), 'type="date"'))}</div>`,
+      [{t: 'Отмена'}, {t: 'Начислить', cls: 'pri', fn: async m => { await call('saveAward', vals(m)); toast('Баллы начислены'); await tlRefresh(); }}]);
+    $('#tlrules').onclick = () => { const s = S.T.settings; modal('Правила лиги', `<div class="fg">
+        ${fld('Название', inp('league_name', s.league_name), 'full')}
+        ${fld('Сезон с', inp('league_from', s.league_from, 'type="date"'))}${fld('по', inp('league_to', s.league_to, 'type="date"'))}
+        ${fld('Баллов за час занятий', inp('league_pHour', s.league_pHour, 'type="number" step="0.5"'))}
+        ${fld('За участие в турнире', inp('league_pEvent', s.league_pEvent, 'type="number"'))}
+        ${fld('За новый уровень в танце', inp('league_pLevel', s.league_pLevel, 'type="number"'))}
+        ${fld('Танцы в паспорте (через запятую)', txt('tools_dances', s.tools_dances), 'full')}</div>`,
+      [{t: 'Отмена'}, {t: 'Сохранить', cls: 'pri', fn: async m => { await call('saveLeague', vals(m)); toast('Правила сохранены'); await tlRefresh(); }}], {wide: true}); };
+    $('#tllp').onclick = () => printEl(r.name, $('#tllg'), 'Сезон ' + fd(r.from) + ' — ' + fd(r.to));
+    $$('[data-awd]').forEach(b => b.onclick = async () => { try { await call('deleteAward', {id: b.dataset.awd}); toast('Удалено'); await tlRefresh(); } catch (e) { fail(e); } });
+  }).catch(fail);
+};
+
+// ---------- 4. Отчёт для HR ----------
+TLV.hr = () => {
+  const ui = S.ui.tlhr || (S.ui.tlhr = {c: ''});
+  const pp = periodPicker('tlhrp', () => TLV.hr());
+  const comps = S.T.companies || [];
+  $('#tlb').innerHTML = `<p class="small muted" style="margin-top:0">Отчёт для HR компании-партнёра: кто из сотрудников занимался, сколько часов, турниры, рост уровня и место в корпоративной лиге. Его можно распечатать или сохранить в PDF и отправить в компанию.</p>
+    <div class="tl-pick"><div>${fld('Компания', sel('tlco', [['', '— выберите —']].concat(comps.map(c => [c.name, c.name + ' (' + c.people + ')'])), ui.c, 'id="tlco"'))}</div></div>
+    ${pp.html}<div id="tlhrr" class="sect">${ui.c ? empty('Формирую…') : `<div class="card">${empty(comps.length ? 'Выберите компанию' : 'У учеников не указана компания или партнёр')}</div>`}</div>`;
+  pp.wire($('#tlb'));
+  $('#tlco').onchange = e => { ui.c = e.target.value; TLV.hr(); };
+  if (!ui.c) return;
+  const my = S.pageSeq;
+  call('hrReport', {company: ui.c, from: pp.p.from, to: pp.p.to}, true).then(r => {
+    if (S.pageSeq !== my || !$('#tlhrr')) return;
+    const t = r.total;
+    $('#tlhrr').innerHTML = `<div class="row" style="margin-bottom:10px"><h2 class="grow" style="margin:0">${esc(r.company)}</h2><button class="btn pri" id="tlhrp">${ic('print')}Отчёт для HR</button></div>
+      <div class="kpis"><div class="kpi"><b>${t.activePeople} из ${t.people}</b><span>сотрудников занимались</span></div><div class="kpi"><b>${fh(t.hours)}</b><span>часов занятий</span></div>
+        <div class="kpi"><b>${t.events}</b><span>участий в турнирах и событиях</span></div><div class="kpi"><b>${r.league ? r.league.place + ' из ' + r.league.of : '—'}</b><span>место в лиге</span></div></div>
+      <div class="tw sect"><table class="t"><thead><tr><th>Сотрудник</th><th class="n">Часы</th><th class="n">Занятий</th><th>Последнее</th><th>Турниры и события</th><th>Рост уровня</th><th class="n">Остаток, ч</th></tr></thead><tbody>
+      ${r.rows.map(x => `<tr><td><b>${esc(x.name)}</b></td><td class="n">${fh(x.hours)}</td><td class="n">${x.visits}</td><td class="nowrap">${fd(x.last) || '—'}</td><td class="small">${esc(x.events.join('; ')) || '—'}</td><td class="small">${esc(x.levels.join('; ')) || '—'}</td><td class="n">${x.remaining ? fh(x.remaining) : '—'}</td></tr>`).join('') || '<tr><td colspan="7">Нет сотрудников</td></tr>'}
+      </tbody></table></div>`;
+    $('#tlhrp').onclick = () => showDoc('Отчёт для ' + r.company, `<h1>Корпоративная программа бальных танцев</h1>
+      <div><b>${esc(r.company)}</b> · период ${fd(r.from)} — ${fd(r.to)}</div>
+      <table style="margin-top:12px"><tbody><tr><td>Сотрудников в программе</td><td class="n">${t.people}</td></tr><tr><td>Занимались в периоде</td><td class="n">${t.activePeople}</td></tr>
+        <tr><td>Часов занятий</td><td class="n">${fh(t.hours)}</td></tr><tr><td>Посещений</td><td class="n">${t.visits}</td></tr><tr><td>Участий в турнирах и событиях</td><td class="n">${t.events}</td></tr>
+        <tr><td>Отметок роста уровня</td><td class="n">${t.levels}</td></tr>${r.league ? `<tr><td>Место в корпоративной лиге</td><td class="n">${r.league.place} из ${r.league.of} (${fh(r.league.points)} баллов)</td></tr>` : ''}</tbody></table>
+      <h2>Сотрудники</h2><table><thead><tr><th>Сотрудник</th><th class="n">Часы</th><th class="n">Посещений</th><th>Турниры и события</th><th>Рост уровня</th></tr></thead><tbody>
+      ${r.rows.map(x => `<tr><td>${esc(x.name)}</td><td class="n">${fh(x.hours)}</td><td class="n">${x.visits}</td><td>${esc(x.events.join('; ')) || '—'}</td><td>${esc(x.levels.join('; ')) || '—'}</td></tr>`).join('')}</tbody></table>`, r.company);
+  }).catch(fail);
+};
+
+// ---------- 5. Telegram ----------
+function tgLinkModal(p) {
+  call('tgLink', p).then(r => {
+    const bg = modal('Подключение к Telegram: ' + esc(r.name), r.url ? `<p style="margin-top:0">${p.self ? 'Нажмите «Открыть» на телефоне, где установлен Telegram, и затем «Запустить» — бот подключится.' : 'Отправьте эту ссылку человеку (WhatsApp, почта, SMS). Он откроет её, нажмёт «Запустить» в Telegram — и бот подключится.'}</p>
+      <div class="tl-link" id="tlurl">${esc(r.url)}</div>
+      <p class="small muted">Ссылка личная: по ней подключается только ${esc(r.name)}. Не пересылайте её другим людям. ${r.linked ? '<b>Сейчас уже подключён.</b>' : ''}</p>` : empty('Сначала администратор должен подключить бота на вкладке «Telegram-бот».'),
+      [{t: 'Закрыть'}].concat(r.url ? [{t: 'Открыть', fn: () => { window.open(r.url, '_blank'); return false; }}, {t: 'Скопировать', cls: 'pri', fn: async () => {
+        try { await navigator.clipboard.writeText(r.url); toast('Ссылка скопирована'); } catch (e) { const s = getSelection(), rg = document.createRange(); rg.selectNodeContents($('#tlurl', bg)); s.removeAllRanges(); s.addRange(rg); toast('Выделено — скопируйте вручную'); }
+        return false; }}] : []));
+    TL.load(true).then(() => { if (S.route[0] === 'tools' && (S.route[1] === 'bot' || S.route[1] === 'tg')) TLV[S.route[1]](); });
+  }).catch(fail);
+}
+TLV.tg = () => {
+  const me = S.T.me.tg;
+  $('#tlb').innerHTML = `<div class="card" style="max-width:640px"><h2 style="margin-top:0">Уведомления в Telegram</h2>
+    ${!me.connected ? empty('Бот клуба пока не подключён. Как только администратор его включит, здесь появится кнопка.') : `
+    <p>${role() === 'client' ? 'Бот напомнит о записи на занятие, подскажет остаток часов и предупредит, когда абонемент заканчивается.' : 'Бот напомнит о завтрашних занятиях и записях учеников.'}</p>
+    <div class="row"><span class="badge ${me.linked ? 'ok' : ''}">${me.linked ? 'Подключено' : 'Не подключено'}</span><span class="spacer"></span>
+      <button class="btn pri" id="tlme">${ic('send')}${me.linked ? 'Подключить заново' : 'Подключить Telegram'}</button></div>
+    ${me.id ? `<div style="margin-top:12px"><label class="tl-sw"><input type="checkbox" id="tlnot" ${me.notify ? 'checked' : ''}> Получать уведомления</label></div>` : ''}
+    <p class="small muted">Команды в боте: /balance — остаток часов, /next — ближайшие занятия, /stop — выключить уведомления.</p>`}</div>`;
+  if ($('#tlme')) $('#tlme').onclick = () => tgLinkModal({self: true});
+  if ($('#tlnot')) $('#tlnot').onchange = async e => { try { await call('tgSetNotify', {id: me.id, notify: e.target.checked}); await tlRefresh(); toast('Сохранено'); } catch (er) { fail(er); } };
+};
+TLV.bot = () => {
+  const b = S.T.bot, s = S.T.settings, admin = role() === 'admin';
+  const ui = S.ui.tlbot || (S.ui.tlbot = {k: 'client', q: ''});
+  const rows = (S.T.tg || []);
+  const rowOf = (k, id) => rows.find(r => r.kind === k && r.refId === id);
+  const people = ui.k === 'client' ? TL.clients().map(c => ({k: 'client', id: c.id, name: c.name, sub: c.company || ''}))
+    : ui.k === 'trainer' ? (S.D.trainers || []).filter(t => t.active).map(t => ({k: 'trainer', id: t.id, name: t.name, sub: t.phone || ''}))
+    : (S.D.users || [{id: S.user.id, name: S.user.name, role: role(), active: true}]).filter(u => u.active && ['admin', 'manager'].includes(u.role)).map(u => ({k: 'user', id: u.id, name: u.name, sub: ROLE[u.role]}));
+  const list = people.filter(p => !ui.q || p.name.toLowerCase().includes(ui.q.toLowerCase()));
+  const cnt = k => rows.filter(r => r.kind === k && r.linked).length;
+  $('#tlb').innerHTML = `
+    <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));align-items:start">
+      <div class="card"><div class="row"><h2 class="grow" style="margin:0">Бот клуба</h2><span class="badge ${b.connected ? 'ok' : 'warn'}">${b.connected ? 'Подключён' : 'Не подключён'}</span></div>
+        ${b.connected ? `<p>Бот: <b>@${esc(b.name)}</b>. Подключились ${b.linked} чел. ${b.triggers ? '' : '<br><span class="badge warn">Расписание не включено — нажмите «Сохранить»</span>'}</p>` : `
+        <ol class="tl-step"><li>Откройте в Telegram <b>@BotFather</b> и отправьте <b>/newbot</b>.</li><li>Придумайте имя, например «Клуб бальных танцев», и адрес бота, оканчивающийся на <b>bot</b>.</li>
+          <li>BotFather пришлёт токен вида <span class="tl-link" style="display:inline;padding:1px 6px">123456789:AA…</span> — вставьте его ниже.</li></ol>`}
+        ${admin ? `<div class="fg">${fld(b.connected ? 'Новый токен (если нужно заменить)' : 'Токен бота', inp('token', '', 'id="tltok" autocomplete="off" placeholder="123456789:AA…"'), 'full')}</div>` : '<p class="small muted">Подключает и настраивает бота администратор.</p>'}
+      </div>
+      <div class="card"><h2 style="margin-top:0">Что отправлять</h2><div class="stack" id="tlbs">
+        ${chk('bot_remind', 'Напоминать ученикам о записи и тренерам о занятиях за день', s.bot_remind)}
+        ${chk('bot_low', 'Предупреждать ученика, когда в абонементе осталось мало часов', s.bot_low)}
+        ${chk('bot_digest', 'Утренняя сводка администраторам и менеджерам', s.bot_digest)}
+        ${chk('bot_nudge', 'Писать ученику, если он давно не приходил', s.bot_nudge)}
+        <div class="fg">${fld('Час отправки', sel('bot_hour', Array.from({length: 24}, (_, i) => [i, String(i).padStart(2, '0') + ':00']), s.bot_hour))}
+          ${fld('«Мало часов» — это, ч', inp('bot_lowHours', s.bot_lowHours, 'type="number" min="0" step="0.5"'))}
+          ${fld('«Давно не был» — дней', inp('bot_inactive', s.bot_inactive, 'type="number" min="3"'))}</div></div>
+        ${admin ? `<div class="row" style="margin-top:12px"><button class="btn pri" id="tlbsave">Сохранить</button>${b.connected ? `<button class="btn" id="tlbrun">${ic('send')}Отправить сейчас</button><span class="spacer"></span><button class="btn danger sm" id="tlboff">Отключить бота</button>` : ''}</div>` : ''}</div>
+    </div>
+    <h2 class="sect">Кому отправлять</h2>
+    <p class="small muted" style="margin-top:-4px">Нажмите «Ссылка» и отправьте её человеку — после подключения ему будут приходить уведомления. Снимите галку, чтобы не отправлять конкретному человеку.</p>
+    <div class="row" style="margin-bottom:10px"><div class="chips">${[['client', 'Ученики', cnt('client')], ['trainer', 'Тренеры', cnt('trainer')], ['user', 'Сотрудники', cnt('user')]].map(x => `<span class="chip ${ui.k === x[0] ? 'on' : ''}" data-tk="${x[0]}">${x[1]} · ${x[2]}</span>`).join('')}</div>
+      <span class="spacer"></span><input class="inp" id="tlq" placeholder="Поиск…" value="${esc(ui.q)}" style="max-width:240px"></div>
+    <div class="tw"><table class="t"><thead><tr><th>Имя</th><th>Статус</th><th>Уведомления</th><th></th></tr></thead><tbody>
+    ${list.map(p => { const r = rowOf(p.k, p.id); return `<tr><td><b>${esc(p.name)}</b><div class="small muted">${esc(p.sub)}</div></td>
+      <td>${r && r.linked ? '<span class="badge ok">подключён</span>' : r ? '<span class="badge">ссылка выдана</span>' : '<span class="small muted">—</span>'}</td>
+      <td>${r ? `<label class="tl-sw"><input type="checkbox" data-nt="${r.id}" ${r.notify ? 'checked' : ''}> отправлять</label>` : '<span class="small muted">после подключения</span>'}</td>
+      <td class="nowrap"><button class="btn sm" data-lk="${p.k}|${p.id}">${ic('send')}Ссылка</button>${r && r.linked ? ` <button class="btn sm" data-tt2="${r.id}">Проверка</button> <button class="btn sm" data-ul="${r.id}">Отключить</button>` : ''}</td></tr>`; }).join('') || `<tr><td colspan="4">${empty('Никого не найдено')}</td></tr>`}
+    </tbody></table></div>`;
+  $$('[data-tk]').forEach(c => c.onclick = () => { ui.k = c.dataset.tk; TLV.bot(); });
+  $('#tlq').oninput = e => { ui.q = e.target.value; clearTimeout(TL.qt); TL.qt = setTimeout(() => { TLV.bot(); const q = $('#tlq'); if (q) { q.focus(); q.setSelectionRange(q.value.length, q.value.length); } }, 300); };
+  $$('[data-nt]').forEach(c => c.onchange = async () => { try { await call('tgSetNotify', {id: c.dataset.nt, notify: c.checked}, true); const r = rows.find(x => x.id === c.dataset.nt); if (r) r.notify = c.checked; toast(c.checked ? 'Уведомления включены' : 'Уведомления выключены'); } catch (e) { c.checked = !c.checked; fail(e); } });
+  $$('[data-lk]').forEach(x => x.onclick = () => { const [k, id] = x.dataset.lk.split('|'); tgLinkModal({kind: k, refId: id}); });
+  $$('[data-tt2]').forEach(x => x.onclick = async () => { try { await call('tgTest', {id: x.dataset.tt2}); toast('Проверочное сообщение отправлено'); } catch (e) { fail(e); } });
+  $$('[data-ul]').forEach(x => x.onclick = async () => { try { await call('tgUnlink', {id: x.dataset.ul}); toast('Отключено. Новая ссылка понадобится для повторного подключения'); await tlRefresh(); } catch (e) { fail(e); } });
+  if ($('#tlbsave')) $('#tlbsave').onclick = async () => {
+    const v = vals($('#tlbs')); v.token = $('#tltok') ? $('#tltok').value.trim() : '';
+    ['bot_remind', 'bot_low', 'bot_digest', 'bot_nudge'].forEach(k => { v[k] = v[k] ? 'true' : 'false'; });
+    try { await call('botSave', v); toast(v.token ? 'Бот подключён' : 'Настройки сохранены'); await tlRefresh(); } catch (e) { fail(e); }
+  };
+  if ($('#tlbrun')) $('#tlbrun').onclick = async () => { try { const r = await call('botRunNow', {}); toast('Отправлено сообщений: ' + r.sent); await tlRefresh(); } catch (e) { fail(e); } };
+  if ($('#tlboff')) $('#tlboff').onclick = () => modal('Отключить бота?', '<p style="margin-top:0">Бот перестанет отвечать и присылать уведомления. Подключения людей сохранятся — после нового подключения всё заработает снова.</p>',
+    [{t: 'Отмена'}, {t: 'Отключить', cls: 'danger', fn: async () => { await call('botDisconnect', {}); toast('Бот отключён'); await tlRefresh(); }}]);
+};
+</script>

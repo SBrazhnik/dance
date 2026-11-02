@@ -7,7 +7,7 @@
  */
 
 const CLUB_NAME = 'Клуб корпоративных бальных танцев';
-const APP_VER = '2026-11-02.9'; // меняется при каждом обновлении — открытые страницы предложат перезагрузку
+const APP_VER = '2026-11-02.10'; // меняется при каждом обновлении — открытые страницы предложат перезагрузку
 const STAFF = ['admin', 'manager'];
 const ALL = ['admin', 'manager', 'trainer', 'client'];
 const SESSION_DAYS = 30;
@@ -86,6 +86,22 @@ const TABLES = {
   messages: ['Чат', [
     ['id', 'ID'], ['channel', 'Канал'], ['userId', 'ID автора'], ['userName', 'Автор'], ['text', 'Текст'], ['createdAt', 'Время']]],
   settings: ['Настройки', [['key', 'Параметр'], ['value', 'Значение']]],
+  // --- модуль «Инструменты» (Tools.gs) ---
+  dancers: ['Анкеты танцоров', [
+    ['id', 'ID'], ['clientId', 'ID ученика'], ['height', 'Рост, см', 'n'], ['level', 'Уровень', 'n'], ['programs', 'Программы'],
+    ['days', 'Удобные дни'], ['seek', 'Ищет пару', 'b'], ['note', 'Заметка'], ['updatedAt', 'Обновлено']]],
+  progress: ['Прогресс танцоров', [
+    ['id', 'ID'], ['clientId', 'ID ученика'], ['dance', 'Танец'], ['level', 'Уровень', 'n'], ['trainerId', 'ID тренера'],
+    ['trainerName', 'Кто отметил'], ['date', 'Дата', 'd'], ['note', 'Заметка'], ['createdAt', 'Создано']]],
+  diary: ['Дневник занятий', [
+    ['id', 'ID'], ['clientId', 'ID ученика'], ['trainerId', 'ID тренера'], ['trainerName', 'Тренер'], ['date', 'Дата', 'd'],
+    ['text', 'Что отработали'], ['video', 'Видео'], ['createdBy', 'Автор'], ['createdAt', 'Создано']]],
+  awards: ['Баллы лиги', [
+    ['id', 'ID'], ['date', 'Дата', 'd'], ['clientId', 'ID ученика'], ['clientName', 'Ученик'], ['title', 'За что'],
+    ['points', 'Баллы', 'n'], ['createdAt', 'Создано']]],
+  tg: ['Telegram', [
+    ['id', 'ID'], ['kind', 'Тип'], ['refId', 'ID карточки'], ['name', 'Имя'], ['chatId', 'Чат'], ['code', 'Код подключения'],
+    ['notify', 'Уведомления', 'b'], ['linkedAt', 'Подключён'], ['lastSent', 'Последнее сообщение'], ['createdAt', 'Создано']]],
   errors: ['Ошибки', [['id', 'ID'], ['createdAt', 'Время'], ['userName', 'Пользователь'], ['where', 'Где'], ['message', 'Ошибка'], ['stack', 'Подробности'], ['ua', 'Устройство']]],
 };
 
@@ -301,7 +317,7 @@ function api_(token, action, payload) {
     if (action === 'ping') return { ok: true, data: { club: CLUB_NAME } };
     const user = auth_(token);
     if (!user) return { ok: false, error: 'AUTH', message: 'Сессия истекла — войдите снова' };
-    const h = HANDLERS[action];
+    const h = HANDLERS[action] || (typeof toolHandlers_ === 'function' ? toolHandlers_()[action] : null);
     if (!h) throw new Error('Неизвестное действие: ' + action);
     if (h.roles.indexOf(user.role) < 0) throw new Error('Недостаточно прав');
     const data = h.write ? withLock_(() => {
@@ -399,7 +415,7 @@ function tz_() { return ss_().getSpreadsheetTimeZone() || Session.getScriptTimeZ
 
 function ensureSchema_() {
   const props = PropertiesService.getScriptProperties();
-  const ver = 'schema-5';
+  const ver = 'schema-6';
   if (props.getProperty('schema') === ver) return;
   const ss = ss_();
   Object.keys(TABLES).forEach(key => {
