@@ -265,8 +265,10 @@ function call(action, payload, quiet) {
   payload = Object.assign({}, payload || {});
   if (!NO_SNAP.includes(action)) payload.__snap = true;
   if (!quiet) { pending++; showLoading(); }
+  const t0 = Date.now();
   return new Promise((resolve, reject) => {
     const done = r => {
+      if (r) { S.perf = (S.perf || []).concat([{a: action, total: Date.now() - t0, server: r.ms || 0, at: new Date().toLocaleTimeString('ru-RU')}]).slice(-15); }
       if (!quiet) { pending--; showLoading(); }
       if (!r) return reject(new Error('Пустой ответ сервера'));
       if (!r.ok) {
@@ -1772,7 +1774,11 @@ VIEWS.settings = (tab) => {
     const xlsx = st.spreadsheetUrl ? st.spreadsheetUrl.replace(/\/edit.*$/, '') + '/export?format=xlsx' : '';
     box.innerHTML = `<div class="card stack"><h2>База данных</h2>
       <div class="small muted">Все данные хранятся в Google Таблице на вашем Google Диске. Пользователи приложения к ней доступа не имеют. Справочники — на листе «Справочники».</div>
-      <div class="row">${st.spreadsheetUrl ? `<a class="btn" href="${esc(st.spreadsheetUrl)}" target="_blank">${ic('doc')}Открыть таблицу</a><a class="btn" href="${esc(xlsx)}" target="_blank">${ic('dl')}Скачать в Excel (.xlsx)</a>` : ''}</div></div>`;
+      <div class="row">${st.spreadsheetUrl ? `<a class="btn" href="${esc(st.spreadsheetUrl)}" target="_blank">${ic('doc')}Открыть таблицу</a><a class="btn" href="${esc(xlsx)}" target="_blank">${ic('dl')}Скачать в Excel (.xlsx)</a>` : ''}</div>
+      <div class="small muted">Если меняли таблицу вручную (удаляли строки, сортировали) и приложение показывает старое — подождите 30 минут или запустите в Apps Script функцию <b>clearCache</b>.</div></div>
+      <div class="card sect"><h2 style="margin-bottom:8px">Скорость работы</h2><div class="small muted" style="margin-bottom:8px">Последние запросы в этом окне: полное время и время работы сервера Google.</div>
+      <div class="tw"><table class="t"><thead><tr><th>Время</th><th>Действие</th><th class="n">Всего, с</th><th class="n">Сервер, с</th></tr></thead><tbody>
+      ${(S.perf || []).slice().reverse().map(x => `<tr><td>${esc(x.at)}</td><td>${esc(x.a)}</td><td class="n">${(x.total / 1000).toFixed(1).replace('.', ',')}</td><td class="n">${(x.server / 1000).toFixed(1).replace('.', ',')}</td></tr>`).join('') || `<tr><td colspan="4">${empty('Пока нет данных')}</td></tr>`}</tbody></table></div></div>`;
   }
 };
 function dictForm(list, o) {

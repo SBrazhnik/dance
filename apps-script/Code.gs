@@ -286,6 +286,12 @@ function backupInfo_() {
 
 /** Единая точка вызова из интерфейса. */
 function api(token, action, payload) {
+  const t0 = Date.now();
+  const r = api_(token, action, payload);
+  r.ms = Date.now() - t0;
+  return r;
+}
+function api_(token, action, payload) {
   try {
     payload = payload || {};
     prefetch_(Object.keys(TABLES).filter(k => k !== 'messages' || /Message/.test(action)));
@@ -296,7 +302,12 @@ function api(token, action, payload) {
     const h = HANDLERS[action];
     if (!h) throw new Error('Неизвестное действие: ' + action);
     if (h.roles.indexOf(user.role) < 0) throw new Error('Недостаточно прав');
-    const data = h.write ? withLock_(() => h.fn(user, payload)) : h.fn(user, payload);
+    const data = h.write ? withLock_(() => {
+      // внутри блокировки перечитываем версии листов: кто-то мог сохранить данные, пока мы ждали
+      Object.keys(_cache).forEach(k => delete _cache[k]);
+      prefetch_(Object.keys(TABLES).filter(k => k !== 'messages' || /Message/.test(action)));
+      return h.fn(user, payload);
+    }) : h.fn(user, payload);
     if (h.write && payload.__snap) {
       // свежие данные в том же ответе — интерфейсу не нужен второй запрос
       const fresh = auth_(token);
@@ -399,6 +410,7 @@ function ensureSchema_() {
   const S = settings_();
   Object.keys(DEFAULT_SETTINGS).forEach(k => { if (!(k in S)) setSetting_(k, DEFAULT_SETTINGS[k]); });
   seedDict_();
+  clearCache();
   props.setProperty('schema', ver);
 }
 
@@ -412,8 +424,11 @@ function norm_(v, type) {
   }
   if (v === null || v === undefined) return '';
   const s = String(v);
-  if (type === 'd') { const m = s.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})/); if (m) return m[3] + '-' + ('0' + m[2]).slice(-2) + '-' + ('0' + m[1]).slice(-2); }
-  if (type === 't') { const m = s.match(/^(\d{1,2}):(\d{2})/); if (m) return ('0' + m[1]).slice(-2) + ':' + m[2]; }
+  if (type === 'd') {
+    if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+    const m = s.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})/); if (m) return m[3] + '-' + ('0' + m[2]).slice(-2) + '-' + ('0' + m[1]).slice(-2);
+  }
+  if (type === 't') { const m = s.match(/(?:^|\s)(\d{1,2}):(\d{2})(?::\d{2})?$/); if (m) return ('0' + m[1]).slice(-2) + ':' + m[2]; }
   return s;
 }
 
@@ -421,21 +436,79 @@ function tbl_(key) {
   if (_cache[key]) return _cache[key];
   const sh = ss_().getSheetByName(TABLES[key][0]);
   if (!sh) throw new Error('Нет листа «' + TABLES[key][0] + '». Запустите setup().');
-  return (_cache[key] = buildTbl_(key, sh.getDataRange().getValues(), sh));
+  const values = sh.getDataRange().getValues();
+  storeCache_(key, values);
+  return (_cache[key] = buildTbl_(key, values.map(r => r.map(cellStr_)), sh));
 }
 
-/** Читает все нужные листы ОДНИМ запросом к Sheets API (если сервис подключён). */
+// ---------------------------------------------------------------------------
+// Быстрый кэш листов (CacheService). Лист перечитывается из таблицы только после изменений.
+// Версия каждого листа хранится в кэше; запись через приложение или ручная правка (onEdit) её сбрасывает.
+// ---------------------------------------------------------------------------
+const CACHE_TTL = 1800;      // 30 минут — даже без сброса данные обновятся сами
+const CHUNK = 40000;         // символов в одном куске (лимит значения кэша — 100 КБ)
+const _dirty = {};
+function cache_() { return CacheService.getScriptCache(); }
+function cellStr_(v) {
+  if (v instanceof Date) {
+    const t = Utilities.formatDate(v, tz_(), 'HH:mm:ss');
+    if (v.getFullYear() < 1901) return Utilities.formatDate(v, tz_(), 'HH:mm');
+    return Utilities.formatDate(v, tz_(), t === '00:00:00' ? 'yyyy-MM-dd' : 'yyyy-MM-dd HH:mm:ss');
+  }
+  return v;
+}
+/** Берёт листы из кэша одним-тремя обращениями; чего нет — дочитает tbl_ по одному и положит в кэш. */
 function prefetch_(keys) {
   keys = keys.filter(k => !_cache[k]);
-  if (!keys.length || typeof Sheets === 'undefined') return;
-  try {
-    const res = Sheets.Spreadsheets.Values.batchGet(ss_().getId(), {
-      ranges: keys.map(k => "'" + TABLES[k][0] + "'"),
-      valueRenderOption: 'UNFORMATTED_VALUE', dateTimeRenderOption: 'FORMATTED_STRING'
-    });
-    (res.valueRanges || []).forEach((vr, i) => { _cache[keys[i]] = buildTbl_(keys[i], vr.values || [], null); });
-  } catch (e) { /* нет сервиса или листа — читаем по одному */ }
+  if (!keys.length) return;
+  let c;
+  try { c = cache_(); } catch (e) { return; }
+  const vers = c.getAll(keys.map(k => 'v_' + k));
+  const metaKeys = keys.filter(k => vers['v_' + k]).map(k => 'm_' + k + '_' + vers['v_' + k]);
+  const metas = metaKeys.length ? c.getAll(metaKeys) : {};
+  const chunkKeys = [];
+  const plan = {};
+  keys.forEach(k => {
+    const v = vers['v_' + k]; const n = v && Number(metas['m_' + k + '_' + v]);
+    if (n) { plan[k] = { v, n }; for (let i = 0; i < n; i++) chunkKeys.push('c_' + k + '_' + v + '_' + i); }
+  });
+  const chunks = chunkKeys.length ? c.getAll(chunkKeys) : {};
+  Object.keys(plan).forEach(k => {
+    let str = '';
+    for (let i = 0; i < plan[k].n; i++) { const part = chunks['c_' + k + '_' + plan[k].v + '_' + i]; if (part === undefined || part === null) return; str += part; }
+    try { _cache[k] = buildTbl_(k, JSON.parse(str), null); _cache[k]._ver = plan[k].v; } catch (e) { /* испорченный кэш — перечитаем лист */ }
+  });
+  keys.filter(k => !_cache[k]).forEach(k => tbl_(k));
 }
+function storeCache_(key, values) {
+  if (_dirty[key]) return; // лист менялся в этом запросе — кэшируем в следующем
+  try {
+    const c = cache_();
+    const v = newId_(8);
+    const str = JSON.stringify(values.map(r => r.map(cellStr_)));
+    const put = {};
+    let n = 0;
+    for (let i = 0; i < str.length; i += CHUNK) put['c_' + key + '_' + v + '_' + (n++)] = str.slice(i, i + CHUNK);
+    put['m_' + key + '_' + v] = String(n || 1);
+    if (!n) put['c_' + key + '_' + v + '_0'] = '[]';
+    c.putAll(put, CACHE_TTL);
+    c.put('v_' + key, v, CACHE_TTL);
+  } catch (e) { /* без кэша тоже работает */ }
+}
+function invalidate_(key) {
+  if (_dirty[key]) return;
+  _dirty[key] = 1;
+  try { cache_().remove('v_' + key); } catch (e) { /* нет кэша */ }
+}
+/** Ручная правка таблицы администратором — сбрасываем кэш изменённого листа. */
+function onEdit(e) {
+  try {
+    const name = e && e.range ? e.range.getSheet().getName() : '';
+    Object.keys(TABLES).forEach(k => { if (!name || TABLES[k][0] === name) CacheService.getScriptCache().remove('v_' + k); });
+  } catch (err) { /* нет доступа */ }
+}
+/** Если меняли структуру таблицы (удаляли строки, сортировали) — запустите, чтобы приложение перечитало всё. */
+function clearCache() { Object.keys(TABLES).forEach(k => CacheService.getScriptCache().remove('v_' + k)); }
 
 function buildTbl_(key, values, sheet) {
   const [name, cols] = TABLES[key];
@@ -480,6 +553,7 @@ function rowFor_(t, o, raw) {
 function insertMany_(key, objs) {
   if (!objs.length) return [];
   const t = tbl_(key);
+  invalidate_(key);
   const start = t.sh.getLastRow() + 1;
   const rows = [], fmts = [];
   objs.forEach((o, n) => {
@@ -506,6 +580,7 @@ function must_(key, id, what) { const r = find_(key, id); if (!r) throw new Erro
 
 function update_(key, id, patch) {
   const t = tbl_(key);
+  invalidate_(key);
   const o = t.rows.find(r => r.id === id);
   if (!o) throw new Error('Запись не найдена');
   t.cols.forEach(c => { if (c[0] in patch && c[0] !== 'id') o[c[0]] = norm_(patch[c[0]], c[2]); });
@@ -521,6 +596,7 @@ function del_(key, ids) {
   ids = [].concat(ids).filter(Boolean);
   if (!ids.length) return 0;
   const t = tbl_(key);
+  invalidate_(key);
   const rows = t.rows.filter(r => ids.indexOf(r.id) >= 0).map(r => r._r).sort((a, b) => b - a);
   rows.forEach(r => t.sh.deleteRow(r));
   delete _cache[key];
@@ -535,6 +611,7 @@ function settings_() {
 }
 function setSetting_(k, v) {
   const t = tbl_('settings');
+  invalidate_('settings');
   const r = t.rows.find(x => x.key === k);
   if (r) {
     r.value = String(v);
@@ -611,7 +688,7 @@ function login_(p) {
     const old = t.rows.filter(s => s.expiresAt < Date.now()).map(s => s.token);
     if (old.length) { // очистка просроченных
       const rows = t.rows.filter(s => old.indexOf(s.token) >= 0).map(s => s._r).sort((a, b) => b - a);
-      rows.forEach(r => t.sh.deleteRow(r)); delete _cache.sessions;
+      rows.forEach(r => t.sh.deleteRow(r)); delete _cache.sessions; invalidate_('sessions');
     }
     insert_('sessions', { token, userId: u.id, expiresAt: Date.now() + SESSION_DAYS * 864e5 });
   });
@@ -639,7 +716,7 @@ function logout_(token) {
   CacheService.getScriptCache().remove('s_' + token);
   const t = tbl_('sessions');
   const s = t.rows.find(x => x.token === token);
-  if (s) { t.sh.deleteRow(s._r); delete _cache.sessions; }
+  if (s) { t.sh.deleteRow(s._r); delete _cache.sessions; invalidate_('sessions'); }
   return true;
 }
 
@@ -681,7 +758,7 @@ function saveUser_(admin, p) {
       const mine = st.rows.filter(s => s.userId === p.id);
       mine.forEach(s => CacheService.getScriptCache().remove('s_' + s.token));
       mine.map(s => s._r).sort((a, b) => b - a).forEach(r => st.sh.deleteRow(r));
-      delete _cache.sessions;
+      delete _cache.sessions; invalidate_('sessions');
     }
     return p.id;
   }
@@ -1149,7 +1226,7 @@ function delUsersOf_(field, id) {
   if (!users.length) return;
   const st = tbl_('sessions');
   st.rows.filter(s => users.indexOf(s.userId) >= 0).map(s => s._r).sort((a, b) => b - a).forEach(r => st.sh.deleteRow(r));
-  delete _cache.sessions;
+  delete _cache.sessions; invalidate_('sessions');
   del_('users', users);
 }
 function dropFromList_(table, field, namesField, nameTable, id) {
@@ -1192,7 +1269,7 @@ function deleteUser_(admin, p) {
   const st = tbl_('sessions');
   st.rows.filter(s => s.userId === u.id).forEach(s => CacheService.getScriptCache().remove('s_' + s.token));
   st.rows.filter(s => s.userId === u.id).map(s => s._r).sort((a, b) => b - a).forEach(r => st.sh.deleteRow(r));
-  delete _cache.sessions;
+  delete _cache.sessions; invalidate_('sessions');
   return del_('users', u.id);
 }
 function trashUrl_(url) {
