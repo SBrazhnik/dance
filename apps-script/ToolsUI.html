@@ -29,7 +29,7 @@ I.spark = '<path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/>
 I.send = '<path d="M22 2L11 13M22 2l-7 20-4-9-9-4z"/>';
 (function () {
   const i = PAGES.findIndex(p => p.k === 'help');
-  PAGES.splice(i < 0 ? PAGES.length : i, 0, {k: 'tools', t: 'Инструменты', i: 'spark', r: ['admin', 'manager', 'trainer', 'client']});
+  PAGES.splice(i < 0 ? PAGES.length : i, 0, {k: 'tools', t: 'Инструменты', i: 'spark', r: ['admin']});
 })();
 
 const TL = {

@@ -557,7 +557,15 @@ function botRunNow_(user) {
 // ---------------------------------------------------------------------------
 // Регистрация действий
 // ---------------------------------------------------------------------------
+/** Кому сейчас открыт модуль. Чтобы открыть менеджерам, тренерам и ученикам — добавьте их роли сюда и в ToolsUI.html. */
+const TOOLS_OPEN_TO = ['admin'];
+
 function toolHandlers_() {
+  const all = toolHandlersAll_();
+  Object.keys(all).forEach(k => { all[k].roles = all[k].roles.filter(r => TOOLS_OPEN_TO.indexOf(r) >= 0); });
+  return all;
+}
+function toolHandlersAll_() {
   return {
   toolsLoad: { roles: ALL, fn: toolsLoad_ },
   saveDancer: { roles: ALL, write: true, fn: saveDancer_ },
