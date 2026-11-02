@@ -31,12 +31,12 @@ const TABLES = {
     ['notes', 'Заметки'], ['createdAt', 'Создан'],
     ['phone2', 'Доп. телефон'], ['telegram', 'Мессенджер'], ['address', 'Адрес'], ['birthDate', 'Дата рождения', 'd'],
     ['height', 'Рост, см', 'n'], ['programs', 'Программы'], ['rateTour', 'Ставка турнир, ₽', 'n'],
-    ['rates', 'Ставки по видам (JSON)'], ['extra', 'Доп. поля (JSON)']]],
+    ['rates', 'Ставки по видам (JSON)'], ['extra', 'Доп. поля (JSON)'], ['gender', 'Пол']]],
   clients: ['Ученики', [
     ['id', 'ID'], ['name', 'ФИО'], ['phone', 'Телефон'], ['email', 'Email'], ['birthDate', 'Дата рождения', 'd'],
     ['company', 'Компания'], ['trainerIds', 'ID тренеров'], ['trainerNames', 'Тренеры'], ['partnerId', 'ID партнёра'],
     ['contractNo', '№ договора'], ['contractDate', 'Дата договора', 'd'], ['active', 'Активен', 'b'],
-    ['notes', 'Заметки'], ['createdAt', 'Создан'], ['extra', 'Доп. поля (JSON)']]],
+    ['notes', 'Заметки'], ['createdAt', 'Создан'], ['extra', 'Доп. поля (JSON)'], ['gender', 'Пол']]],
   partners: ['Партнёры', [
     ['id', 'ID'], ['name', 'Название'], ['contact', 'Контактное лицо'], ['phone', 'Телефон'],
     ['contractNo', '№ договора'], ['contractDate', 'Дата договора', 'd'], ['active', 'Активен', 'b'],
@@ -85,6 +85,7 @@ const TABLES = {
   messages: ['Чат', [
     ['id', 'ID'], ['channel', 'Канал'], ['userId', 'ID автора'], ['userName', 'Автор'], ['text', 'Текст'], ['createdAt', 'Время']]],
   settings: ['Настройки', [['key', 'Параметр'], ['value', 'Значение']]],
+  errors: ['Ошибки', [['id', 'ID'], ['createdAt', 'Время'], ['userName', 'Пользователь'], ['where', 'Где'], ['message', 'Ошибка'], ['stack', 'Подробности'], ['ua', 'Устройство']]],
 };
 
 const DEFAULT_SETTINGS = {
@@ -294,7 +295,7 @@ function api(token, action, payload) {
 function api_(token, action, payload) {
   try {
     payload = payload || {};
-    prefetch_(Object.keys(TABLES).filter(k => k !== 'messages' || /Message/.test(action)));
+    prefetch_(Object.keys(TABLES).filter(k => (k !== 'messages' || /Message/.test(action)) && (k !== 'errors' || /Error/.test(action))));
     if (action === 'login') return { ok: true, data: login_(payload) };
     if (action === 'ping') return { ok: true, data: { club: CLUB_NAME } };
     const user = auth_(token);
@@ -305,7 +306,7 @@ function api_(token, action, payload) {
     const data = h.write ? withLock_(() => {
       // внутри блокировки перечитываем версии листов: кто-то мог сохранить данные, пока мы ждали
       Object.keys(_cache).forEach(k => delete _cache[k]);
-      prefetch_(Object.keys(TABLES).filter(k => k !== 'messages' || /Message/.test(action)));
+      prefetch_(Object.keys(TABLES).filter(k => (k !== 'messages' || /Message/.test(action)) && (k !== 'errors' || /Error/.test(action))));
       return h.fn(user, payload);
     }) : h.fn(user, payload);
     if (h.write && payload.__snap) {
@@ -315,8 +316,18 @@ function api_(token, action, payload) {
     }
     return { ok: true, data: data === undefined ? null : data };
   } catch (e) {
+    if (e && (e instanceof TypeError || e instanceof ReferenceError || e instanceof RangeError)) {
+      try { logError_('сервер', action, e.message, e.stack, ''); } catch (x) { /* журнал недоступен */ }
+      return { ok: false, error: 'ERR', message: 'Внутренняя ошибка (' + action + '): ' + e.message + '. Она записана в журнал ошибок.' };
+    }
     return { ok: false, error: 'ERR', message: (e && e.message) || String(e) };
   }
+}
+function logError_(who, where, message, stack, ua) {
+  const t = tbl_('errors');
+  if (t.rows.length > 500) del_('errors', t.rows.slice(0, t.rows.length - 400).map(r => r.id));
+  insert_('errors', { userName: who || '', where: String(where || '').slice(0, 200), message: String(message || '').slice(0, 500), stack: String(stack || '').slice(0, 1500), ua: String(ua || '').slice(0, 200) });
+  return true;
 }
 
 const HANDLERS = {
@@ -370,6 +381,8 @@ const HANDLERS = {
   uploadContractFile: { roles: STAFF, write: true, fn: uploadContractFile_ },
   removeContractFile: { roles: STAFF, write: true, fn: removeContractFile_ },
   getFile: { roles: STAFF, fn: getFile_ },
+  logError: { roles: ALL, write: true, fn: (u, p) => logError_(u.name, p.where, p.message, p.stack, p.ua) },
+  getErrors: { roles: ['admin'], fn: () => tbl_('errors').rows.slice(-50).reverse().map(e => ({ createdAt: e.createdAt, userName: e.userName, where: e.where, message: e.message })) },
   backupInfo: { roles: ['admin'], fn: backupInfo_ },
   backupNow: { roles: ['admin'], write: true, fn: (u) => backupNow_(u.name) },
   saveBackup: { roles: ['admin'], write: true, fn: saveBackup_ },
@@ -385,7 +398,7 @@ function tz_() { return ss_().getSpreadsheetTimeZone() || Session.getScriptTimeZ
 
 function ensureSchema_() {
   const props = PropertiesService.getScriptProperties();
-  const ver = 'schema-4';
+  const ver = 'schema-5';
   if (props.getProperty('schema') === ver) return;
   const ss = ss_();
   Object.keys(TABLES).forEach(key => {
@@ -858,8 +871,8 @@ function load_(user) {
     Object.assign(res, {
       me: me.id ? me : null,
       groups: tbl_('groups').rows.filter(g => ids_(g.trainerIds).indexOf(user.trainerId) >= 0),
-      trainers: trainers.map(t => ({ id: t.id, name: t.name, spec: t.spec, programs: t.programs, height: t.height, active: t.active })),
-      clients: clients.filter(c => mine[c.id]).map(c => ({ id: c.id, name: c.name, phone: c.phone, company: c.company, trainerIds: c.trainerIds, notes: c.notes, active: c.active, birthDate: c.birthDate })),
+      trainers: trainers.map(t => ({ id: t.id, name: t.name, spec: t.spec, programs: t.programs, height: t.height, gender: t.gender, active: t.active })),
+      clients: clients.filter(c => mine[c.id]).map(c => ({ id: c.id, name: c.name, phone: c.phone, company: c.company, trainerIds: c.trainerIds, notes: c.notes, active: c.active, birthDate: c.birthDate, gender: c.gender })),
       allClients: lite(clients.filter(c => c.active)),
       subs: subs.filter(s => mine[s.clientId]).map(s => { const x = Object.assign({}, s); delete x.price; delete x.paid; return x; }),
       lessons: lessons.filter(l => l.trainerId === user.trainerId),
@@ -900,6 +913,7 @@ function saveTrainer_(u, p) {
   const d = {
     name: String(req_(p.name, 'Укажите ФИО')).trim(), phone: p.phone || '', phone2: p.phone2 || '', email: p.email || '',
     telegram: p.telegram || '', address: p.address || '', birthDate: isDate_(p.birthDate) ? p.birthDate : '',
+    gender: ['М', 'Ж'].indexOf(p.gender) >= 0 ? p.gender : '',
     height: Number(p.height) || '', programs: programs.join(', '), spec: programs.join(', '),
     rates: JSON.stringify(rates), rateInd: rates.ind || 0, rateGroup: rates.group || 0, rateEvent: rates.event || 0,
     rateTour: rates.tournament || 0, extra: JSON.stringify(p.extra || {}),
@@ -917,7 +931,8 @@ function saveClient_(u, p) {
     name: String(req_(p.name, 'Укажите ФИО')).trim(), phone: p.phone || '', email: p.email || '',
     birthDate: isDate_(p.birthDate) ? p.birthDate : '', company: p.company || '',
     trainerIds: tids.join(','), trainerNames: tids.map(t => nameOf_('trainers', t)).join(', '),
-    partnerId: p.partnerId || '', active: p.active !== false, notes: p.notes || '', extra: JSON.stringify(p.extra || {})
+    partnerId: p.partnerId || '', active: p.active !== false, notes: p.notes || '', extra: JSON.stringify(p.extra || {}),
+    gender: ['М', 'Ж'].indexOf(p.gender) >= 0 ? p.gender : ''
   };
   let id = p.id;
   if (id) update_('clients', id, d); else id = insert_('clients', d);

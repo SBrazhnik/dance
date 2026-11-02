@@ -121,9 +121,11 @@ table.t{border-collapse:collapse;width:100%;font-size:14px}
 .modal.xl{max-width:1000px}
 iframe.docv{width:100%;height:72vh;border:1px solid var(--line);border-radius:10px;background:#fff}
 .sect-t{font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);font-weight:650;margin-top:6px;padding-top:8px;border-top:1px solid var(--line)}
-.filters{display:grid;gap:10px;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));align-items:end}
+.filters{display:grid;gap:10px;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));align-items:end}
 .filters .pair{display:flex;gap:6px;align-items:center}
 .filters .pair .inp{min-width:0}
+.filters .search{min-width:0}
+.filters .search .inp{width:100%}
 .kv{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;font-size:14px}
 .kv .k{color:var(--muted)}
 .dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px;vertical-align:middle}
@@ -297,7 +299,19 @@ function toast(msg, err) {
   const t = document.createElement('div'); t.className = 'toast' + (err ? ' err' : ''); t.textContent = msg;
   document.body.appendChild(t); setTimeout(() => t.remove(), err ? 4500 : 2600);
 }
-const fail = e => toast(e.message || String(e), true);
+const fail = e => { reportError(e, 'fail'); toast(e && e.message ? e.message : String(e), true); };
+/** Непредвиденные ошибки (не проверки вроде «Укажите ФИО») отправляем в журнал на сервер. */
+function reportError(e, where) {
+  try {
+    if (!e || !(e instanceof TypeError || e instanceof ReferenceError || e instanceof RangeError || e instanceof SyntaxError)) return;
+    if (!S.token) return;
+    const msg = String(e.message || e).slice(0, 500);
+    if (S.lastErr === msg) return; S.lastErr = msg;
+    call('logError', {message: msg, stack: String(e.stack || '').slice(0, 1500), where: where + ' · ' + (S.route || []).join('/'), ua: navigator.userAgent.slice(0, 200)}, true).catch(() => {});
+  } catch (x) { /* журнал не должен ломать приложение */ }
+}
+window.addEventListener('error', ev => { reportError(ev.error || new TypeError(ev.message), 'window'); });
+window.addEventListener('unhandledrejection', ev => { reportError(ev.reason, 'promise'); });
 
 async function reload() {
   if (S.snap) { S.D = S.snap; S.snap = null; } else S.D = await call('load');
@@ -400,6 +414,7 @@ function render() {
   $('#rf').onclick = () => reload().then(() => toast('Обновлено')).catch(fail);
   $('#um').onclick = userMenu;
   $$('[data-go]').forEach(a => a.onclick = () => { S.prev = null; go(a.dataset.go); });
+  S.pageSeq = (S.pageSeq || 0) + 1;
   const fn = VIEWS[S.route[0]] || VIEWS[homeOf(r)];
   try { fn(...S.route.slice(1)); } catch (e) { console.error(e); $('#main').innerHTML = `<div class="card">Ошибка отображения: ${esc(e.message)}</div>`; }
 }
@@ -800,6 +815,7 @@ function clientForm(o) {
     ${fld('Email', inp('email', o.email, 'type="email"'))}
     ${fld('Компания', inp('company', o.company))}
     ${fld('Дата рождения', inp('birthDate', o.birthDate, 'type="date"'))}
+    ${fld('Пол', sel('gender', [['', '—'], ['М', 'Мужской'], ['Ж', 'Женский']], o.gender || ''))}
     ${fld('Партнёр', sel('partnerId', [['', '— нет —']].concat((S.D.partners || []).filter(p => p.active).map(p => [p.id, p.name])), o.partnerId || ''), 'full')}
     ${fld('Закреплённые тренеры', multi('trainerIds', (S.D.trainers || []).filter(t => t.active).map(t => [t.id, t.name]), ids(o.trainerIds)), 'full')}
     ${extraFields('client', extraOf(o))}
@@ -829,6 +845,7 @@ function trainerForm(o) {
     ${fld('Telegram / WhatsApp', inp('telegram', o.telegram, 'placeholder="@ник или номер"'))}
     ${fld('Адрес', inp('address', o.address), 'full')}
     <div class="full sect-t">Параметры</div>
+    ${fld('Пол', sel('gender', [['', '—'], ['М', 'Мужской'], ['Ж', 'Женский']], o.gender || ''))}
     ${fld('Рост, см', inp('height', +o.height || '', 'type="number" min="100" max="230"'))}
     ${fld('Дата рождения', inp('birthDate', o.birthDate, 'type="date"'))}
     ${fld('Программы', chipsMulti('programs', dictList('program').map(p => p.name), progs(o.programs), 'Добавьте программы в «Настройки → Программы»'), 'full')}
@@ -978,7 +995,9 @@ VIEWS.home = () => {
   $$('[data-c]').forEach(e => e.onclick = () => { S.prev = ['home']; go('client', e.dataset.c); });
 
   const key = from + '|' + to;
+  const myPage = S.pageSeq;
   call('report', {from, to}, true).then(r => {
+    if (S.pageSeq !== myPage) return;
     if (S.route[0] !== 'home' || !$('#hk') || (S.ui.home && range().join('|') !== key)) return;
     const f = r.facts;
     const work = f.filter(x => x.n > 0);
@@ -1025,6 +1044,7 @@ VIEWS.clients = () => {
     let list = S.D.clients.slice().sort((a, b) => a.name.localeCompare(b.name));
     list = list.filter(c => ui.f === 'arch' ? !c.active : c.active !== false);
     if (q) list = list.filter(c => (c.name + ' ' + (c.company || '') + ' ' + (c.phone || '')).toLowerCase().includes(q));
+    if (ui.g) list = list.filter(c => (c.gender || '') === ui.g);
     if (ui.f === 'low') list = list.filter(c => ['warn'].includes(clientSummary(c.id).cls));
     if (ui.f === 'none') list = list.filter(c => ['bad', 'none'].includes(clientSummary(c.id).cls));
     $('#cl-list').innerHTML = list.length ? list.map(c => {
@@ -1045,9 +1065,11 @@ VIEWS.clients = () => {
     <div class="head"><h1>${isTr ? 'Мои ученики' : 'Ученики'}</h1>
       ${isStaff() ? `<button class="btn" id="ns">${ic('ticket')}Абонемент</button><button class="btn pri" id="nc">${ic('plus')}Ученик</button>` : ''}</div>
     <div class="row" style="margin-bottom:14px"><div class="search grow">${ic('search')}<input class="inp" id="q" placeholder="Поиск по имени, компании, телефону" value="${esc(ui.q)}"></div>
+      ${sel('g', [['', 'Пол: все'], ['М', 'Мужской'], ['Ж', 'Женский']], ui.g || '', 'id="cg" style="width:auto"')}
       <div class="chips">${[['all', 'Все'], ['low', 'Заканчиваются'], ['none', 'Нет часов']].concat(isStaff() ? [['arch', 'Архив']] : []).map(x => `<span class="chip ${ui.f === x[0] ? 'on' : ''}" data-f="${x[0]}">${x[1]}</span>`).join('')}</div></div>
     <div class="grid" id="cl-list"></div>`;
   $('#q').oninput = e => { ui.q = e.target.value; draw(); };
+  $('#cg').onchange = e => { ui.g = e.target.value; draw(); };
   $$('[data-f]').forEach(c => c.onclick = () => { ui.f = c.dataset.f; $$('[data-f]').forEach(x => x.classList.toggle('on', x === c)); draw(); });
   if ($('#nc')) { $('#nc').onclick = () => clientForm(); $('#ns').onclick = () => subForm(); }
   draw();
@@ -1066,7 +1088,7 @@ VIEWS.client = (id) => {
       <div class="card stack">
         <div class="row"><div class="avatar c" style="width:52px;height:52px;font-size:18px">${initials(c.name)}</div>
           <div class="grow">${c.contractNo ? ctrBadge(c, staff) : (staff ? `<button class="btn sm" id="ct">${ic('doc')}Присвоить договор</button>` : '')}</div></div>
-        <div class="small">${[c.phone && `📞 <a href="tel:${esc(c.phone)}">${esc(c.phone)}</a>`, c.email && esc(c.email), c.company && 'Компания: ' + esc(c.company), c.birthDate && 'Дата рождения: ' + fd(c.birthDate), c.partnerId && S.m.partners && S.m.partners[c.partnerId] && 'Партнёр: ' + esc(S.m.partners[c.partnerId].name)].filter(Boolean).join('<br>') || '<span class="muted">Контакты не указаны</span>'}</div>
+        <div class="small">${[c.phone && `📞 <a href="tel:${esc(c.phone)}">${esc(c.phone)}</a>`, c.email && esc(c.email), c.company && 'Компания: ' + esc(c.company), c.birthDate && 'Дата рождения: ' + fd(c.birthDate), c.gender && 'Пол: ' + (c.gender === 'М' ? 'мужской' : 'женский'), c.partnerId && S.m.partners && S.m.partners[c.partnerId] && 'Партнёр: ' + esc(S.m.partners[c.partnerId].name)].filter(Boolean).join('<br>') || '<span class="muted">Контакты не указаны</span>'}</div>
         <div><div class="small muted">Тренеры</div>${ids(c.trainerIds).map(t => `<span class="badge" style="margin:3px 4px 0 0">${esc(tName(t))}</span>`).join('') || '<span class="small muted">не закреплены</span>'}</div>
         ${extraView('client', extraOf(c)) ? `<div class="kv">${extraView('client', extraOf(c))}</div>` : ''}
         ${c.notes ? `<div class="small" style="background:var(--soft);padding:8px 10px;border-radius:8px">${esc(c.notes)}</div>` : ''}
@@ -1088,7 +1110,9 @@ VIEWS.client = (id) => {
   wireCtr($('#main'));
   let H = null;
   $('#prn').onclick = () => H ? showDoc('История занятий — ' + c.name, clientHistoryDoc(c, H)) : toast('Подождите, история загружается');
+  const myPage = S.pageSeq;
   call('clientHistory', {clientId: id}).then(h => {
+    if (S.pageSeq !== myPage || !$('#subs')) return; // пользователь уже ушёл со страницы
     H = h;
     $('#subs').innerHTML = h.subs.length ? h.subs.slice().sort((a, b) => (a.status === 'closed') - (b.status === 'closed') || b.startDate.localeCompare(a.startDate)).map(s => subBlock(s, {click: staff})).join('') : empty('Абонементов нет');
     if (staff) $$('#subs [data-sub]').forEach(e => e.onclick = () => subForm(h.subs.find(s => s.id === e.dataset.sub)));
@@ -1113,7 +1137,7 @@ function canEditLesson(l) {
 }
 
 VIEWS.trainers = () => {
-  const ui = S.ui.tf || (S.ui.tf = {q: '', prog: '', hFrom: '', hTo: '', sFrom: '', sTo: '', arch: false, sort: 'name', fx: {}});
+  const ui = S.ui.tf || (S.ui.tf = {q: '', prog: '', gender: '', hFrom: '', hTo: '', sFrom: '', sTo: '', arch: false, sort: 'name', fx: {}});
   const t0 = today(), ms = monthStart(t0);
   const hrs = {}, studs = {};
   S.D.lessons.filter(l => !l.eventId && l.date >= ms).forEach(l => { hrs[l.trainerId] = (hrs[l.trainerId] || 0) + l.hours; });
@@ -1126,6 +1150,7 @@ VIEWS.trainers = () => {
     const q = ui.q.toLowerCase();
     if (q) list = list.filter(t => [t.name, t.phone, t.phone2, t.email, t.telegram, t.programs, t.spec].join(' ').toLowerCase().includes(q));
     if (ui.prog) list = list.filter(t => progs(t.programs || t.spec).includes(ui.prog));
+    if (ui.gender) list = list.filter(t => (t.gender || '') === ui.gender);
     const hf = num(ui.hFrom), ht = num(ui.hTo), sf = num(ui.sFrom), st = num(ui.sTo);
     if (hf != null) list = list.filter(t => +t.height && +t.height >= hf);
     if (ht != null) list = list.filter(t => +t.height && +t.height <= ht);
@@ -1136,7 +1161,7 @@ VIEWS.trainers = () => {
     list.sort(by[ui.sort] || by.name);
     $('#tr-count').textContent = 'Найдено: ' + list.length;
     $('#tr-list').innerHTML = list.map(t => `<div class="card tight click" data-t="${t.id}" style="${t.active ? '' : 'opacity:.55'}"><div class="row"><div class="avatar">${initials(t.name)}</div>
-        <div class="grow"><b>${esc(t.name)}</b><div class="small muted">${[+t.height ? 'рост ' + t.height + ' см' : '', t.phone].filter(Boolean).map(esc).join(' · ') || '—'}</div></div>
+        <div class="grow"><b>${esc(t.name)}</b><div class="small muted">${[t.gender === 'М' ? 'муж.' : t.gender === 'Ж' ? 'жен.' : '', +t.height ? 'рост ' + t.height + ' см' : '', t.phone].filter(Boolean).map(esc).join(' · ') || '—'}</div></div>
         <div class="right"><b style="font-size:18px;color:var(--navy)">${fh(hrs[t.id] || 0)}</b><div class="small muted">ч в ${MONTHS[+t0.slice(5, 7) - 1].slice(0, 3)}.</div></div></div>
         <div class="chips" style="margin-top:8px">${progs(t.programs || t.spec).map(p => `<span class="badge">${esc(p)}</span>`).join('')}</div>
         <div class="row small muted" style="margin-top:8px"><span>Учеников: <b style="color:var(--text)">${studs[t.id] || 0}</b></span>${t.contractNo ? `<span class="badge gold">№ ${esc(t.contractNo)}</span>` : ''}</div></div>`).join('')
@@ -1147,6 +1172,7 @@ VIEWS.trainers = () => {
     <div class="card filters" style="margin-bottom:12px">
       <div><label class="f">Поиск</label><div class="search">${ic('search')}<input class="inp" id="fq" placeholder="Имя, телефон…" value="${esc(ui.q)}"></div></div>
       <div><label class="f">Программа</label>${sel('prog', [['', 'Все программы']].concat(dictList('program').map(p => [p.name, p.name])), ui.prog, 'id="fprog"')}</div>
+      <div><label class="f">Пол</label>${sel('gender', [['', 'Все'], ['М', 'Мужской'], ['Ж', 'Женский']], ui.gender, 'id="fgen"')}</div>
       <div><label class="f">Рост, см</label><div class="pair"><input class="inp" id="fh1" type="number" placeholder="от" value="${esc(ui.hFrom)}"><span>—</span><input class="inp" id="fh2" type="number" placeholder="до" value="${esc(ui.hTo)}"></div></div>
       <div><label class="f">Учеников</label><div class="pair"><input class="inp" id="fs1" type="number" min="0" placeholder="от" value="${esc(ui.sFrom)}"><span>—</span><input class="inp" id="fs2" type="number" min="0" placeholder="до" value="${esc(ui.sTo)}"></div></div>
       ${selFields.map(f => `<div><label class="f">${esc(f.name)}</label>${sel('fx', [['', 'Все']].concat(progs(f.options).map(x => [x, x])), ui.fx[f.id] || '', `data-fx="${esc(f.id)}"`)}</div>`).join('')}
@@ -1158,6 +1184,7 @@ VIEWS.trainers = () => {
   const bind = (sel_, key) => { $(sel_).oninput = e => { ui[key] = e.target.value; draw(); }; };
   bind('#fq', 'q'); bind('#fh1', 'hFrom'); bind('#fh2', 'hTo'); bind('#fs1', 'sFrom'); bind('#fs2', 'sTo');
   $('#fprog').onchange = e => { ui.prog = e.target.value; draw(); };
+  $('#fgen').onchange = e => { ui.gender = e.target.value; draw(); };
   $('#fsort').onchange = e => { ui.sort = e.target.value; draw(); };
   $$('[data-fx]').forEach(x => x.onchange = () => { ui.fx[x.dataset.fx] = x.value; draw(); });
   $$('[data-arch]').forEach(c => c.onclick = () => { ui.arch = c.dataset.arch === '1'; VIEWS.trainers(); });
@@ -1165,8 +1192,8 @@ VIEWS.trainers = () => {
   $('#nt').onclick = () => trainerForm();
   $('#tprn').onclick = () => {
     const rows = $$('#tr-list [data-t]').map(e => S.m.trainers[e.dataset.t]).filter(Boolean);
-    showDoc('Тренеры', `<h1>Тренеры</h1><table><thead><tr><th>ФИО</th><th>Программы</th><th class="n">Рост</th><th class="n">Учеников</th><th>Телефон</th><th>Договор</th></tr></thead><tbody>
-      ${rows.map(t => `<tr><td>${esc(t.name)}</td><td>${esc(t.programs || t.spec)}</td><td class="n">${+t.height || ''}</td><td class="n">${studs[t.id] || 0}</td><td>${esc(t.phone)}</td><td>${esc(t.contractNo)}</td></tr>`).join('')}</tbody></table>`);
+    showDoc('Тренеры', `<h1>Тренеры</h1><table><thead><tr><th>ФИО</th><th>Пол</th><th>Программы</th><th class="n">Рост</th><th class="n">Учеников</th><th>Телефон</th><th>Договор</th></tr></thead><tbody>
+      ${rows.map(t => `<tr><td>${esc(t.name)}</td><td>${esc(t.gender)}</td><td>${esc(t.programs || t.spec)}</td><td class="n">${+t.height || ''}</td><td class="n">${studs[t.id] || 0}</td><td>${esc(t.phone)}</td><td>${esc(t.contractNo)}</td></tr>`).join('')}</tbody></table>`);
   };
   draw();
 };
@@ -1181,7 +1208,7 @@ VIEWS.trainer = (id, self) => {
   const contacts = [
     t.phone && ['Телефон', `<a href="tel:${esc(t.phone)}">${esc(t.phone)}</a>`], t.phone2 && ['Доп. телефон', `<a href="tel:${esc(t.phone2)}">${esc(t.phone2)}</a>`],
     t.email && ['Email', `<a href="mailto:${esc(t.email)}">${esc(t.email)}</a>`], t.telegram && ['Мессенджер', esc(t.telegram)], t.address && ['Адрес', esc(t.address)],
-    +t.height && ['Рост', t.height + ' см'], t.birthDate && ['Дата рождения', fd(t.birthDate)],
+    t.gender && ['Пол', t.gender === 'М' ? 'мужской' : 'женский'], +t.height && ['Рост', t.height + ' см'], t.birthDate && ['Дата рождения', fd(t.birthDate)],
   ].filter(Boolean);
   const myGroups = (S.D.groups || []).filter(g => g.active !== false && ids(g.trainerIds).includes(t.id));
   $('#main').innerHTML = `
@@ -1217,7 +1244,9 @@ VIEWS.trainer = (id, self) => {
   let R = null;
   const cn = cid => (S.m.clients[cid] || ((R && R.clients) || []).find(c => c.id === cid) || {}).name || '—';
   $('#hprn').onclick = () => R ? showDoc('История занятий — ' + t.name, trainerHistoryDoc(t, pp.p, R.facts.filter(x => x.tr === t.id), cn, staff), fd(pp.p.from) + ' — ' + fd(pp.p.to)) : toast('Подождите, данные загружаются');
+  const myPage = S.pageSeq;
   call('report', {from: pp.p.from, to: pp.p.to, trainerId: t.id}).then(r => {
+    if (S.pageSeq !== myPage || !$('#trr')) return;
     R = r;
     const f = r.facts.filter(x => x.tr === t.id);
     const by = {};
@@ -1422,7 +1451,9 @@ VIEWS.reports = (tab) => {
   if (tab === 'subs') return reportSubs();
   if (tab === 'acts') return reportActs();
   $('#rr').innerHTML = '<div class="empty">Считаю…</div>';
+  const myPage = S.pageSeq;
   call('report', {from: pp.p.from, to: pp.p.to}).then(r => {
+    if (S.pageSeq !== myPage || !$('#rr')) return;
     S.ui.lastReport = r;
     ({sum: reportSum, pair: reportPair, pivot: reportPivot})[tab](r, pp.p);
   }).catch(fail);
@@ -1840,6 +1871,7 @@ VIEWS.settings = (tab) => {
       <div class="full row"><button class="btn pri">Сохранить</button><button type="button" class="btn" id="bnow">${ic('dl')}Сделать копию сейчас</button></div></form></div>
       <div class="card sect" id="binfo"><div class="empty small">Загрузка…</div></div>`;
     const info = () => call('backupInfo', {}, true).then(b => {
+      if (!$('#binfo')) return;
       $('#binfo').innerHTML = `<div class="row" style="margin-bottom:8px"><h2 class="grow">Копии</h2>${b.folderUrl ? `<a class="btn sm" href="${esc(b.folderUrl)}" target="_blank">Открыть папку «Бэкапы»</a>` : ''}</div>
         <div class="small" style="margin-bottom:8px">Расписание: ${b.triggerOn ? '<span class="badge ok">включено</span>' : '<span class="badge warn">не включено</span>'}${b.last ? ' · последняя копия: ' + esc(b.last) : ''}</div>
         ${b.err ? `<div class="small" style="color:var(--bad);margin-bottom:8px">${esc(b.err)}</div>` : ''}${b.status ? `<div class="small muted" style="margin-bottom:8px">${esc(b.status)}</div>` : ''}
@@ -1851,11 +1883,17 @@ VIEWS.settings = (tab) => {
     info();
   }
   if (tab === 'db') {
+    setTimeout(() => call('getErrors', {}, true).then(list => {
+      const el = $('#errlog'); if (!el) return;
+      el.innerHTML = `<h2 style="margin-bottom:8px">Журнал ошибок</h2><div class="small muted" style="margin-bottom:8px">Непредвиденные ошибки приложения у всех пользователей (последние 50). Пусто — значит всё хорошо.</div>
+        ${list.length ? `<div class="tw"><table class="t"><thead><tr><th>Время</th><th>Кто</th><th>Где</th><th>Ошибка</th></tr></thead><tbody>${list.map(x => `<tr><td class="nowrap small">${esc(x.createdAt)}</td><td class="small">${esc(x.userName)}</td><td class="small">${esc(x.where)}</td><td class="small">${esc(x.message)}</td></tr>`).join('')}</tbody></table></div>` : empty('Ошибок нет')}`;
+    }).catch(() => {}), 0);
     const xlsx = st.spreadsheetUrl ? st.spreadsheetUrl.replace(/\/edit.*$/, '') + '/export?format=xlsx' : '';
     box.innerHTML = `<div class="card stack"><h2>База данных</h2>
       <div class="small muted">Все данные хранятся в Google Таблице на вашем Google Диске. Пользователи приложения к ней доступа не имеют. Справочники — на листе «Справочники».</div>
       <div class="row">${st.spreadsheetUrl ? `<a class="btn" href="${esc(st.spreadsheetUrl)}" target="_blank">${ic('doc')}Открыть таблицу</a><a class="btn" href="${esc(xlsx)}" target="_blank">${ic('dl')}Скачать в Excel (.xlsx)</a>` : ''}</div>
       <div class="small muted">Если меняли таблицу вручную (удаляли строки, сортировали) и приложение показывает старое — подождите 30 минут или запустите в Apps Script функцию <b>clearCache</b>.</div></div>
+      <div class="card sect" id="errlog"><h2 style="margin-bottom:8px">Журнал ошибок</h2><div class="empty small">Загрузка…</div></div>
       <div class="card sect"><h2 style="margin-bottom:8px">Скорость работы</h2><div class="small muted" style="margin-bottom:8px">Последние запросы в этом окне: полное время и время работы сервера Google.</div>
       <div class="tw"><table class="t"><thead><tr><th>Время</th><th>Действие</th><th class="n">Всего, с</th><th class="n">Сервер, с</th></tr></thead><tbody>
       ${(S.perf || []).slice().reverse().map(x => `<tr><td>${esc(x.at)}</td><td>${esc(x.a)}</td><td class="n">${(x.total / 1000).toFixed(1).replace('.', ',')}</td><td class="n">${(x.server / 1000).toFixed(1).replace('.', ',')}</td></tr>`).join('') || `<tr><td colspan="4">${empty('Пока нет данных')}</td></tr>`}</tbody></table></div></div>`;
