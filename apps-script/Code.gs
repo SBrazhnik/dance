@@ -1518,7 +1518,7 @@ function report_(user, p) {
   const facts = facts_(from, to, tr);
   const res = { from, to, facts };
   const evIds = {}; facts.forEach(f => { if (f.ev) evIds[f.ev] = 1; });
-  res.events = tbl_('events').rows.filter(e => evIds[e.id]).map(e => ({ id: e.id, title: e.title, type: e.type, date: e.date, hours: e.hours, clientIds: e.clientIds, location: e.location, results: e.results }));
+  res.events = tbl_('events').rows.filter(e => evIds[e.id]).map(e => ({ id: e.id, title: e.title, type: e.type, date: e.date, hours: e.hours, clientIds: e.clientIds, location: e.location, results: e.results, trainerNames: e.trainerNames }));
   if (user.role === 'trainer') {
     const cl = {}; facts.forEach(f => { if (f.cl) cl[f.cl] = 1; });
     res.clients = tbl_('clients').rows.filter(c => cl[c.id]).map(c => ({ id: c.id, name: c.name, company: c.company }));

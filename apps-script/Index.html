@@ -900,41 +900,121 @@ function contractBtn(kind, id) {
 const VIEWS = {};
 
 VIEWS.home = () => {
-  const D = S.D, t = today(), ms = monthStart(t);
-  const mLessons = D.lessons.filter(l => l.date >= ms && l.date <= t);
-  const mEvents = D.events.filter(e => e.date >= ms && e.date <= t);
-  const trHours = sum(mLessons.filter(l => !l.eventId), l => l.hours) + sum(mEvents, e => e.hours * ids(e.trainerIds).length);
-  const attention = D.subs.filter(s => (s.status || 'active') === 'active' && ['low', 'ended', 'expired'].includes(s.state))
-    .sort((a, b) => a.remaining - b.remaining);
-  const activeClients = D.clients.filter(c => c.active);
-  const noSub = activeClients.filter(c => !activeSubs(c.id).length);
-  const todaySlots = D.slots.filter(s => s.date === t && s.status !== 'cancelled').sort((a, b) => a.time.localeCompare(b.time));
-  const todayEvents = D.events.filter(e => e.date === t);
-  const recent = D.lessons.filter(l => !l.eventId).slice().sort((a, b) => (b.createdAt + b.date).localeCompare(a.createdAt + a.date)).slice(0, 8);
+  const D = S.D, t = today();
+  const ui = S.ui.home || (S.ui.home = {mode: 'day', anchor: t, from: t, to: t});
+  // границы периода
+  const wkStart = d => addDays(d, -((new Date(d + 'T12:00:00Z').getUTCDay() + 6) % 7));
+  const range = () => {
+    const a = ui.anchor;
+    if (ui.mode === 'day') return [a, a];
+    if (ui.mode === 'week') return [wkStart(a), addDays(wkStart(a), 6)];
+    if (ui.mode === 'month') return [monthStart(a), monthEnd(a)];
+    if (ui.mode === 'year') return [a.slice(0, 4) + '-01-01', a.slice(0, 4) + '-12-31'];
+    return [ui.from, ui.to];
+  };
+  const [from, to] = range();
+  const shift = dir => {
+    const a = ui.anchor;
+    if (ui.mode === 'day') ui.anchor = addDays(a, dir);
+    if (ui.mode === 'week') ui.anchor = addDays(a, 7 * dir);
+    if (ui.mode === 'month') ui.anchor = monthStart(a, dir);
+    if (ui.mode === 'year') ui.anchor = (+a.slice(0, 4) + dir) + a.slice(4);
+    if (ui.mode === 'custom') { const len = Math.round((new Date(ui.to) - new Date(ui.from)) / 864e5) + 1; ui.from = addDays(ui.from, len * dir); ui.to = addDays(ui.to, len * dir); }
+    VIEWS.home();
+  };
+  const label = ui.mode === 'day' ? `${wd(from)}, ${fd(from)}${from === t ? ' · сегодня' : ''}`
+    : ui.mode === 'month' ? monthName(from).replace(/^./, c => c.toUpperCase())
+    : ui.mode === 'year' ? from.slice(0, 4) + ' год'
+    : `${fd(from)} — ${fd(to)}`;
+  const modes = [['day', 'День'], ['week', 'Неделя'], ['month', 'Месяц'], ['year', 'Год'], ['custom', 'Период']];
+
+  const attention = D.subs.filter(s => (s.status || 'active') === 'active' && ['low', 'ended', 'expired'].includes(s.state)).sort((a, b) => a.remaining - b.remaining);
+  const noSub = D.clients.filter(c => c.active && !activeSubs(c.id).length);
+  const newSubs = D.subs.filter(s => s.startDate >= from && s.startDate <= to);
+  const slots = D.slots.filter(s => s.date >= from && s.date <= to && s.status !== 'cancelled').sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time));
+  const rent = (D.rent || []).filter(r => r.date >= from && r.date <= to);
+
   $('#main').innerHTML = `
     <div class="head"><h1>Главная</h1><button class="btn pri" id="qa">${ic('check')}Отметить занятие</button></div>
-    <div class="kpis">
-      <div class="kpi"><b>${fh(trHours)}</b><span>часов тренеров за ${MONTHS[+t.slice(5, 7) - 1]}</span></div>
-      <div class="kpi"><b>${mLessons.filter(l => !l.eventId).length + mEvents.length}</b><span>занятий за месяц</span></div>
-      <div class="kpi"><b>${activeClients.length}</b><span>активных учеников</span></div>
-      <div class="kpi"><b style="color:${attention.length ? 'var(--bad)' : 'var(--navy)'}">${attention.length}</b><span>абонементов требуют внимания</span></div>
+    <div class="card" style="margin-bottom:12px">
+      <div class="row" style="gap:10px">
+        <div class="chips">${modes.map(m => `<span class="chip ${ui.mode === m[0] ? 'on' : ''}" data-m="${m[0]}">${m[1]}</span>`).join('')}</div>
+        <span class="spacer"></span>
+        <button class="btn sm" id="hprev" title="Назад">${ic('back')}</button>
+        <b style="min-width:150px;text-align:center">${esc(label)}</b>
+        <button class="btn sm" id="hnext" title="Вперёд" style="transform:scaleX(-1)">${ic('back')}</button>
+        <button class="btn sm" id="htoday">Сегодня</button>
+      </div>
+      ${ui.mode === 'custom' ? `<div class="row" style="gap:6px;margin-top:10px"><input type="date" class="inp" id="hf" value="${from}" style="width:auto"> — <input type="date" class="inp" id="ht" value="${to}" style="width:auto"></div>` : ui.mode === 'day' ? `<div class="row" style="margin-top:10px"><input type="date" class="inp" id="hd" value="${from}" style="width:auto"></div>` : ''}
     </div>
-    <div class="grid sect" style="grid-template-columns:repeat(auto-fit,minmax(340px,1fr));align-items:start">
+    <div id="hbody"><div class="kpis" id="hk"><div class="kpi"><b>…</b><span>часов тренеров</span></div><div class="kpi"><b>…</b><span>занятий и событий</span></div><div class="kpi"><b>…</b><span>учеников занималось</span></div>
+      <div class="kpi"><b>${newSubs.length}</b><span>новых абонементов${newSubs.length ? ' · ' + money(sum(newSubs, s => +s.price || 0)) : ''}</span></div></div>
+    <div class="grid sect" style="grid-template-columns:repeat(auto-fit,minmax(320px,1fr));align-items:start">
+      <div class="card"><h2 style="margin-bottom:10px">По тренерам</h2><div id="htr"><div class="empty small">Считаю…</div></div></div>
+      <div class="card"><h2 style="margin-bottom:10px">По видам занятий</h2><div id="hty"><div class="empty small">Считаю…</div></div></div>
+    </div>
+    <div class="grid sect" style="grid-template-columns:repeat(auto-fit,minmax(320px,1fr));align-items:start">
+      <div class="card"><h2 style="margin-bottom:10px">Расписание и аренда</h2>
+        ${slots.length + rent.length ? slots.map(s => `<div class="slot sub"><div class="tm">${ui.mode === 'day' ? '' : `<div class="small muted">${fd(s.date).slice(0, 5)}</div>`}${esc(s.time)}</div><div class="grow"><b>${esc(s.title)}</b><div class="small muted">${esc(tName(s.trainerId))} · записано ${D.bookings.filter(b => b.slotId === s.id && b.status !== 'cancelled').length}/${s.capacity}${s.status === 'done' ? ' · проведено' : ''}</div></div></div>`).join('')
+          + rent.map(r => `<div class="slot sub"><div class="tm">${ui.mode === 'day' ? '' : `<div class="small muted">${fd(r.date).slice(0, 5)}</div>`}${esc(r.time || '—')}</div><div class="grow"><b>Аренда: ${esc(r.renter)}</b><div class="small muted">${esc(r.hall || '')} · ${fh(r.hours)} ч · ${money(r.amount)}${r.paid ? '' : ' · не оплачено'}</div></div></div>`).join('')
+          : empty('В расписании на этот период ничего нет')}
+      </div>
       <div class="card"><h2 style="margin-bottom:10px">Абонементы: заканчиваются</h2>
-        ${attention.length ? attention.slice(0, 12).map(s => `<div class="row sub click" data-c="${s.clientId}"><div class="grow"><b>${esc(cName(s.clientId))}</b><div class="small muted">${esc(s.title)}${s.endDate ? ' · до ' + fd(s.endDate) : ''}</div></div><span class="badge ${subState(s)[1]}">${s.state === 'expired' ? 'Срок истёк' : 'Осталось ' + fh(s.remaining) + ' ч'}</span></div>`).join('') : empty('Все абонементы в порядке')}
+        ${attention.length ? attention.slice(0, 10).map(s => `<div class="row sub click" data-c="${s.clientId}"><div class="grow"><b>${esc(cName(s.clientId))}</b><div class="small muted">${esc(s.title)}${s.endDate ? ' · до ' + fd(s.endDate) : ''}</div></div><span class="badge ${subState(s)[1]}">${s.state === 'expired' ? 'Срок истёк' : 'Осталось ' + fh(s.remaining) + ' ч'}</span></div>`).join('') : empty('Все абонементы в порядке')}
         ${noSub.length ? `<div class="small muted" style="margin-top:10px">Без абонемента: ${noSub.slice(0, 8).map(c => `<a data-c="${c.id}" style="cursor:pointer">${esc(c.name)}</a>`).join(', ')}${noSub.length > 8 ? ' и ещё ' + (noSub.length - 8) : ''}</div>` : ''}
       </div>
-      <div class="card"><h2 style="margin-bottom:10px">Сегодня, ${fd(t)}</h2>
-        ${todaySlots.length + todayEvents.length ? todaySlots.map(s => `<div class="slot sub"><div class="tm">${esc(s.time)}</div><div class="grow"><b>${esc(s.title)}</b><div class="small muted">${esc(tName(s.trainerId))} · записано ${D.bookings.filter(b => b.slotId === s.id && b.status !== 'cancelled').length}/${s.capacity}</div></div></div>`).join('')
-          + todayEvents.map(e => `<div class="slot sub"><div class="tm">${esc(e.time || '—')}</div><div class="grow"><b>${esc(e.title)}</b><div class="small muted">${TYPE[e.type]} · ${esc(e.trainerNames)}</div></div></div>`).join('') : empty('В расписании на сегодня ничего нет')}
-      </div>
     </div>
-    <div class="sect"><h2>Последние отметки тренеров</h2>
-      <div class="tw"><table class="t"><thead><tr><th>Дата</th><th>Тренер</th><th>Ученик</th><th class="n">Часов</th><th>Отметил</th></tr></thead><tbody>
-      ${recent.map(l => `<tr class="click" data-c="${l.clientId}"><td class="nowrap">${fd(l.date)} ${esc(l.time)}</td><td>${esc(l.trainerName)}</td><td>${esc(l.clientName)}</td><td class="n">${fh(l.hours)}</td><td class="small muted">${esc(l.createdBy)}</td></tr>`).join('') || `<tr><td colspan="5">${empty('Пока нет отметок')}</td></tr>`}
-      </tbody></table></div></div>`;
-  $('#qa').onclick = () => lessonForm();
+    <div class="sect"><div class="row" style="margin-bottom:10px"><h2 class="grow">Занятия за период</h2><button class="btn sm" id="hprn">${ic('print')}Печать</button></div>
+      <div class="tw" id="hl"><div class="empty small">Загрузка…</div></div></div></div>`;
+
+  $('#qa').onclick = () => lessonForm({date: ui.mode === 'day' ? from : undefined});
+  $$('[data-m]').forEach(c => c.onclick = () => { ui.mode = c.dataset.m; if (ui.mode === 'custom') { ui.from = from; ui.to = to; } VIEWS.home(); });
+  $('#hprev').onclick = () => shift(-1);
+  $('#hnext').onclick = () => shift(1);
+  $('#htoday').onclick = () => { ui.anchor = today(); if (ui.mode === 'custom') { ui.mode = 'day'; } VIEWS.home(); };
+  if ($('#hd')) $('#hd').onchange = e => { if (e.target.value) { ui.anchor = e.target.value; VIEWS.home(); } };
+  if ($('#hf')) $('#hf').onchange = e => { if (e.target.value) { ui.from = e.target.value; if (ui.to < ui.from) ui.to = ui.from; VIEWS.home(); } };
+  if ($('#ht')) $('#ht').onchange = e => { if (e.target.value) { ui.to = e.target.value; if (ui.from > ui.to) ui.from = ui.to; VIEWS.home(); } };
   $$('[data-c]').forEach(e => e.onclick = () => { S.prev = ['home']; go('client', e.dataset.c); });
+
+  const key = from + '|' + to;
+  call('report', {from, to}, true).then(r => {
+    if (S.route[0] !== 'home' || !$('#hk') || (S.ui.home && range().join('|') !== key)) return;
+    const f = r.facts;
+    const work = f.filter(x => x.n > 0);
+    const hours = sum(work, x => x.th);
+    const sessions = work.filter(x => !x.ev).length + new Set(work.filter(x => x.ev).map(x => x.ev)).size;
+    const clients = new Set(f.filter(x => x.cl).map(x => x.cl)).size;
+    const k = $$('#hk .kpi b');
+    k[0].textContent = fh(hours); k[1].textContent = sessions; k[2].textContent = clients;
+    // по тренерам
+    const byT = {};
+    work.forEach(x => { const o = byT[x.tr] = byT[x.tr] || {h: 0, n: 0, a: 0}; o.h += x.th; o.n += x.n; const t = S.m.trainers[x.tr]; if (t) o.a += payOf(t, x.type, x.th, x.n); });
+    const tk = Object.keys(byT).sort((a, b) => byT[b].h - byT[a].h);
+    const mx = Math.max(1, ...tk.map(x => byT[x].h));
+    $('#htr').innerHTML = tk.length ? `<div class="hbars">${tk.map(id => `<div class="hb"><span><a style="cursor:pointer" data-t="${id}">${esc(tName(id))}</a></span><div class="bar"><i style="width:${byT[id].h / mx * 100}%"></i></div><span class="right"><b>${fh(byT[id].h)} ч</b></span></div>`).join('')}</div>
+      <div class="small muted" style="margin-top:8px">По ставкам за период: <b style="color:var(--text)">${money(sum(tk, id => byT[id].a))}</b></div>` : empty('Занятий нет');
+    $$('#htr [data-t]').forEach(a => a.onclick = () => { S.ui.tr = {from, to, preset: 'c'}; go('trainer', a.dataset.t); });
+    // по видам
+    const byY = {};
+    work.forEach(x => { const o = byY[x.type] = byY[x.type] || {h: 0, n: 0}; o.h += x.th; o.n += 1; });
+    const yk = Object.keys(byY).sort((a, b) => (+typeInfo(a).order || 0) - (+typeInfo(b).order || 0));
+    const my = Math.max(1, ...yk.map(x => byY[x].h));
+    $('#hty').innerHTML = yk.length ? `<div class="hbars">${yk.map(id => `<div class="hb"><span><span class="dot" style="background:${esc(typeColor(id))}"></span>${esc(typeInfo(id).name)}</span><div class="bar"><i style="width:${byY[id].h / my * 100}%;background:${esc(typeColor(id))}"></i></div><span class="right"><b>${fh(byY[id].h)} ч</b></span></div>`).join('')}</div>` : empty('Занятий нет');
+    // список
+    const evT = Object.fromEntries((r.events || []).map(e => [e.id, e]));
+    const seen = {};
+    const rows = work.filter(x => { if (!x.ev) return true; if (seen[x.ev]) return false; seen[x.ev] = 1; return true; })
+      .sort((a, b) => b.date.localeCompare(a.date));
+    const totalRows = rows.length; rows.length = Math.min(rows.length, 300);
+    $('#hl').innerHTML = rows.length ? `<table class="t"><thead><tr><th>Дата</th><th>Вид</th><th>Тренер</th><th>Ученик / событие</th><th class="n">Часов</th></tr></thead><tbody>
+      ${rows.map(x => `<tr class="${x.cl ? 'click' : ''}" ${x.cl ? `data-c="${x.cl}"` : ''}><td class="nowrap">${fd(x.date)} <span class="muted small">${wd(x.date)}</span></td><td>${typeBadge(x.type)}</td>
+        <td>${x.ev ? esc((evT[x.ev] || {}).trainerNames || tName(x.tr)) : esc(tName(x.tr))}</td>
+        <td>${x.ev ? esc((evT[x.ev] || {}).title || x.title || '') + (evT[x.ev] && evT[x.ev].clientIds ? ` <span class="small muted">· ${ids(evT[x.ev].clientIds).length} уч.</span>` : '') : esc(cName(x.cl))}</td><td class="n">${fh(x.th)}</td></tr>`).join('')}
+      </tbody></table>${totalRows > rows.length ? `<div class="small muted" style="padding:8px">Показаны последние 300 из ${totalRows} — выберите период короче или откройте «Отчёты»</div>` : ''}` : empty('За этот период занятий нет');
+    $$('#hl [data-c]').forEach(e => e.onclick = () => { S.prev = ['home']; go('client', e.dataset.c); });
+  }).catch(e => { if ($('#hl')) $('#hl').innerHTML = `<div class="empty" style="color:var(--bad)">${esc(e.message)}</div>`; });
+  $('#hprn').onclick = () => printEl('Сводка: ' + label, $('#hbody'), fd(from) + ' — ' + fd(to));
 };
 
 VIEWS.clients = () => {
