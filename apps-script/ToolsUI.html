@@ -25,8 +25,6 @@
 .tl-sw{display:flex;align-items:center;gap:8px;cursor:pointer}
 </style>
 <script>
-// ===================== Модуль «Инструменты» =====================
-// Отдельный файл: подключается в Index.html одной строкой и не меняет остальные экраны.
 I.spark = '<path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/>';
 I.send = '<path d="M22 2L11 13M22 2l-7 20-4-9-9-4z"/>';
 (function () {
@@ -70,7 +68,6 @@ VIEWS.tools = tab => {
 };
 async function tlRefresh() { await TL.load(true); if (S.route[0] === 'tools' && $('#tlb')) TLV[S.route[1] || TL.tabs()[0][0]](); }
 
-// ---------- анкета танцора ----------
 function dancerForm(clientId, after) {
   const d = TL.dancer(clientId);
   const c = S.m.clients[clientId] || {};
@@ -91,7 +88,6 @@ function dancerForm(clientId, after) {
 
 const TLV = {};
 
-// ---------- 1. Подбор пары ----------
 TLV.pair = () => {
   const ui = S.ui.tlp || (S.ui.tlp = {c: ''});
   const seekers = (S.T.dancers || []).filter(d => d.seek && S.m.clients[d.clientId]);
@@ -125,7 +121,6 @@ TLV.pair = () => {
   }).catch(fail);
 };
 
-// ---------- 2. Паспорт танцора ----------
 function passportHtml(clientId, opts) {
   opts = opts || {};
   const cur = TL.current(clientId);
@@ -165,7 +160,7 @@ function diaryForm(clientId, o) {
   modal(o.id ? 'Запись в дневнике' : 'Новая запись в дневнике', `<div class="fg">
     ${fld('Дата', inp('date', o.date || today(), 'type="date"'))}
     ${fld('Что отработали, над чем работать', txt('text', o.text), 'full')}
-    ${fld('Ссылка на видео (Google Диск, YouTube…)', inp('video', o.video || '', 'placeholder="https://"'), 'full')}
+    ${fld('Ссылка на видео (Google Диск, YouTube…)', inp('video', o.video || '', 'placeholder="https:' + '/' + '/…"'), 'full')}
   </div>`, [o.id ? {t: ic('trash') + 'Удалить', cls: 'danger', left: 1, fn: async () => { await call('deleteDiary', {id: o.id}); toast('Удалено'); await tlRefresh(); }} : null,
     {t: 'Отмена'}, {t: 'Сохранить', cls: 'pri', fn: async m => {
       const v = vals(m); v.clientId = clientId; v.id = o.id; await call('saveDiary', v); toast('Запись сохранена'); await tlRefresh();
@@ -205,7 +200,6 @@ TLV.my = () => {
   $('#tlan').onclick = () => dancerForm(cid, tlRefresh);
 };
 
-// ---------- 3. Корпоративная лига ----------
 TLV.league = () => {
   const staff = ['admin', 'manager'].includes(role());
   const my = S.pageSeq;
@@ -249,7 +243,6 @@ TLV.league = () => {
   }).catch(fail);
 };
 
-// ---------- 4. Отчёт для HR ----------
 TLV.hr = () => {
   const ui = S.ui.tlhr || (S.ui.tlhr = {c: ''});
   const pp = periodPicker('tlhrp', () => TLV.hr());
@@ -280,7 +273,6 @@ TLV.hr = () => {
   }).catch(fail);
 };
 
-// ---------- 5. Telegram ----------
 function tgLinkModal(p) {
   call('tgLink', p).then(r => {
     const bg = modal('Подключение к Telegram: ' + esc(r.name), r.url ? `<p style="margin-top:0">${p.self ? 'Нажмите «Открыть» на телефоне, где установлен Telegram, и затем «Запустить» — бот подключится.' : 'Отправьте эту ссылку человеку (WhatsApp, почта, SMS). Он откроет её, нажмёт «Запустить» в Telegram — и бот подключится.'}</p>
