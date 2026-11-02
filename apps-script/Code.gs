@@ -187,7 +187,7 @@ function removeTestData() {
   n.acts = del_('acts', acts.map(a => a.id));
   n.lessons = del_('lessons', tbl_('lessons').rows.filter(l => has(tr, l.trainerId) || has(cl, l.clientId)).map(l => l.id));
   n.subs = del_('subs', tbl_('subs').rows.filter(s => has(cl, s.clientId) || has(tr, s.trainerId)).map(s => s.id));
-  n.events = del_('events', tbl_('events').rows.filter(e => ids_(e.trainerIds).every(t => has(tr, t))).map(e => e.id));
+  n.events = del_('events', tbl_('events').rows.filter(e => { const t = ids_(e.trainerIds); return t.length > 0 && t.every(x => has(tr, x)); }).map(e => e.id));
   const slots = tbl_('slots').rows.filter(s => has(tr, s.trainerId)).map(s => s.id);
   n.bookings = del_('bookings', tbl_('bookings').rows.filter(b => has(slots, b.slotId) || has(cl, b.clientId)).map(b => b.id));
   n.slots = del_('slots', slots);
