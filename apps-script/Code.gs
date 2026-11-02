@@ -106,6 +106,11 @@ const DEFAULT_SETTINGS = {
   actSubtitle: 'об оказанных услугах',
   actText: 'Вышеперечисленные услуги выполнены полностью и в срок. Заказчик претензий по объёму, качеству и срокам оказания услуг не имеет.',
   actSaveCopy: 'true',
+  backupEnabled: 'true',
+  backupEvery: 1,
+  backupHour: 3,
+  backupKeep: 30,
+  backupFormat: 'xlsx',
 };
 const PUBLIC_SETTINGS = ['clubName', 'halls', 'lowHours', 'trainerEditDays'];
 const KINDS = { client: 'Ученик', trainer: 'Тренер', partner: 'Партнёр', rent: 'Аренда', other: 'Прочее' };
@@ -194,6 +199,91 @@ function removeTestData() {
   Logger.log('Удалено: ' + JSON.stringify(n));
 }
 
+// ---------------------------------------------------------------------------
+// Резервные копии базы: папка «Бэкапы» рядом с таблицей
+// ---------------------------------------------------------------------------
+/** Запустите один раз из редактора: даст разрешения и включит ежедневный бэкап. */
+function setupBackup() {
+  ensureSchema_();
+  installBackupTrigger_();
+  const r = backupNow_('настройка');
+  Logger.log('Бэкап включён. Первая копия: ' + r.name + ' — ' + r.url);
+}
+/** Вызывается триггером по расписанию. */
+function runBackup() {
+  try { backupNow_('автоматически'); } catch (e) { setSetting_('backupLastStatus', 'Ошибка: ' + e.message); throw e; }
+}
+function backupFolder_() {
+  const S = settings_();
+  if (S.folder_backups) { try { const f = DriveApp.getFolderById(S.folder_backups); if (!f.isTrashed()) return f; } catch (e) { /* создадим */ } }
+  const parents = DriveApp.getFileById(ss_().getId()).getParents();
+  const base = parents.hasNext() ? parents.next() : DriveApp.getRootFolder();
+  const ex = base.getFoldersByName('Бэкапы');
+  const f = ex.hasNext() ? ex.next() : base.createFolder('Бэкапы');
+  setSetting_('folder_backups', f.getId());
+  return f;
+}
+function backupNow_(by) {
+  const S = settings_();
+  const folder = backupFolder_();
+  const ss = ss_();
+  SpreadsheetApp.flush();
+  const stamp = Utilities.formatDate(new Date(), tz_(), 'yyyy-MM-dd HH-mm');
+  const name = 'Бэкап ' + ss.getName() + ' ' + stamp;
+  const fmt = String(S.backupFormat || 'xlsx');
+  const made = [];
+  if (fmt === 'xlsx' || fmt === 'both') {
+    const url = 'https://docs.google.com/spreadsheets/d/' + ss.getId() + '/export?format=xlsx';
+    const resp = UrlFetchApp.fetch(url, { headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken() }, muteHttpExceptions: true });
+    if (resp.getResponseCode() !== 200) throw new Error('Google не отдал файл Excel (код ' + resp.getResponseCode() + ')');
+    made.push(folder.createFile(resp.getBlob().setName(name + '.xlsx')));
+  }
+  if (fmt === 'sheet' || fmt === 'both') made.push(DriveApp.getFileById(ss.getId()).makeCopy(name, folder));
+  // храним только последние N копий каждого формата
+  const keep = Math.max(1, parseInt(S.backupKeep, 10) || 30);
+  const all = [];
+  const it = folder.getFiles();
+  while (it.hasNext()) { const f = it.next(); if (f.getName().indexOf('Бэкап ') === 0) all.push(f); }
+  ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'application/vnd.google-apps.spreadsheet'].forEach(mime => {
+    all.filter(f => f.getMimeType() === mime).sort((a, b) => b.getDateCreated() - a.getDateCreated()).slice(keep).forEach(f => f.setTrashed(true));
+  });
+  const when = now_();
+  setSetting_('backupLast', when);
+  setSetting_('backupLastStatus', 'Готово (' + by + '): ' + made.map(f => f.getName()).join(', '));
+  return { name: made.map(f => f.getName()).join(', '), url: folder.getUrl(), when };
+}
+function installBackupTrigger_() {
+  ScriptApp.getProjectTriggers().filter(t => t.getHandlerFunction() === 'runBackup').forEach(t => ScriptApp.deleteTrigger(t));
+  const S = settings_();
+  if (String(S.backupEnabled) === 'false') return 'off';
+  const every = Math.min(Math.max(parseInt(S.backupEvery, 10) || 1, 1), 7);
+  const hour = Math.min(Math.max(parseInt(S.backupHour, 10) || 0, 0), 23);
+  const b = ScriptApp.newTrigger('runBackup').timeBased().atHour(hour).nearMinute(15);
+  (every === 7 ? b.everyWeeks(1) : b.everyDays(every)).inTimezone(tz_()).create();
+  return 'on';
+}
+function saveBackup_(u, p) {
+  setSetting_('backupEnabled', p.backupEnabled === false ? 'false' : 'true');
+  setSetting_('backupEvery', Math.min(Math.max(parseInt(p.backupEvery, 10) || 1, 1), 7));
+  setSetting_('backupHour', Math.min(Math.max(parseInt(p.backupHour, 10) || 0, 0), 23));
+  setSetting_('backupKeep', Math.min(Math.max(parseInt(p.backupKeep, 10) || 30, 1), 365));
+  setSetting_('backupFormat', ['xlsx', 'sheet', 'both'].indexOf(p.backupFormat) >= 0 ? p.backupFormat : 'xlsx');
+  try { return installBackupTrigger_(); }
+  catch (e) { throw new Error('Настройки сохранены, но расписание не включилось: нужно разрешение. Откройте Apps Script и один раз запустите функцию setupBackup. (' + e.message + ')'); }
+}
+function backupInfo_() {
+  const S = settings_();
+  let files = [], folderUrl = '', triggerOn = false, err = '';
+  try {
+    const folder = backupFolder_(); folderUrl = folder.getUrl();
+    const it = folder.getFiles();
+    while (it.hasNext()) { const f = it.next(); if (f.getName().indexOf('Бэкап ') === 0) files.push({ name: f.getName(), url: f.getUrl(), size: f.getSize(), date: Utilities.formatDate(f.getDateCreated(), tz_(), 'yyyy-MM-dd HH:mm') }); }
+    files.sort((a, b) => b.date.localeCompare(a.date));
+  } catch (e) { err = e.message; }
+  try { triggerOn = ScriptApp.getProjectTriggers().some(t => t.getHandlerFunction() === 'runBackup'); } catch (e) { err = err || 'Нужно разрешение: запустите setupBackup в редакторе Apps Script'; }
+  return { files: files.slice(0, 60), folderUrl, triggerOn, last: S.backupLast || '', status: S.backupLastStatus || '', err };
+}
+
 /** Единая точка вызова из интерфейса. */
 function api(token, action, payload) {
   try {
@@ -269,6 +359,9 @@ const HANDLERS = {
   uploadContractFile: { roles: STAFF, write: true, fn: uploadContractFile_ },
   removeContractFile: { roles: STAFF, write: true, fn: removeContractFile_ },
   getFile: { roles: STAFF, fn: getFile_ },
+  backupInfo: { roles: ['admin'], fn: backupInfo_ },
+  backupNow: { roles: ['admin'], write: true, fn: (u) => backupNow_(u.name) },
+  saveBackup: { roles: ['admin'], write: true, fn: saveBackup_ },
 };
 
 // ---------------------------------------------------------------------------

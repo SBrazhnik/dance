@@ -143,6 +143,12 @@ public class MainActivity extends Activity {
             @Override
             public void onPageFinished(WebView view, String url) {
                 if (!url.startsWith("data:")) loadedOnce = true;
+                if (url.startsWith("https://script.google.com/")) {
+                    // убираем служебную полосу Google «Это приложение создано пользователем Google Apps Script»
+                    view.evaluateJavascript("(function(){var s=document.createElement('style');"
+                            + "s.textContent='#warning,.warning-bar{display:none!important}';"
+                            + "(document.head||document.documentElement).appendChild(s);})()", null);
+                }
                 splash.setVisibility(View.GONE);
             }
 
