@@ -129,6 +129,9 @@ public class MainActivity extends Activity {
         s.setUseWideViewPort(true);
         s.setMediaPlaybackRequiresUserGesture(true);
         s.setUserAgentString(s.getUserAgentString() + " DanceClubApp/1.0");
+        // всегда свежая версия приложения: страницу не берём из кэша
+        s.setCacheMode(WebSettings.LOAD_NO_CACHE);
+        web.clearCache(true);
 
         CookieManager cm = CookieManager.getInstance();
         cm.setAcceptCookie(true);
@@ -183,11 +186,8 @@ public class MainActivity extends Activity {
             if (url != null && (url.startsWith("http://") || url.startsWith("https://"))) openExternal(Uri.parse(url));
         });
 
-        if (state != null) {
-            web.restoreState(state);
-        } else {
-            start();
-        }
+        // старую сохранённую страницу не восстанавливаем — грузим текущую версию
+        start();
     }
 
     private View buildSplash() {
@@ -302,9 +302,22 @@ public class MainActivity extends Activity {
         web.saveState(out);
     }
 
+    private long pausedAt = 0;
+
     @Override
     protected void onPause() {
         super.onPause();
+        pausedAt = System.currentTimeMillis();
         CookieManager.getInstance().flush();
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        // после долгого перерыва перезагружаем страницу, чтобы подтянуть обновления
+        if (pausedAt > 0 && System.currentTimeMillis() - pausedAt > 20 * 60 * 1000L) {
+            pausedAt = 0;
+            start();
+        }
     }
 }

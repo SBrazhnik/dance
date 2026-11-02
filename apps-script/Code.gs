@@ -7,6 +7,7 @@
  */
 
 const CLUB_NAME = 'Клуб корпоративных бальных танцев';
+const APP_VER = '2026-11-02.9'; // меняется при каждом обновлении — открытые страницы предложат перезагрузку
 const STAFF = ['admin', 'manager'];
 const ALL = ['admin', 'manager', 'trainer', 'client'];
 const SESSION_DAYS = 30;
@@ -834,13 +835,17 @@ function canSeeClient_(user, clientId) {
   return false;
 }
 
+function appUrl_() {
+  try { return ScriptApp.getService().getUrl() || ''; } catch (e) { return ''; }
+}
+
 function load_(user) {
   const S = settings_();
   const today = today_();
   const from = addDays_(today, -62);
   const staff = STAFF.indexOf(user.role) >= 0;
   const used = usage_();
-  const res = { user: pubUser_(user), today, club: CLUB_NAME, settings: {} };
+  const res = { user: pubUser_(user), today, club: CLUB_NAME, settings: {}, ver: APP_VER, url: appUrl_() };
   (staff && user.role === 'admin' ? Object.keys(S) : PUBLIC_SETTINGS).forEach(k => {
     if (k !== 'Первичный пароль admin') res.settings[k] = S[k];
   });
