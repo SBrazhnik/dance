@@ -1588,7 +1588,7 @@ function contractForm(o) {
     ${fld('Действует до', inp('endDate', o.endDate || '', 'type="date"'))}
     ${fld('Сумма, ₽', inp('amount', +o.amount || '', 'type="number" min="0"'))}
     ${fld('Заметки', inp('notes', o.notes), 'full')}
-    ${fld('Файл договора (скан, PDF, до 10 МБ)', `${o.fileId ? `<div class="row" style="margin-bottom:6px"><span class="badge">${ic('clip', 12)} ${esc(o.fileName || 'файл')}</span><button type="button" class="btn sm" id="fview">${ic('eye')}Открыть</button><button type="button" class="btn sm danger" id="frm">Убрать файл</button></div>` : ''}<input type="file" id="cfile" class="inp" accept=".pdf,image/*,.doc,.docx">`, 'full')}
+    ${fld('Файл договора (скан, PDF, до 10 МБ)', `${o.fileId ? `<div class="row" style="margin-bottom:6px"><span class="badge">${ic('clip', 12)} ${esc(o.fileName || 'файл')}</span><button type="button" class="btn sm" id="fview">${ic('eye')}Открыть</button><button type="button" class="btn sm danger" id="frm">Убрать файл</button></div>` : ''}<input type="file" id="cfile" class="inp" accept=".pdf,.jpg,.jpeg,.png,.heic,.webp,.doc,.docx">`, 'full')}
   </div>`, [
     o.id ? {t: ic('trash') + 'Удалить', cls: 'danger', left: 1, fn: async () => { if (!confirm('Удалить договор № ' + o.number + '? Номер освободится, у стороны договора он исчезнет.')) return false; await call('deleteContract', {id: o.id}); toast('Удалено'); await reload(); }} : null,
     {t: 'Отмена'},
