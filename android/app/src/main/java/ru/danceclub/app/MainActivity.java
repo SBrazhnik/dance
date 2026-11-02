@@ -13,7 +13,12 @@ import android.text.InputType;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
+import android.print.PrintAttributes;
+import android.print.PrintDocumentAdapter;
+import android.print.PrintManager;
+import android.util.Base64;
 import android.webkit.CookieManager;
+import android.webkit.JavascriptInterface;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceError;
 import android.webkit.WebResourceRequest;
@@ -28,6 +33,9 @@ import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import java.io.File;
+import java.io.FileOutputStream;
+
 /**
  * Оболочка для веб-приложения клуба (Google Apps Script).
  * Адрес берётся из сборки (BuildConfig.APP_URL) или вводится при первом запуске.
@@ -38,6 +46,64 @@ public class MainActivity extends Activity {
     private View splash;
     private SharedPreferences prefs;
     private boolean loadedOnce = false;
+    private WebView printView; // держим ссылку, пока идёт печать
+
+    /** Мост для страницы: печать документов и открытие файлов (акты, договоры, CSV). */
+    public class Bridge {
+        @JavascriptInterface
+        public void print(final String title, final String html) {
+            runOnUiThread(() -> doPrint(title, html));
+        }
+
+        @JavascriptInterface
+        public void openFile(final String name, final String mime, final String base64) {
+            runOnUiThread(() -> doOpenFile(name, mime, base64));
+        }
+    }
+
+    private void doPrint(String title, String html) {
+        final String jobName = (title == null || title.isEmpty()) ? getString(R.string.app_name) : title;
+        final WebView pw = new WebView(this);
+        pw.getSettings().setJavaScriptEnabled(false);
+        pw.setWebViewClient(new WebViewClient() {
+            @Override
+            public void onPageFinished(WebView view, String url) {
+                PrintManager pm = (PrintManager) getSystemService(PRINT_SERVICE);
+                PrintDocumentAdapter adapter = view.createPrintDocumentAdapter(jobName);
+                pm.print(jobName, adapter, new PrintAttributes.Builder().setMediaSize(PrintAttributes.MediaSize.ISO_A4).build());
+            }
+        });
+        printView = pw;
+        pw.loadDataWithBaseURL("https://script.google.com/", html, "text/html", "utf-8", null);
+    }
+
+    private void doOpenFile(String name, String mime, String base64) {
+        try {
+            String safe = (name == null || name.isEmpty() ? "file" : name).replaceAll("[\\\\/:*?\"<>|]", "_");
+            File dir = new File(getCacheDir(), "shared");
+            if (!dir.exists() && !dir.mkdirs()) throw new Exception("нет доступа к памяти");
+            File f = new File(dir, safe);
+            try (FileOutputStream out = new FileOutputStream(f)) {
+                out.write(Base64.decode(base64 == null ? "" : base64, Base64.DEFAULT));
+            }
+            Uri uri = Uri.parse("content://" + SharedFileProvider.AUTHORITY + "/" + Uri.encode(safe));
+            String type = (mime == null || mime.isEmpty()) ? "application/octet-stream" : mime;
+            Intent view = new Intent(Intent.ACTION_VIEW).setDataAndType(uri, type)
+                    .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_ACTIVITY_NEW_TASK);
+            Intent send = new Intent(Intent.ACTION_SEND).setType(type).putExtra(Intent.EXTRA_STREAM, uri)
+                    .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            Intent chooser = Intent.createChooser(send, "Сохранить или отправить: " + safe);
+            if (view.resolveActivity(getPackageManager()) != null) {
+                Intent pick = Intent.createChooser(view, "Открыть: " + safe);
+                pick.putExtra(Intent.EXTRA_INITIAL_INTENTS, new Intent[]{send});
+                startActivity(pick);
+            } else {
+                startActivity(chooser);
+            }
+        } catch (Exception e) {
+            Toast.makeText(this, "Не удалось открыть файл: " + e.getMessage(), Toast.LENGTH_LONG).show();
+        }
+    }
 
     @Override
     protected void onCreate(Bundle state) {
@@ -106,7 +172,10 @@ public class MainActivity extends Activity {
             }
         });
 
-        web.setDownloadListener((url, ua, cd, mime, len) -> openExternal(Uri.parse(url)));
+        web.addJavascriptInterface(new Bridge(), "AndroidBridge");
+        web.setDownloadListener((url, ua, cd, mime, len) -> {
+            if (url != null && (url.startsWith("http://") || url.startsWith("https://"))) openExternal(Uri.parse(url));
+        });
 
         if (state != null) {
             web.restoreState(state);

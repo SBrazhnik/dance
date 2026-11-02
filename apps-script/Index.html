@@ -118,6 +118,17 @@ table.t{border-collapse:collapse;width:100%;font-size:14px}
 .modal-bg{position:fixed;inset:0;background:rgba(12,18,35,.45);z-index:60;display:flex;align-items:flex-start;justify-content:center;padding:40px 12px;overflow:auto}
 .modal{background:var(--card);border-radius:16px;width:100%;max-width:560px;box-shadow:0 20px 60px rgba(0,0,0,.3);animation:pop .15s ease-out}
 .modal.wide{max-width:760px}
+.modal.xl{max-width:1000px}
+iframe.docv{width:100%;height:72vh;border:1px solid var(--line);border-radius:10px;background:#fff}
+.sect-t{font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);font-weight:650;margin-top:6px;padding-top:8px;border-top:1px solid var(--line)}
+.filters{display:grid;gap:10px;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));align-items:end}
+.filters .pair{display:flex;gap:6px;align-items:center}
+.filters .pair .inp{min-width:0}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;font-size:14px}
+.kv .k{color:var(--muted)}
+.dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px;vertical-align:middle}
+.swatch{width:42px;height:38px;padding:2px;border:1px solid #d6dbe6;border-radius:9px;background:#fff}
+.toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
 .modal .mh{display:flex;align-items:center;padding:16px 18px 6px}
 .modal .mh h2{flex:1}
 .modal .mb{padding:10px 18px 4px}
@@ -185,7 +196,7 @@ table.t{border-collapse:collapse;width:100%;font-size:14px}
 const LOGO = 'data:image/png;base64,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';
 const CLUB = 'Клуб корпоративных бальных танцев';
 const ROLE = {admin:'Администратор', manager:'Менеджер', trainer:'Тренер', client:'Ученик'};
-const TYPE = {ind:'Индивидуальное', group:'Групповое', event:'Мероприятие'};
+const TYPE = new Proxy({}, {get: (o, k) => typeInfo(String(k)).name});
 const SUBST = {ok:['Активен','ok'], low:['Заканчивается','warn'], ended:['Часы закончились','bad'], expired:['Срок истёк','bad'], frozen:['Заморожен',''], closed:['Закрыт','']};
 const KINDS = {client:'Ученики', trainer:'Тренеры', partner:'Партнёры', rent:'Аренда', other:'Прочее'};
 const WD = ['Вс','Пн','Вт','Ср','Чт','Пт','Сб'];
@@ -208,7 +219,12 @@ const I = { // иконки
   bell:'<path d="M6 8a6 6 0 1 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10 21h4"/>',
   clock:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/>',
   plus:'<path d="M12 5v14M5 12h14"/>', check:'<path d="M4 12l5 5L20 6"/>', x:'<path d="M6 6l12 12M18 6L6 18"/>',
-  menu:'<path d="M3 6h18M3 12h18M3 18h18"/>', back:'<path d="M15 18l-6-6 6-6"/>', search:'<circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/>',
+  menu:'<path d="M3 6h18M3 12h18M3 18h18"/>',
+  print:'<path d="M6 9V3h12v6"/><rect x="3" y="9" width="18" height="8" rx="2"/><path d="M7 14h10v7H7z"/>',
+  clip:'<path d="M21 11l-8.5 8.5a5 5 0 0 1-7-7L14 4a3.5 3.5 0 0 1 5 5l-8.5 8.5a2 2 0 0 1-3-3L15 7"/>',
+  trophy:'<path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0z"/><path d="M17 5h3v2a3 3 0 0 1-3 3M7 5H4v2a3 3 0 0 0 3 3"/>',
+  list:'<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>',
+  eye:'<path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"/><circle cx="12" cy="12" r="3"/>', back:'<path d="M15 18l-6-6 6-6"/>', search:'<circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/>',
   refresh:'<path d="M20 11a8 8 0 1 0-2 6M20 4v7h-7"/>', dl:'<path d="M12 3v12M6 10l6 6 6-6M4 21h16"/>', edit:'<path d="M4 20h4L19 9l-4-4L4 16z"/>', trash:'<path d="M4 7h16M9 7V4h6v3M6 7l1 14h10l1-14"/>',
 };
 const ic = (n, s) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"${s ? ` style="width:${s}px;height:${s}px"` : ''}>${I[n] || ''}</svg>`;
@@ -283,7 +299,7 @@ async function reload() {
 }
 function index() {
   const D = S.D, m = {};
-  ['trainers', 'clients', 'subs', 'partners', 'slots', 'events', 'users', 'allClients'].forEach(k => {
+  ['trainers', 'clients', 'subs', 'partners', 'slots', 'events', 'users', 'allClients', 'groups', 'contracts', 'acts'].forEach(k => {
     m[k] = {}; (D[k] || []).forEach(x => { m[k][x.id] = x; });
   });
   if (D.allClients) D.allClients.forEach(c => { if (!m.clients[c.id]) m.clients[c.id] = c; });
@@ -334,7 +350,8 @@ const PAGES = [
   {k:'trainers', t:'Тренеры', i:'star', r:['admin','manager']},
   {k:'me', t:'Мои часы', i:'clock', r:['trainer']},
   {k:'schedule', t:'Расписание', i:'cal', r:['admin','manager','trainer']},
-  {k:'events', t:'Группы и мероприятия', i:'group', r:['admin','manager','trainer']},
+  {k:'groups', t:'Группы', i:'group', r:['admin','manager','trainer']},
+  {k:'events', t:'Занятия и события', i:'trophy', r:['admin','manager','trainer']},
   {k:'reports', t:'Отчёты и акты', i:'chart', r:['admin','manager']},
   {sep:1, r:['admin','manager']},
   {k:'rent', t:'Аренда', i:'key', r:['admin','manager']},
@@ -394,7 +411,7 @@ function userMenu(e) {
 function modal(title, body, buttons, opts) {
   opts = opts || {};
   const bg = document.createElement('div'); bg.className = 'modal-bg';
-  bg.innerHTML = `<div class="modal ${opts.wide ? 'wide' : ''}"><div class="mh"><h2>${title}</h2><button class="ibtn" data-x>${ic('x', 20)}</button></div>
+  bg.innerHTML = `<div class="modal ${opts.wide ? 'wide' : ''} ${opts.xl ? 'xl' : ''}"><div class="mh"><h2>${title}</h2><button class="ibtn" data-x>${ic('x', 20)}</button></div>
     <div class="mb">${body}</div><div class="mf"></div></div>`;
   const close = () => bg.remove();
   bg.querySelector('[data-x]').onclick = close;
@@ -484,8 +501,8 @@ function clientSummary(clientId) {
 }
 function empty(msg) { return `<div class="empty">${msg}</div>`; }
 function tableCsv(name, headers, rows) {
-  const csv = '﻿' + [headers].concat(rows).map(r => r.map(c => '"' + String(c == null ? '' : c).replace(/"/g, '""') + '"').join(';')).join('\r\n');
-  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], {type: 'text/csv'})); a.download = name + '.csv'; a.click();
+  const csv = '\ufeff' + [headers].concat(rows).map(r => r.map(c => '"' + String(c == null ? '' : c).replace(/"/g, '""') + '"').join(';')).join('\r\n');
+  saveBlob(name + '.csv', new Blob([csv], {type: 'text/csv'}));
 }
 function periodPicker(key, onChange) {
   const p = S.ui[key] || (S.ui[key] = {from: monthStart(today()), to: monthEnd(today()), preset: 'm0'});
@@ -507,6 +524,213 @@ function periodPicker(key, onChange) {
   };
   return {p, html, wire};
 }
+
+// ---------- справочники, ставки, доп. поля ----------
+const BUILTIN = {ind: ['Индивидуальное', 'ind', 'hour', '#32467a'], group: ['Групповое', 'group', 'hour', '#3f7cac'], practice: ['Танцпрактика', 'group', 'hour', '#2a9d8f'], camp: ['Сборы', 'group', 'hour', '#8e5ea2'], event: ['Мероприятие', 'event', 'hour', '#c9a24a'], tournament: ['Турнир', 'event', 'fixed', '#c93d3d']};
+const KINDNAME = {ind: 'Индивидуальное', group: 'Групповое', event: 'Мероприятие / турнир'};
+function typeInfo(id) {
+  const d = S.D && (S.D.dict || []).find(x => x.list === 'type' && x.id === id);
+  if (d) return d;
+  const b = BUILTIN[id];
+  return b ? {id, name: b[0], kind: b[1], mode: b[2], color: b[3], rate: 0, order: 0, deduct: b[1] !== 'event'} : {id, name: id || '—', kind: 'group', mode: 'hour', color: '#6b7385', rate: 0, order: 99};
+}
+function dictList(list, all) { return ((S.D && S.D.dict) || []).filter(d => d.list === list && (all || d.active !== false)).sort((a, b) => (+a.order || 0) - (+b.order || 0) || a.name.localeCompare(b.name)); }
+const typesOf = kinds => dictList('type').filter(t => kinds.includes(t.kind));
+const typeColor = id => typeInfo(id).color || '#6b7385';
+const typeBadge = id => `<span class="badge" style="background:${esc(typeColor(id))}22;color:${esc(typeColor(id))}">${esc(typeInfo(id).name)}</span>`;
+const progs = s => String(s || '').split(',').map(x => x.trim()).filter(Boolean);
+function ratesOf(t) {
+  let r = {};
+  try { r = JSON.parse((t && t.rates) || '{}') || {}; } catch (e) { r = {}; }
+  [['ind', 'rateInd'], ['group', 'rateGroup'], ['event', 'rateEvent'], ['tournament', 'rateTour']].forEach(([k, c]) => { if ((r[k] === undefined || r[k] === '') && +t[c]) r[k] = +t[c]; });
+  return r;
+}
+function rateOf(t, type) {
+  const r = ratesOf(t), has = k => r[k] !== undefined && r[k] !== '' && r[k] !== null;
+  if (has(type)) return +r[type] || 0;
+  const ty = typeInfo(type);
+  if (+ty.rate) return +ty.rate;
+  const base = ty.mode === 'hour' ? ty.kind : '';
+  return base && has(base) ? +r[base] || 0 : 0;
+}
+const payOf = (t, type, hours, units) => (typeInfo(type).mode === 'fixed' ? units : hours) * rateOf(t, type);
+function extraOf(o) { try { return JSON.parse((o && o.extra) || '{}') || {}; } catch (e) { return {}; } }
+function extraFields(entity, ex) {
+  const fs = dictList('field').filter(f => f.kind === entity);
+  if (!fs.length) return '';
+  return `<div class="full sect-t">Дополнительно</div>` + fs.map(f => {
+    const n = 'x_' + f.id, v = ex[f.id];
+    if (f.mode === 'check') return `<div style="align-self:end">${chk(n, esc(f.name), !!v)}</div>`;
+    if (f.mode === 'select') return fld(esc(f.name), sel(n, [['', '—']].concat(progs(f.options).map(x => [x, x])), v || ''));
+    return fld(esc(f.name), inp(n, v == null ? '' : v, f.mode === 'number' ? 'type="number"' : f.mode === 'date' ? 'type="date"' : ''));
+  }).join('');
+}
+function extraView(entity, ex) {
+  return dictList('field', true).filter(f => f.kind === entity && ex[f.id] !== undefined && ex[f.id] !== '' && ex[f.id] !== false && ex[f.id] !== null)
+    .map(f => `<span class="k">${esc(f.name)}</span><span>${f.mode === 'check' ? 'да' : f.mode === 'date' ? fd(ex[f.id]) : esc(ex[f.id])}</span>`).join('');
+}
+function chipsMulti(name, items, chosen, emptyMsg) {
+  if (!items.length) return `<div class="small muted">${emptyMsg || 'Список пуст'}</div>`;
+  return `<div class="chips">${items.map(x => { const on = chosen.includes(x); return `<label class="chip ${on ? 'on' : ''}"><input type="checkbox" data-multi="1" name="${name}" value="${esc(x)}" ${on ? 'checked' : ''} hidden>${esc(x)}</label>`; }).join('')}</div>`;
+}
+function formVals(m) {
+  const v = vals(m); v.rates = {}; v.extra = {};
+  Object.keys(v).forEach(k => {
+    if (k.startsWith('rate_')) { v.rates[k.slice(5)] = v[k]; delete v[k]; }
+    else if (k.startsWith('x_')) { v.extra[k.slice(2)] = v[k]; delete v[k]; }
+  });
+  return v;
+}
+function contractFields(kind, o) {
+  return fld('№ договора', `<div class="row" style="gap:6px;flex-wrap:nowrap"><input class="inp" name="contractNo" value="${esc(o.contractNo || '')}" placeholder="без договора"><button type="button" class="btn sm" data-autono="${kind}" title="Следующий свободный номер">Авто</button></div>`)
+    + (kind === 'rent' ? '' : fld('Дата договора', inp('contractDate', o.contractDate || '', 'type="date"')));
+}
+async function autoNo(bg, kind) {
+  try {
+    const n = await call('nextContractNo', {kind}, true);
+    const i = $('[name=contractNo]', bg) || $('[name=number]', bg); if (i) i.value = n;
+    const d = $('[name=contractDate]', bg); if (d && !d.value) d.value = today();
+  } catch (e) { fail(e); }
+}
+function wireForm(bg, kind, o) {
+  wireMulti(bg);
+  $$('.chips input[type=checkbox]', bg).forEach(c => c.onchange = () => c.parentNode.classList.toggle('on', c.checked));
+  $$('[data-autono]', bg).forEach(b => b.onclick = () => autoNo(bg, b.dataset.autono));
+  if (o && !o.id && !o.contractNo && kind && kind !== 'rent') autoNo(bg, kind);
+}
+function wireCtr(root) {
+  $$('[data-ctr]', root).forEach(b => b.onclick = () => { const c = (S.D.contracts || []).find(x => x.number === b.dataset.ctr); if (c) contractForm(c); });
+}
+const ctrBadge = (o, staff) => o.contractNo ? `<span class="badge gold ${staff ? 'click' : ''}" ${staff ? `data-ctr="${esc(o.contractNo)}" title="Открыть договор"` : ''}>Договор № ${esc(o.contractNo)}${o.contractDate ? ' от ' + fd(o.contractDate) : ''}</span>` : '';
+
+// ---------- печать и просмотр документов ----------
+const clubName = () => (S.D && S.D.settings && S.D.settings.clubName) || CLUB;
+const inApp = () => !!(window.AndroidBridge && window.AndroidBridge.print);
+function docShell(title, body, sub) {
+  return `<!DOCTYPE html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(title)}</title><style>
+@page{size:A4;margin:14mm 12mm}
+body{font:12.5px/1.45 Arial,Helvetica,sans-serif;color:#111;margin:18px}
+@media print{body{margin:0}}
+.dh{display:flex;align-items:center;gap:12px;border-bottom:2px solid #253559;padding-bottom:8px;margin-bottom:14px}
+.dh img{width:42px;height:42px;border-radius:8px}
+.dh b{font-size:14px;color:#253559}
+h1{font-size:18px;margin:8px 0 4px}h2{font-size:14px;margin:16px 0 6px}h3{font-size:13px;margin:12px 0 4px}
+table{border-collapse:collapse;width:100%;margin:8px 0}tr{page-break-inside:avoid}
+th,td{border:1px solid #c4c8d2;padding:4px 6px;text-align:left;vertical-align:top}
+th{background:#eef1f8}.n{text-align:right;white-space:nowrap}
+tfoot td{font-weight:bold;background:#f5f6fa}
+.muted{color:#666}.small{font-size:11px}.c{text-align:center}.nowrap{white-space:nowrap}
+.row2{display:flex;justify-content:space-between;margin:10px 0}
+.sig{display:flex;justify-content:space-between;gap:40px;margin-top:40px}.sig div{flex:1}
+.badge{display:inline-block;border:1px solid #ccc;border-radius:10px;padding:0 6px;font-size:11px}
+.empty{color:#666;padding:6px}
+</style></head><body><div class="dh"><img src="${LOGO}" alt=""><div><b>${esc(clubName())}</b>${sub ? `<div class="muted small">${esc(sub)}</div>` : ''}</div></div>${body}<div class="muted small" style="margin-top:18px">Сформировано ${fd(today())}${S.user ? ' · ' + esc(S.user.name) : ''}</div></body></html>`;
+}
+function showDoc(title, body, sub) {
+  const html = docShell(title, body, sub);
+  const bg = modal(esc(title), `<iframe class="docv" title="Документ"></iframe>`, [
+    {t: 'Закрыть'},
+    {t: ic('dl') + 'Сохранить', fn: () => { saveBlob(title.replace(/[\\/:*?"<>|]/g, '_') + '.html', new Blob([html], {type: 'text/html'})); return false; }},
+    {t: ic('print') + 'Печать', cls: 'pri', fn: () => { printHtml(title, html, $('iframe.docv', bg)); return false; }},
+  ], {wide: true, xl: true, nofocus: true});
+  $('iframe.docv', bg).srcdoc = html;
+  return bg;
+}
+function printHtml(title, html, fr) {
+  if (inApp()) { window.AndroidBridge.print(title, html); return; }
+  try { if (fr && fr.contentWindow) { fr.contentWindow.focus(); fr.contentWindow.print(); return; } } catch (e) { /* ниже — в новом окне */ }
+  const w = window.open('', '_blank');
+  if (!w) return toast('Разрешите всплывающие окна, чтобы печатать', true);
+  w.document.write(html); w.document.close(); setTimeout(() => { w.focus(); w.print(); }, 400);
+}
+function b64Blob(b64, mime) { const bin = atob(b64); const a = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) a[i] = bin.charCodeAt(i); return new Blob([a], {type: mime}); }
+function saveBlob(name, blob) {
+  if (window.AndroidBridge && window.AndroidBridge.openFile) {
+    const fr = new FileReader();
+    fr.onload = () => window.AndroidBridge.openFile(name, blob.type || 'application/octet-stream', String(fr.result).split(',')[1] || '');
+    fr.readAsDataURL(blob); return;
+  }
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name;
+  document.body.appendChild(a); a.click(); setTimeout(() => a.remove(), 200);
+}
+/** Печать любого блока страницы (таблицы отчётов, списки) — без кнопок и полей. */
+function printEl(title, el, sub) {
+  if (!el) return;
+  const c = el.cloneNode(true);
+  $$('button,.bar,.hbars,input,select,.noprint', c).forEach(x => x.remove());
+  $$('a', c).forEach(a => { const sp = document.createElement('span'); sp.textContent = a.textContent; a.replaceWith(sp); });
+  $$('[style]', c).forEach(x => x.removeAttribute('style'));
+  showDoc(title, `<h1>${esc(title)}</h1>${sub ? `<div class="muted">${esc(sub)}</div>` : ''}${c.innerHTML}`);
+}
+async function viewFile(fileId) {
+  const f = await call('getFile', {fileId});
+  if (window.AndroidBridge && window.AndroidBridge.openFile) { window.AndroidBridge.openFile(f.name, f.mime, f.data); return; }
+  const blob = b64Blob(f.data, f.mime), url = URL.createObjectURL(blob);
+  const isImg = /^image\//.test(f.mime), isPdf = f.mime === 'application/pdf';
+  modal(esc(f.name), isImg ? `<img src="${url}" style="max-width:100%;border-radius:8px">`
+    : isPdf ? `<iframe class="docv" src="${url}"></iframe><div class="small muted" style="margin-top:6px">Если документ не отображается — нажмите «Скачать».</div>`
+    : `<div class="empty">Просмотр этого формата в браузере недоступен — скачайте файл.</div>`,
+    [{t: 'Закрыть'}, {t: ic('dl') + 'Скачать', cls: 'pri', fn: () => { saveBlob(f.name, blob); return false; }}], {wide: true, xl: true, nofocus: true});
+}
+async function uploadFile(id, f) {
+  if (f.size > 10 * 1024 * 1024) throw new Error('Файл больше 10 МБ');
+  const data = await new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(String(fr.result).split(',')[1] || ''); fr.onerror = rej; fr.readAsDataURL(f); });
+  await call('uploadContractFile', {id, name: f.name, mime: f.type || 'application/octet-stream', data});
+}
+
+// ---------- документы: история, акт ----------
+function trainerHistoryDoc(t, p, f, cn, staff) {
+  const rows = f.filter(x => x.n > 0).sort((a, b) => (a.date + (a.ev ? 1 : 0)).localeCompare(b.date + (b.ev ? 1 : 0)));
+  const by = {};
+  rows.forEach(x => { const o = by[x.type] = by[x.type] || {h: 0, u: 0, a: 0}; o.h += x.th; o.u += x.n; o.a += payOf(t, x.type, x.th, x.n); });
+  const keys = Object.keys(by).sort((a, b) => (+typeInfo(a).order || 0) - (+typeInfo(b).order || 0));
+  return `<h1>История занятий тренера</h1>
+    <div><b>${esc(t.name)}</b>${t.contractNo ? ' · договор № ' + esc(t.contractNo) : ''}</div>
+    <div class="muted">Период: ${fd(p.from)} — ${fd(p.to)}</div>
+    <h2>Итого по видам занятий</h2>
+    <table><thead><tr><th>Вид</th><th class="n">Часов</th><th class="n">Занятий / участий</th>${staff ? '<th class="n">Ставка</th><th class="n">Сумма</th>' : ''}</tr></thead><tbody>
+    ${keys.map(k => `<tr><td>${esc(typeInfo(k).name)}</td><td class="n">${fh(by[k].h)}</td><td class="n">${by[k].u}</td>${staff ? `<td class="n">${money(rateOf(t, k))} ${typeInfo(k).mode === 'fixed' ? 'за участие' : 'в час'}</td><td class="n">${money(by[k].a)}</td>` : ''}</tr>`).join('') || `<tr><td colspan="5">За период занятий нет</td></tr>`}
+    </tbody><tfoot><tr><td>Всего</td><td class="n">${fh(sum(keys, k => by[k].h))}</td><td class="n">${rows.length}</td>${staff ? `<td></td><td class="n">${money(sum(keys, k => by[k].a))}</td>` : ''}</tr></tfoot></table>
+    <h2>Все занятия за период</h2>
+    <table><thead><tr><th>Дата</th><th>Вид</th><th>Ученик / событие</th><th class="n">Часов</th>${staff ? '<th class="n">Сумма</th>' : ''}</tr></thead><tbody>
+    ${rows.map(x => `<tr><td class="nowrap">${fd(x.date)} ${wd(x.date)}</td><td>${esc(typeInfo(x.type).name)}</td><td>${esc(x.ev ? (x.title || '') : cn(x.cl))}</td><td class="n">${fh(x.th)}</td>${staff ? `<td class="n">${money(payOf(t, x.type, x.th, x.n))}</td>` : ''}</tr>`).join('') || `<tr><td colspan="5">—</td></tr>`}
+    </tbody></table>`;
+}
+function clientHistoryDoc(c, h) {
+  const subT = Object.fromEntries(h.subs.map(s => [s.id, s.title]));
+  const by = {};
+  h.lessons.forEach(l => { by[l.trainerId] = (by[l.trainerId] || 0) + l.hours; });
+  return `<h1>История занятий ученика</h1><div><b>${esc(c.name)}</b>${c.contractNo ? ' · договор № ' + esc(c.contractNo) : ''}</div>
+    <h2>Абонементы</h2><table><thead><tr><th>Абонемент</th><th>Тренер</th><th class="n">Часов</th><th class="n">Использовано</th><th class="n">Остаток</th><th>Срок</th><th>Статус</th></tr></thead><tbody>
+    ${h.subs.map(s => `<tr><td>${esc(s.title)}</td><td>${s.trainerId ? esc(tName(s.trainerId)) : 'любой'}</td><td class="n">${fh(s.hours)}</td><td class="n">${fh(s.used)}</td><td class="n">${fh(s.remaining)}</td><td>${fd(s.startDate)} — ${fd(s.endDate) || 'без срока'}</td><td>${subState(s)[0]}</td></tr>`).join('') || '<tr><td colspan="7">Нет</td></tr>'}</tbody></table>
+    <h2>Часы по тренерам</h2><table><tbody>${Object.keys(by).map(k => `<tr><td>${esc(tName(k))}</td><td class="n">${fh(by[k])} ч</td></tr>`).join('') || '<tr><td>—</td></tr>'}</tbody></table>
+    <h2>Занятия</h2><table><thead><tr><th>Дата</th><th>Тренер</th><th>Вид</th><th class="n">Часов</th><th>Абонемент</th><th>Заметка</th></tr></thead><tbody>
+    ${h.lessons.map(l => `<tr><td class="nowrap">${fd(l.date)} ${esc(l.time)}</td><td>${esc(l.trainerName)}</td><td>${esc(TYPE[l.type])}</td><td class="n">${fh(l.hours)}</td><td>${l.subId ? esc(subT[l.subId] || '') : 'без абонемента'}</td><td>${esc(l.notes)}</td></tr>`).join('') || '<tr><td colspan="6">—</td></tr>'}
+    </tbody><tfoot><tr><td colspan="3">Всего</td><td class="n">${fh(sum(h.lessons, l => l.hours))}</td><td colspan="2"></td></tr></tfoot></table>`;
+}
+function actData(a) {
+  try { const d = JSON.parse(a.data || ''); if (d && d.lines) return d; } catch (e) { /* старый акт */ }
+  return {number: a.number, date: String(a.createdAt || '').slice(0, 10), from: a.dateFrom, to: a.dateTo, trainer: {name: a.trainerName},
+    club: {name: clubName(), requisites: S.D.settings.clubRequisites || '', director: S.D.settings.director || '', city: S.D.settings.city || ''},
+    texts: {title: 'АКТ', subtitle: 'об оказанных услугах', text: ''}, detail: [], hours: a.hours, amount: a.amount,
+    lines: [{name: 'Услуги по проведению занятий', unit: 'ч', qty: a.hours, rate: a.hours ? a.amount / a.hours : 0, amount: a.amount}]};
+}
+function actBody(d) {
+  const m2 = v => (+v || 0).toLocaleString('ru-RU', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+  const isD = v => /^\d{4}-\d{2}-\d{2}$/.test(String(v));
+  return `<h1 class="c">${esc(d.texts.title || 'АКТ')} № ${esc(d.number)}</h1>${d.texts.subtitle ? `<div class="c">${esc(d.texts.subtitle)}</div>` : ''}
+    <div class="row2"><span>${d.club.city ? 'г. ' + esc(d.club.city) : ''}</span><span>${fd(d.date)}</span></div>
+    <p><b>Исполнитель:</b> ${esc(d.trainer.name)}${d.trainer.contractNo ? ', договор № ' + esc(d.trainer.contractNo) + (d.trainer.contractDate ? ' от ' + fd(d.trainer.contractDate) : '') : ''}<br>
+    <b>Заказчик:</b> ${esc(d.club.name)}${d.club.requisites ? ', ' + esc(d.club.requisites) : ''}<br>
+    <b>Период оказания услуг:</b> с ${fd(d.from)} по ${fd(d.to)}</p>
+    <table><thead><tr><th>№</th><th>Наименование услуг</th><th class="n">Кол-во</th><th>Ед.</th><th class="n">Ставка, ₽</th><th class="n">Сумма, ₽</th></tr></thead><tbody>
+    ${d.lines.map((l, i) => `<tr><td>${i + 1}</td><td>${esc(l.name)}</td><td class="n">${fh(l.qty)}</td><td>${esc(l.unit || 'ч')}</td><td class="n">${m2(l.rate)}</td><td class="n">${m2(l.amount)}</td></tr>`).join('')}
+    </tbody><tfoot><tr><td></td><td>Итого</td><td></td><td></td><td></td><td class="n">${m2(d.amount)}</td></tr></tfoot></table>
+    <p>Всего оказано услуг на сумму ${m2(d.amount)} руб. ${esc(d.texts.text || '')}</p>
+    ${(d.detail || []).length ? `<h2>Расшифровка</h2><table><thead><tr><th>Ученик / событие</th><th>Дата</th><th class="n">Объём</th></tr></thead><tbody>${d.detail.map(r => `<tr><td>${esc(r[0])}</td><td>${isD(r[1]) ? fd(r[1]) : esc(r[1])}</td><td class="n">${esc(String(r[2]).replace('.', ','))}</td></tr>`).join('')}</tbody></table>` : ''}
+    <div class="sig"><div>Исполнитель<br><br>_______________ / ${esc(d.trainer.name)}</div><div>Заказчик<br><br>_______________ / ${esc(d.club.director || '')}</div></div>`;
+}
+const openAct = a => showDoc('Акт № ' + a.number, actBody(actData(a)), a.trainerName);
 
 // ---------- формы действий ----------
 function lessonForm(o) {
@@ -570,50 +794,76 @@ function clientForm(o) {
     ${fld('Дата рождения', inp('birthDate', o.birthDate, 'type="date"'))}
     ${fld('Партнёр', sel('partnerId', [['', '— нет —']].concat((S.D.partners || []).filter(p => p.active).map(p => [p.id, p.name])), o.partnerId || ''), 'full')}
     ${fld('Закреплённые тренеры', multi('trainerIds', (S.D.trainers || []).filter(t => t.active).map(t => [t.id, t.name]), ids(o.trainerIds)), 'full')}
+    ${extraFields('client', extraOf(o))}
+    <div class="full sect-t">Договор</div>
+    ${contractFields('client', o)}
     ${fld('Заметки', txt('notes', o.notes), 'full')}
-    <div class="full">${o.contractNo ? `<span class="badge gold">Договор № ${esc(o.contractNo)}</span>` : chk('makeContract', 'Присвоить номер договора', !o.id)}</div>
     ${o.id ? `<div class="full">${chk('active', 'Активен (снимите, чтобы отправить в архив)', o.active)}</div>` : ''}
-  </div>`, [{t: 'Отмена'}, {t: 'Сохранить', cls: 'pri', fn: async m => {
-    const v = vals(m); v.id = o.id; if (!o.id) v.active = true;
-    const id = await call('saveClient', v); toast('Сохранено'); await reload(); if (!o.id) go('client', id);
-  }}]);
-  wireMulti(bg);
+  </div>`, [
+    o.id && role() === 'admin' ? {t: ic('trash') + 'Удалить', cls: 'danger', left: 1, fn: async () => { if (!confirm('Удалить ученика безвозвратно?')) return false; await call('deleteClient', {id: o.id}); toast('Удалено'); await reload(); go('clients'); }} : null,
+    {t: 'Отмена'},
+    {t: 'Сохранить', cls: 'pri', fn: async m => {
+      const v = formVals(m); v.id = o.id; if (!o.id) v.active = true;
+      const id = await call('saveClient', v); toast('Сохранено'); await reload(); if (!o.id) go('client', id);
+    }}].filter(Boolean), {wide: true});
+  wireForm(bg, 'client', o);
 }
 
 function trainerForm(o) {
   o = o || {};
-  modal(o.id ? 'Тренер' : 'Новый тренер', `<div class="fg">
+  const rates = ratesOf(o);
+  const bg = modal(o.id ? 'Тренер' : 'Новый тренер', `<div class="fg">
     ${fld('ФИО', inp('name', o.name), 'full')}
+    <div class="full sect-t">Контакты</div>
     ${fld('Телефон', inp('phone', o.phone, 'type="tel"'))}
+    ${fld('Доп. телефон', inp('phone2', o.phone2, 'type="tel"'))}
     ${fld('Email', inp('email', o.email, 'type="email"'))}
-    ${fld('Направление', inp('spec', o.spec, 'placeholder="Стандарт, латина…"'), 'full')}
-    ${fld('Ставка индивид., ₽/ч', inp('rateInd', o.rateInd || '', 'type="number" min="0"'))}
-    ${fld('Ставка групп., ₽/ч', inp('rateGroup', o.rateGroup || '', 'type="number" min="0"'))}
-    ${fld('Ставка мероприятия, ₽/ч', inp('rateEvent', o.rateEvent || '', 'type="number" min="0"'))}
+    ${fld('Telegram / WhatsApp', inp('telegram', o.telegram, 'placeholder="@ник или номер"'))}
+    ${fld('Адрес', inp('address', o.address), 'full')}
+    <div class="full sect-t">Параметры</div>
+    ${fld('Рост, см', inp('height', +o.height || '', 'type="number" min="100" max="230"'))}
+    ${fld('Дата рождения', inp('birthDate', o.birthDate, 'type="date"'))}
+    ${fld('Программы', chipsMulti('programs', dictList('program').map(p => p.name), progs(o.programs), 'Добавьте программы в «Настройки → Программы»'), 'full')}
+    ${extraFields('trainer', extraOf(o))}
+    <div class="full sect-t">Ставки, ₽</div>
+    ${dictList('type').map(t => fld(esc(t.name) + (t.mode === 'fixed' ? ' — за участие' : ' — за час'),
+      `<input class="inp" name="rate_${esc(t.id)}" type="number" min="0" value="${rates[t.id] !== undefined ? esc(rates[t.id]) : ''}" placeholder="${+t.rate ? 'по умолчанию ' + t.rate : (t.mode === 'hour' && t.kind !== t.id && rates[t.kind] ? 'как ' + esc(typeInfo(t.kind).name).toLowerCase() + ': ' + rates[t.kind] : '')}">`)).join('')}
+    <div class="full sect-t">Договор</div>
+    ${contractFields('trainer', o)}
     ${fld('Заметки', txt('notes', o.notes), 'full')}
-    <div class="full">${o.contractNo ? `<span class="badge gold">Договор № ${esc(o.contractNo)}</span>` : chk('makeContract', 'Присвоить номер договора', !o.id)}</div>
-    ${o.id ? `<div class="full">${chk('active', 'Активен', o.active)}</div>` : ''}
-  </div>`, [{t: 'Отмена'}, {t: 'Сохранить', cls: 'pri', fn: async m => {
-    const v = vals(m); v.id = o.id; if (!o.id) v.active = true;
-    const id = await call('saveTrainer', v); toast('Сохранено'); await reload(); if (!o.id) go('trainer', id);
-  }}]);
+    ${o.id ? `<div class="full">${chk('active', 'Активен (снимите — тренер уйдёт в архив)', o.active)}</div>` : ''}
+  </div>`, [
+    o.id && role() === 'admin' ? {t: ic('trash') + 'Удалить', cls: 'danger', left: 1, fn: async () => { if (!confirm('Удалить тренера безвозвратно?')) return false; await call('deleteTrainer', {id: o.id}); toast('Удалено'); await reload(); go('trainers'); }} : null,
+    {t: 'Отмена'},
+    {t: 'Сохранить', cls: 'pri', fn: async m => {
+      const v = formVals(m); v.id = o.id; if (!o.id) v.active = true;
+      const id = await call('saveTrainer', v); toast('Сохранено'); await reload(); if (!o.id) go('trainer', id);
+    }}].filter(Boolean), {wide: true});
+  wireForm(bg, 'trainer', o);
 }
 
 function eventForm(o) {
   o = o || {};
   const isTr = role() === 'trainer';
+  const types = typesOf(['group', 'event']);
+  const typeId = o.type || o.typeId || (types[0] || {}).id || 'group';
   const people = (isTr ? S.D.allClients : S.D.clients.filter(c => c.active)).slice().sort((a, b) => a.name.localeCompare(b.name)).map(c => [c.id, c.name, c.company || '']);
   const trs = (S.D.trainers || []).filter(t => t.active).map(t => [t.id, t.name]);
-  const chosenTr = o.id ? ids(o.trainerIds) : (isTr ? [S.user.trainerId] : []);
-  const bg = modal(o.id ? 'Группа / мероприятие' : 'Новое групповое занятие или мероприятие', `<div class="fg">
-    <div class="full chips">${[['group', 'Групповое занятие'], ['event', 'Мероприятие']].map(x => `<label class="chip ${(o.type || 'group') === x[0] ? 'on' : ''}"><input type="radio" name="type" value="${x[0]}" ${(o.type || 'group') === x[0] ? 'checked' : ''} hidden>${x[1]}</label>`).join('')}</div>
-    ${fld('Название', inp('title', o.title, 'placeholder="Группа «Вальс», корпоратив компании…"'), 'full')}
+  const chosenTr = o.id || o.trainerIds ? ids(o.trainerIds) : (isTr ? [S.user.trainerId] : []);
+  const groups = (S.D.groups || []).filter(g => g.active !== false);
+  const deduct = o.deduct !== undefined ? !!o.deduct : !!typeInfo(typeId).deduct;
+  const bg = modal(o.id ? 'Занятие / событие' : 'Новое занятие группы или событие', `<div class="fg">
+    ${fld('Вид', sel('typeId', types.map(t => [t.id, t.name]).concat(types.some(t => t.id === typeId) ? [] : [[typeId, typeInfo(typeId).name]]), typeId))}
+    ${groups.length ? fld('Группа', sel('groupId', [['', '— без группы —']].concat(groups.map(g => [g.id, g.name])), o.groupId || '')) : ''}
+    ${fld('Название', inp('title', o.title, 'placeholder="Танцпрактика, сборы, Кубок города…"'), 'full')}
     ${fld('Дата', inp('date', o.date || today(), 'type="date"'))}
     ${fld('Время', inp('time', o.time || '', 'type="time"'))}
     ${fld('Часов', inp('hours', o.hours || 1, 'type="number" step="0.25" min="0.25"'))}
+    ${fld('Место', inp('location', o.location, 'placeholder="Зал, город, площадка"'))}
     ${fld('Тренеры', multi('trainerIds', trs, chosenTr), 'full')}
     ${fld('Участники', multi('clientIds', people, ids(o.clientIds), 'Найти ученика…'), 'full')}
-    <div class="full">${chk('deduct', 'Списывать часы с абонементов участников', o.id ? o.deduct : (o.type || 'group') === 'group')}</div>
+    <div class="full">${chk('deduct', 'Списывать часы с абонементов участников', deduct)}</div>
+    ${fld('Итоги / результаты', txt('results', o.results), 'full')}
     ${fld('Заметки', inp('notes', o.notes), 'full')}
   </div>`, [
     o.id ? {t: ic('trash') + 'Удалить', cls: 'danger', left: 1, fn: async () => { if (!confirm('Удалить запись и все отметки участников?')) return false; await call('deleteEvent', {id: o.id}); toast('Удалено'); await afterSave(); }} : null,
@@ -621,7 +871,14 @@ function eventForm(o) {
     {t: 'Сохранить', cls: 'pri', fn: async m => { const v = vals(m); v.id = o.id; await call('saveEvent', v); toast('Сохранено'); await afterSave(); }},
   ].filter(Boolean), {wide: true});
   wireMulti(bg);
-  $$('input[name=type]', bg).forEach(r => r.onchange = () => $$('input[name=type]', bg).forEach(x => x.parentNode.classList.toggle('on', x.checked)));
+  $('[name=typeId]', bg).onchange = e => { if (!o.id) $('[name=deduct]', bg).checked = !!typeInfo(e.target.value).deduct; };
+  const gs = $('[name=groupId]', bg);
+  if (gs) gs.onchange = () => {
+    const g = groups.find(x => x.id === gs.value); if (!g) return;
+    const cur = vals(bg);
+    bg.remove();
+    eventForm(Object.assign({}, o, cur, {groupId: g.id, typeId: g.typeId, type: g.typeId, title: cur.title || g.name, trainerIds: g.trainerIds, clientIds: g.clientIds, deduct: typeInfo(g.typeId).deduct}));
+  };
 }
 
 function contractBtn(kind, id) {
@@ -715,13 +972,15 @@ VIEWS.client = (id) => {
   $('#main').innerHTML = `
     <div class="head"><button class="btn sm" id="bk">${ic('back')}</button><h1>${esc(c.name)}</h1>
       <button class="btn pri" id="ml">${ic('check')}Отметить занятие</button>
+      <button class="btn" id="prn">${ic('print')}Печать</button>
       ${staff ? `<button class="btn" id="ed">${ic('edit')}Изменить</button>` : ''}</div>
     <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(320px,1fr));align-items:start">
       <div class="card stack">
         <div class="row"><div class="avatar c" style="width:52px;height:52px;font-size:18px">${initials(c.name)}</div>
-          <div class="grow">${c.contractNo ? `<span class="badge gold">Договор № ${esc(c.contractNo)}${c.contractDate ? ' от ' + fd(c.contractDate) : ''}</span>` : (staff ? `<button class="btn sm" id="ct">${ic('doc')}Присвоить договор</button>` : '')}</div></div>
+          <div class="grow">${c.contractNo ? ctrBadge(c, staff) : (staff ? `<button class="btn sm" id="ct">${ic('doc')}Присвоить договор</button>` : '')}</div></div>
         <div class="small">${[c.phone && `📞 <a href="tel:${esc(c.phone)}">${esc(c.phone)}</a>`, c.email && esc(c.email), c.company && 'Компания: ' + esc(c.company), c.birthDate && 'Дата рождения: ' + fd(c.birthDate), c.partnerId && S.m.partners && S.m.partners[c.partnerId] && 'Партнёр: ' + esc(S.m.partners[c.partnerId].name)].filter(Boolean).join('<br>') || '<span class="muted">Контакты не указаны</span>'}</div>
         <div><div class="small muted">Тренеры</div>${ids(c.trainerIds).map(t => `<span class="badge" style="margin:3px 4px 0 0">${esc(tName(t))}</span>`).join('') || '<span class="small muted">не закреплены</span>'}</div>
+        ${extraView('client', extraOf(c)) ? `<div class="kv">${extraView('client', extraOf(c))}</div>` : ''}
         ${c.notes ? `<div class="small" style="background:var(--soft);padding:8px 10px;border-radius:8px">${esc(c.notes)}</div>` : ''}
         ${role() === 'admin' ? `<button class="btn sm" id="acc">${ic('lock')}Доступ в приложение</button>` : ''}
       </div>
@@ -738,7 +997,11 @@ VIEWS.client = (id) => {
     if ($('#ct')) $('#ct').onclick = contractBtn('client', id);
   }
   if ($('#acc')) $('#acc').onclick = () => userForm({role: 'client', clientId: id, name: c.name});
+  wireCtr($('#main'));
+  let H = null;
+  $('#prn').onclick = () => H ? showDoc('История занятий — ' + c.name, clientHistoryDoc(c, H)) : toast('Подождите, история загружается');
   call('clientHistory', {clientId: id}).then(h => {
+    H = h;
     $('#subs').innerHTML = h.subs.length ? h.subs.slice().sort((a, b) => (a.status === 'closed') - (b.status === 'closed') || b.startDate.localeCompare(a.startDate)).map(s => subBlock(s, {click: staff})).join('') : empty('Абонементов нет');
     if (staff) $$('#subs [data-sub]').forEach(e => e.onclick = () => subForm(h.subs.find(s => s.id === e.dataset.sub)));
     const by = {};
@@ -762,21 +1025,62 @@ function canEditLesson(l) {
 }
 
 VIEWS.trainers = () => {
+  const ui = S.ui.tf || (S.ui.tf = {q: '', prog: '', hFrom: '', hTo: '', sFrom: '', sTo: '', arch: false, sort: 'name', fx: {}});
   const t0 = today(), ms = monthStart(t0);
-  const hrs = {};
+  const hrs = {}, studs = {};
   S.D.lessons.filter(l => !l.eventId && l.date >= ms).forEach(l => { hrs[l.trainerId] = (hrs[l.trainerId] || 0) + l.hours; });
   S.D.events.filter(e => e.date >= ms && e.date <= t0).forEach(e => ids(e.trainerIds).forEach(t => { hrs[t] = (hrs[t] || 0) + e.hours; }));
-  const list = S.D.trainers.slice().sort((a, b) => (b.active - a.active) || a.name.localeCompare(b.name));
-  $('#main').innerHTML = `<div class="head"><h1>Тренеры</h1><button class="btn pri" id="nt">${ic('plus')}Тренер</button></div>
-    <div class="grid">${list.map(t => {
-      const n = S.D.clients.filter(c => c.active && ids(c.trainerIds).includes(t.id)).length;
-      return `<div class="card tight click" data-t="${t.id}" style="${t.active ? '' : 'opacity:.55'}"><div class="row"><div class="avatar">${initials(t.name)}</div>
-        <div class="grow"><b>${esc(t.name)}</b><div class="small muted">${esc(t.spec || '—')}${t.active ? '' : ' · архив'}</div></div>
+  S.D.clients.filter(c => c.active).forEach(c => ids(c.trainerIds).forEach(t => { studs[t] = (studs[t] || 0) + 1; }));
+  const selFields = dictList('field').filter(f => f.kind === 'trainer' && f.mode === 'select');
+  const num = v => v === '' || v == null ? null : +v;
+  const draw = () => {
+    let list = S.D.trainers.filter(t => ui.arch ? !t.active : t.active);
+    const q = ui.q.toLowerCase();
+    if (q) list = list.filter(t => [t.name, t.phone, t.phone2, t.email, t.telegram, t.programs, t.spec].join(' ').toLowerCase().includes(q));
+    if (ui.prog) list = list.filter(t => progs(t.programs || t.spec).includes(ui.prog));
+    const hf = num(ui.hFrom), ht = num(ui.hTo), sf = num(ui.sFrom), st = num(ui.sTo);
+    if (hf != null) list = list.filter(t => +t.height && +t.height >= hf);
+    if (ht != null) list = list.filter(t => +t.height && +t.height <= ht);
+    if (sf != null) list = list.filter(t => (studs[t.id] || 0) >= sf);
+    if (st != null) list = list.filter(t => (studs[t.id] || 0) <= st);
+    selFields.forEach(f => { const v = ui.fx[f.id]; if (v) list = list.filter(t => String(extraOf(t)[f.id] || '') === v); });
+    const by = {name: (a, b) => a.name.localeCompare(b.name), hours: (a, b) => (hrs[b.id] || 0) - (hrs[a.id] || 0), studs: (a, b) => (studs[b.id] || 0) - (studs[a.id] || 0), height: (a, b) => (+b.height || 0) - (+a.height || 0)};
+    list.sort(by[ui.sort] || by.name);
+    $('#tr-count').textContent = 'Найдено: ' + list.length;
+    $('#tr-list').innerHTML = list.map(t => `<div class="card tight click" data-t="${t.id}" style="${t.active ? '' : 'opacity:.55'}"><div class="row"><div class="avatar">${initials(t.name)}</div>
+        <div class="grow"><b>${esc(t.name)}</b><div class="small muted">${[+t.height ? 'рост ' + t.height + ' см' : '', t.phone].filter(Boolean).map(esc).join(' · ') || '—'}</div></div>
         <div class="right"><b style="font-size:18px;color:var(--navy)">${fh(hrs[t.id] || 0)}</b><div class="small muted">ч в ${MONTHS[+t0.slice(5, 7) - 1].slice(0, 3)}.</div></div></div>
-        <div class="row small muted" style="margin-top:8px"><span>Учеников: ${n}</span>${t.contractNo ? `<span class="badge gold">№ ${esc(t.contractNo)}</span>` : ''}</div></div>`;
-    }).join('') || `<div class="card">${empty('Добавьте первого тренера')}</div>`}</div>`;
+        <div class="chips" style="margin-top:8px">${progs(t.programs || t.spec).map(p => `<span class="badge">${esc(p)}</span>`).join('')}</div>
+        <div class="row small muted" style="margin-top:8px"><span>Учеников: <b style="color:var(--text)">${studs[t.id] || 0}</b></span>${t.contractNo ? `<span class="badge gold">№ ${esc(t.contractNo)}</span>` : ''}</div></div>`).join('')
+      || `<div class="card">${empty(S.D.trainers.length ? 'Никого не найдено — измените фильтры' : 'Добавьте первого тренера')}</div>`;
+    $$('#tr-list [data-t]').forEach(e => e.onclick = () => go('trainer', e.dataset.t));
+  };
+  $('#main').innerHTML = `<div class="head"><h1>Тренеры</h1><button class="btn" id="tprn">${ic('print')}Печать</button><button class="btn pri" id="nt">${ic('plus')}Тренер</button></div>
+    <div class="card filters" style="margin-bottom:12px">
+      <div><label class="f">Поиск</label><div class="search">${ic('search')}<input class="inp" id="fq" placeholder="Имя, телефон…" value="${esc(ui.q)}"></div></div>
+      <div><label class="f">Программа</label>${sel('prog', [['', 'Все программы']].concat(dictList('program').map(p => [p.name, p.name])), ui.prog, 'id="fprog"')}</div>
+      <div><label class="f">Рост, см</label><div class="pair"><input class="inp" id="fh1" type="number" placeholder="от" value="${esc(ui.hFrom)}"><span>—</span><input class="inp" id="fh2" type="number" placeholder="до" value="${esc(ui.hTo)}"></div></div>
+      <div><label class="f">Учеников</label><div class="pair"><input class="inp" id="fs1" type="number" min="0" placeholder="от" value="${esc(ui.sFrom)}"><span>—</span><input class="inp" id="fs2" type="number" min="0" placeholder="до" value="${esc(ui.sTo)}"></div></div>
+      ${selFields.map(f => `<div><label class="f">${esc(f.name)}</label>${sel('fx', [['', 'Все']].concat(progs(f.options).map(x => [x, x])), ui.fx[f.id] || '', `data-fx="${esc(f.id)}"`)}</div>`).join('')}
+      <div><label class="f">Сортировка</label>${sel('sort', [['name', 'По имени'], ['hours', 'По часам за месяц'], ['studs', 'По числу учеников'], ['height', 'По росту']], ui.sort, 'id="fsort"')}</div>
+      <div class="row" style="gap:8px"><span class="chip ${ui.arch ? '' : 'on'}" data-arch="0">Активные</span><span class="chip ${ui.arch ? 'on' : ''}" data-arch="1">Архив</span><button class="btn sm" id="freset">Сбросить</button></div>
+    </div>
+    <div class="small muted" id="tr-count" style="margin-bottom:8px"></div>
+    <div class="grid" id="tr-list"></div>`;
+  const bind = (sel_, key) => { $(sel_).oninput = e => { ui[key] = e.target.value; draw(); }; };
+  bind('#fq', 'q'); bind('#fh1', 'hFrom'); bind('#fh2', 'hTo'); bind('#fs1', 'sFrom'); bind('#fs2', 'sTo');
+  $('#fprog').onchange = e => { ui.prog = e.target.value; draw(); };
+  $('#fsort').onchange = e => { ui.sort = e.target.value; draw(); };
+  $$('[data-fx]').forEach(x => x.onchange = () => { ui.fx[x.dataset.fx] = x.value; draw(); });
+  $$('[data-arch]').forEach(c => c.onclick = () => { ui.arch = c.dataset.arch === '1'; VIEWS.trainers(); });
+  $('#freset').onclick = () => { S.ui.tf = null; VIEWS.trainers(); };
   $('#nt').onclick = () => trainerForm();
-  $$('[data-t]').forEach(e => e.onclick = () => go('trainer', e.dataset.t));
+  $('#tprn').onclick = () => {
+    const rows = $$('#tr-list [data-t]').map(e => S.m.trainers[e.dataset.t]).filter(Boolean);
+    showDoc('Тренеры', `<h1>Тренеры</h1><table><thead><tr><th>ФИО</th><th>Программы</th><th class="n">Рост</th><th class="n">Учеников</th><th>Телефон</th><th>Договор</th></tr></thead><tbody>
+      ${rows.map(t => `<tr><td>${esc(t.name)}</td><td>${esc(t.programs || t.spec)}</td><td class="n">${+t.height || ''}</td><td class="n">${studs[t.id] || 0}</td><td>${esc(t.phone)}</td><td>${esc(t.contractNo)}</td></tr>`).join('')}</tbody></table>`);
+  };
+  draw();
 };
 
 VIEWS.me = () => VIEWS.trainer(S.user.trainerId, true);
@@ -785,19 +1089,36 @@ VIEWS.trainer = (id, self) => {
   if (!t) { $('#main').innerHTML = `<div class="card">${empty('Логин не привязан к карточке тренера. Обратитесь к администратору.')}</div>`; return; }
   const staff = isStaff();
   const pp = periodPicker('tr', () => VIEWS.trainer(id, self));
+  const rates = ratesOf(t);
+  const contacts = [
+    t.phone && ['Телефон', `<a href="tel:${esc(t.phone)}">${esc(t.phone)}</a>`], t.phone2 && ['Доп. телефон', `<a href="tel:${esc(t.phone2)}">${esc(t.phone2)}</a>`],
+    t.email && ['Email', `<a href="mailto:${esc(t.email)}">${esc(t.email)}</a>`], t.telegram && ['Мессенджер', esc(t.telegram)], t.address && ['Адрес', esc(t.address)],
+    +t.height && ['Рост', t.height + ' см'], t.birthDate && ['Дата рождения', fd(t.birthDate)],
+  ].filter(Boolean);
+  const myGroups = (S.D.groups || []).filter(g => g.active !== false && ids(g.trainerIds).includes(t.id));
   $('#main').innerHTML = `
     <div class="head">${self ? '' : `<button class="btn sm" id="bk">${ic('back')}</button>`}<h1>${esc(t.name)}</h1>
+      <button class="btn" id="hprn">${ic('print')}История за период</button>
       ${staff ? `<button class="btn" id="ed">${ic('edit')}Изменить</button><button class="btn gold" id="act">${ic('doc')}Акт за период</button>` : ''}</div>
-    <div class="card row" style="gap:16px">
-      <div class="avatar" style="width:52px;height:52px;font-size:18px">${initials(t.name)}</div>
-      <div class="grow small" style="min-width:170px">${[t.spec && '<b>' + esc(t.spec) + '</b>', t.phone && `📞 <a href="tel:${esc(t.phone)}">${esc(t.phone)}</a>`, t.email && esc(t.email)].filter(Boolean).join(' · ') || ''}
-        ${staff ? `<div class="muted" style="margin-top:4px">Ставки: индивид. ${money(t.rateInd)}/ч · групп. ${money(t.rateGroup)}/ч · мероприятия ${money(t.rateEvent)}/ч</div>` : ''}</div>
-      ${t.contractNo ? `<span class="badge gold">Договор № ${esc(t.contractNo)}${t.contractDate ? ' от ' + fd(t.contractDate) : ''}</span>` : (staff ? `<button class="btn sm" id="ct">${ic('doc')}Присвоить договор</button>` : '')}
-      ${role() === 'admin' ? `<button class="btn sm" id="acc">${ic('lock')}Доступ</button>` : ''}
+    <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));align-items:start">
+      <div class="card stack">
+        <div class="row"><div class="avatar" style="width:52px;height:52px;font-size:18px">${initials(t.name)}</div>
+          <div class="grow chips">${progs(t.programs || t.spec).map(p => `<span class="badge">${esc(p)}</span>`).join('') || '<span class="small muted">Программы не указаны</span>'}</div></div>
+        <div class="kv">${contacts.map(c => `<span class="k">${c[0]}</span><span>${c[1]}</span>`).join('')}${extraView('trainer', extraOf(t))}</div>
+        <div class="row">${t.contractNo ? ctrBadge(t, staff) : (staff ? `<button class="btn sm" id="ct">${ic('doc')}Присвоить договор</button>` : '')}
+          ${role() === 'admin' ? `<button class="btn sm" id="acc">${ic('lock')}Доступ</button>` : ''}</div>
+        ${t.notes ? `<div class="small" style="background:var(--soft);padding:8px 10px;border-radius:8px">${esc(t.notes)}</div>` : ''}
+      </div>
+      <div class="card stack">
+        ${staff ? `<div><h3 style="margin-bottom:6px">Ставки</h3><div class="kv">${dictList('type').map(ty => { const r = rateOf(t, ty.id); return r ? `<span class="k"><span class="dot" style="background:${esc(ty.color)}"></span>${esc(ty.name)}</span><span>${money(r)} ${ty.mode === 'fixed' ? 'за участие' : 'в час'}${rates[ty.id] === undefined ? ' <span class="small muted">(по умолч.)</span>' : ''}</span>` : ''; }).join('') || '<span class="muted small">Ставки не заданы</span>'}</div></div>` : ''}
+        <div><h3 style="margin-bottom:6px">Группы</h3><div class="chips">${myGroups.map(g => `<span class="badge click" data-g="${g.id}" style="background:${esc(typeColor(g.typeId))}22;color:${esc(typeColor(g.typeId))}">${esc(g.name)}</span>`).join('') || '<span class="small muted">Нет постоянных групп</span>'}</div></div>
+      </div>
     </div>
     <div class="sect">${pp.html}</div>
     <div id="trr" class="sect"><div class="empty">Загрузка…</div></div>`;
   pp.wire($('#main'));
+  wireCtr($('#main'));
+  $$('[data-g]').forEach(b => b.onclick = () => { S.ui.gr = {arch: false, t: '', open: b.dataset.g}; go('groups'); });
   if ($('#bk')) $('#bk').onclick = () => go('trainers');
   if (staff) {
     $('#ed').onclick = () => trainerForm(t);
@@ -805,32 +1126,35 @@ VIEWS.trainer = (id, self) => {
     if ($('#ct')) $('#ct').onclick = contractBtn('trainer', t.id);
   }
   if ($('#acc')) $('#acc').onclick = () => userForm({role: 'trainer', trainerId: t.id, name: t.name});
+  let R = null;
+  const cn = cid => (S.m.clients[cid] || ((R && R.clients) || []).find(c => c.id === cid) || {}).name || '—';
+  $('#hprn').onclick = () => R ? showDoc('История занятий — ' + t.name, trainerHistoryDoc(t, pp.p, R.facts.filter(x => x.tr === t.id), cn, staff), fd(pp.p.from) + ' — ' + fd(pp.p.to)) : toast('Подождите, данные загружаются');
   call('report', {from: pp.p.from, to: pp.p.to, trainerId: t.id}).then(r => {
+    R = r;
     const f = r.facts.filter(x => x.tr === t.id);
-    const th = type => sum(f.filter(x => x.type === type), x => x.th);
-    const total = sum(f, x => x.th);
+    const by = {};
+    f.filter(x => x.n > 0).forEach(x => { const o = by[x.type] = by[x.type] || {h: 0, u: 0}; o.h += x.th; o.u += x.n; });
+    const tkeys = Object.keys(by).sort((a, b) => (+typeInfo(a).order || 0) - (+typeInfo(b).order || 0));
+    const total = sum(tkeys, k => by[k].h);
+    const amount = staff ? sum(tkeys, k => payOf(t, k, by[k].h, by[k].u)) : 0;
     const byC = {};
-    f.filter(x => x.cl).forEach(x => { const o = byC[x.cl] = byC[x.cl] || {ind: 0, grp: 0, n: 0}; if (x.type === 'ind') { o.ind += x.ch; o.n++; } else o.grp += x.ch; });
+    f.filter(x => x.cl).forEach(x => { const o = byC[x.cl] = byC[x.cl] || {ind: 0, grp: 0, n: 0}; if (!x.ev) { o.ind += x.ch; o.n++; } else o.grp += x.ch; });
     const assigned = (S.D.clients || []).filter(c => c.active && (ids(c.trainerIds).includes(t.id) || self));
     assigned.forEach(c => { byC[c.id] = byC[c.id] || {ind: 0, grp: 0, n: 0}; });
-    const cn = cid => (S.m.clients[cid] || (r.clients || []).find(c => c.id === cid) || {}).name || '—';
     const keys = Object.keys(byC).sort((a, b) => (byC[b].ind + byC[b].grp) - (byC[a].ind + byC[a].grp) || cn(a).localeCompare(cn(b)));
-    const evs = r.events.filter(e => f.some(x => x.ev === e.id && x.th > 0)).sort((a, b) => b.date.localeCompare(a.date));
-    const inds = f.filter(x => x.type === 'ind').sort((a, b) => b.date.localeCompare(a.date));
-    const amount = staff ? th('ind') * (+t.rateInd || 0) + th('group') * (+t.rateGroup || 0) + th('event') * (+t.rateEvent || 0) : 0;
+    const evs = r.events.filter(e => f.some(x => x.ev === e.id && x.n > 0)).sort((a, b) => b.date.localeCompare(a.date));
+    const inds = f.filter(x => !x.ev).sort((a, b) => b.date.localeCompare(a.date));
     $('#trr').innerHTML = `
       <div class="kpis">
         <div class="kpi"><b>${fh(total)}</b><span>часов всего</span></div>
-        <div class="kpi"><b>${fh(th('ind'))}</b><span>индивидуальные</span></div>
-        <div class="kpi"><b>${fh(th('group'))}</b><span>групповые</span></div>
-        <div class="kpi"><b>${fh(th('event'))}</b><span>мероприятия</span></div>
+        ${tkeys.map(k => `<div class="kpi"><b style="color:${esc(typeColor(k))}">${typeInfo(k).mode === 'fixed' ? by[k].u : fh(by[k].h)}</b><span>${esc(typeInfo(k).name)}${typeInfo(k).mode === 'fixed' ? ' — участий' : ', ч'}</span></div>`).join('')}
         ${staff ? `<div class="kpi"><b>${money(amount)}</b><span>по ставкам</span></div>` : ''}
       </div>
       <div class="sect"><h2>Ученики — кто с кем и сколько</h2><div class="tw"><table class="t"><thead><tr><th>Ученик</th><th class="n">Индивид., ч</th><th class="n">В группах, ч</th><th class="n">Занятий</th><th>Абонемент</th></tr></thead><tbody>
         ${keys.map(k => { const sm = clientSummary(k); return `<tr class="click" data-c="${k}"><td>${esc(cn(k))}</td><td class="n">${fh(byC[k].ind)}</td><td class="n">${fh(byC[k].grp)}</td><td class="n">${byC[k].n}</td><td><span class="badge ${{ok: 'ok', warn: 'warn', bad: 'bad', none: ''}[sm.cls]}">${sm.label}</span></td></tr>`; }).join('') || `<tr><td colspan="5">${empty('Нет учеников')}</td></tr>`}
       </tbody></table></div></div>
-      <div class="sect"><h2>Группы и мероприятия</h2><div class="tw"><table class="t"><thead><tr><th>Дата</th><th>Название</th><th>Тип</th><th class="n">Часов</th><th class="n">Участников</th></tr></thead><tbody>
-        ${evs.map(e => `<tr><td class="nowrap">${fd(e.date)}</td><td>${esc(e.title)}</td><td>${TYPE[e.type]}</td><td class="n">${fh(e.hours)}</td><td class="n">${ids(e.clientIds).length}</td></tr>`).join('') || `<tr><td colspan="5">${empty('За период нет')}</td></tr>`}
+      <div class="sect"><h2>Группы, сборы, мероприятия, турниры</h2><div class="tw"><table class="t"><thead><tr><th>Дата</th><th>Вид</th><th>Название</th><th>Место</th><th class="n">Часов</th><th class="n">Участников</th></tr></thead><tbody>
+        ${evs.map(e => `<tr><td class="nowrap">${fd(e.date)}</td><td>${typeBadge(e.type)}</td><td>${esc(e.title)}${e.results ? `<div class="small muted">${esc(e.results)}</div>` : ''}</td><td>${esc(e.location || '')}</td><td class="n">${fh(e.hours)}</td><td class="n">${ids(e.clientIds).length}</td></tr>`).join('') || `<tr><td colspan="6">${empty('За период нет')}</td></tr>`}
       </tbody></table></div></div>
       <div class="sect"><h2>Индивидуальные занятия</h2><div class="tw"><table class="t"><thead><tr><th>Дата</th><th>Ученик</th><th class="n">Часов</th></tr></thead><tbody>
         ${inds.map(x => `<tr><td>${fd(x.date)} <span class="muted small">${wd(x.date)}</span></td><td>${esc(cn(x.cl))}</td><td class="n">${fh(x.th)}</td></tr>`).join('') || `<tr><td colspan="3">${empty('За период нет')}</td></tr>`}
@@ -844,12 +1168,12 @@ function actDialog(trainerId, from, to) {
   modal('Акт выполненных работ', `<div class="fg">
     ${fld('Тренер', sel('trainerId', trOpts(true), trainerId), 'full')}
     ${fld('С', inp('from', from, 'type="date"'))}${fld('По', inp('to', to, 'type="date"'))}
-    <div class="full small muted">Акт сформируется в Google Документах и PDF в папке «Акты» на вашем Google Диске. Номер присвоится автоматически. Реквизиты клуба и ФИО директора — в Настройках.</div></div>`,
+    <div class="full small muted">Номер присвоится автоматически. Строки акта — по видам занятий и ставкам тренера. Реквизиты клуба, подпись и текст акта — в «Настройках».</div></div>`,
     [{t: 'Отмена'}, {t: ic('doc') + 'Сформировать', cls: 'gold', fn: async m => {
       const r = await call('makeAct', vals(m));
       await reload();
-      modal('Акт № ' + esc(r.number) + ' готов', `<p>${esc(t ? t.name : '')}: <b>${fh(r.hours)} ч</b> на сумму <b>${money(r.amount)}</b></p>
-        <div class="row"><a class="btn pri" href="${esc(r.pdfUrl)}" target="_blank">${ic('dl')}Открыть PDF</a><a class="btn" href="${esc(r.docUrl)}" target="_blank">${ic('edit')}Открыть для правки</a></div>`, [{t: 'Готово', cls: 'pri'}]);
+      toast('Акт № ' + r.number + ' сформирован');
+      showDoc('Акт № ' + r.number, actBody(r.data), t ? t.name : '');
     }}]);
 }
 
@@ -895,7 +1219,7 @@ function slotForm(o) {
   o = o || {};
   const bg = modal(o.id ? 'Слот' : 'Новый слот для записи', `<div class="fg">
     ${role() === 'trainer' ? '' : fld('Тренер', sel('trainerId', trOpts(false, '— выберите —'), o.trainerId || ''), 'full')}
-    <div class="full chips">${[['ind', 'Индивидуальное'], ['group', 'Групповое']].map(x => `<label class="chip ${(o.type || 'ind') === x[0] ? 'on' : ''}"><input type="radio" name="type" value="${x[0]}" ${(o.type || 'ind') === x[0] ? 'checked' : ''} hidden>${x[1]}</label>`).join('')}</div>
+    <div class="full chips">${typesOf(['ind', 'group']).map(x => [x.id, x.name]).map(x => `<label class="chip ${(o.type || 'ind') === x[0] ? 'on' : ''}"><input type="radio" name="type" value="${esc(x[0])}" ${(o.type || 'ind') === x[0] ? 'checked' : ''} hidden>${esc(x[1])}</label>`).join('')}</div>
     ${fld('Название', inp('title', o.title || '', 'placeholder="Необязательно"'), 'full')}
     ${fld('Дата', inp('date', o.date || today(), 'type="date"'))}
     ${fld('Время', inp('time', o.time || '18:00', 'type="time"'))}
@@ -919,20 +1243,27 @@ function completeSlotForm(s) {
   wireMulti(bg);
 }
 
-// --- группы и мероприятия ---
+// --- занятия групп и события ---
 VIEWS.events = () => {
+  const ui = S.ui.evf || (S.ui.evf = {t: ''});
   const pp = periodPicker('ev', () => VIEWS.events());
-  const list = S.D.events.filter(e => e.date >= pp.p.from && e.date <= pp.p.to).sort((a, b) => b.date.localeCompare(a.date) || b.time.localeCompare(a.time));
-  const note = pp.p.from < addDays(today(), -60) ? '<p class="small muted">Показаны записи за последние 2 месяца. Полная история — в «Отчётах».</p>' : '';
-  $('#main').innerHTML = `<div class="head"><h1>Группы и мероприятия</h1><button class="btn pri" id="ne">${ic('plus')}Добавить</button></div>
+  const types = typesOf(['group', 'event']);
+  const list = S.D.events.filter(e => e.date >= pp.p.from && e.date <= pp.p.to && (!ui.t || e.type === ui.t)).sort((a, b) => b.date.localeCompare(a.date) || b.time.localeCompare(a.time));
+  const note = pp.p.from < addDays(today(), -60) ? '<p class="small muted">Показаны записи за последние 2 месяца. Полная история — в «Отчётах» и в карточке тренера.</p>' : '';
+  $('#main').innerHTML = `<div class="head"><h1>Занятия и события</h1><button class="btn" id="eprn">${ic('print')}Печать</button><button class="btn pri" id="ne">${ic('plus')}Добавить</button></div>
+    <div class="chips" style="margin-bottom:10px"><span class="chip ${ui.t ? '' : 'on'}" data-t="">Все</span>${types.map(t => `<span class="chip ${ui.t === t.id ? 'on' : ''}" data-t="${esc(t.id)}"><span class="dot" style="background:${esc(t.color)}"></span>${esc(t.name)}</span>`).join('')}</div>
     ${pp.html}${note}
-    <div class="stack sect">${list.map(e => `<div class="card tight click" data-e="${e.id}"><div class="row">
-      <div class="avatar" style="background:${e.type === 'event' ? 'var(--gold)' : 'var(--navy3)'}">${ic(e.type === 'event' ? 'star' : 'group', 18)}</div>
-      <div class="grow"><b>${esc(e.title)}</b><div class="small muted">${fd(e.date)} ${esc(e.time)} · ${fh(e.hours)} ч · ${esc(e.trainerNames)}</div>
-      <div class="small">${ids(e.clientIds).length} участн.${e.deduct ? ' · списание с абонементов' : ''}</div></div>
-      <span class="badge ${e.type === 'event' ? 'gold' : ''}">${TYPE[e.type]}</span></div></div>`).join('') || `<div class="card">${empty('За период нет записей')}</div>`}</div>`;
+    <div class="stack sect" id="evlist">${list.map(e => `<div class="card tight click" data-e="${e.id}" style="border-left:4px solid ${esc(typeColor(e.type))}"><div class="row">
+      <div class="grow"><b>${esc(e.title)}</b><div class="small muted">${fd(e.date)} ${esc(e.time)} · ${fh(e.hours)} ч${e.location ? ' · ' + esc(e.location) : ''} · ${esc(e.trainerNames)}</div>
+      <div class="small">${ids(e.clientIds).length} участн.${e.deduct ? ' · списание с абонементов' : ''}${e.groupId && S.m.groups[e.groupId] ? ' · группа «' + esc(S.m.groups[e.groupId].name) + '»' : ''}</div>
+      ${e.results ? `<div class="small" style="margin-top:4px">🏆 ${esc(e.results)}</div>` : ''}</div>
+      ${typeBadge(e.type)}</div></div>`).join('') || `<div class="card">${empty('За период нет записей')}</div>`}</div>`;
   pp.wire($('#main'));
-  $('#ne').onclick = () => eventForm();
+  $$('[data-t]').forEach(c => c.onclick = () => { ui.t = c.dataset.t; VIEWS.events(); });
+  $('#ne').onclick = () => eventForm(ui.t ? {typeId: ui.t, type: ui.t} : {});
+  $('#eprn').onclick = () => showDoc('Занятия и события', `<h1>Занятия и события${ui.t ? ': ' + esc(typeInfo(ui.t).name) : ''}</h1><div class="muted">${fd(pp.p.from)} — ${fd(pp.p.to)}</div>
+    <table><thead><tr><th>Дата</th><th>Вид</th><th>Название</th><th>Место</th><th>Тренеры</th><th class="n">Часов</th><th>Участники</th><th>Итоги</th></tr></thead><tbody>
+    ${list.map(e => `<tr><td class="nowrap">${fd(e.date)} ${esc(e.time)}</td><td>${esc(typeInfo(e.type).name)}</td><td>${esc(e.title)}</td><td>${esc(e.location)}</td><td>${esc(e.trainerNames)}</td><td class="n">${fh(e.hours)}</td><td>${esc(e.clientNames)}</td><td>${esc(e.results)}</td></tr>`).join('') || '<tr><td colspan="8">Нет записей</td></tr>'}</tbody></table>`);
   $$('[data-e]').forEach(c => c.onclick = () => {
     const e = S.m.events[c.dataset.e];
     if (role() === 'trainer' && !canEditLesson({trainerId: S.user.trainerId, createdAt: e.createdAt, date: e.date})) return toast('Изменить можно только свежие записи — обратитесь к администратору', true);
@@ -940,11 +1271,61 @@ VIEWS.events = () => {
   });
 };
 
+// --- постоянные группы ---
+VIEWS.groups = () => {
+  const ui = S.ui.gr || (S.ui.gr = {arch: false, t: ''});
+  const staff = isStaff();
+  const types = typesOf(['group', 'event']);
+  const since = addDays(today(), -60);
+  const list = (S.D.groups || []).filter(g => ui.arch ? g.active === false : g.active !== false).filter(g => !ui.t || g.typeId === ui.t).sort((a, b) => a.name.localeCompare(b.name));
+  $('#main').innerHTML = `<div class="head"><h1>Группы</h1>${staff ? `<button class="btn pri" id="ng">${ic('plus')}Группа</button>` : ''}</div>
+    <p class="small muted" style="margin-top:-6px">Постоянный состав: тренеры и ученики. Кнопка «Отметить занятие» подставит всех участников — останется убрать отсутствующих.</p>
+    <div class="row" style="margin-bottom:12px"><div class="chips"><span class="chip ${ui.t ? '' : 'on'}" data-t="">Все</span>${types.map(t => `<span class="chip ${ui.t === t.id ? 'on' : ''}" data-t="${esc(t.id)}"><span class="dot" style="background:${esc(t.color)}"></span>${esc(t.name)}</span>`).join('')}</div>
+      <span class="spacer"></span>${staff ? `<span class="chip ${ui.arch ? 'on' : ''}" id="garch">Архив</span>` : ''}</div>
+    <div class="grid">${list.map(g => {
+      const n = S.D.events.filter(e => e.groupId === g.id && e.date >= since).length;
+      return `<div class="card tight" style="border-left:4px solid ${esc(typeColor(g.typeId))}${ui.open === g.id ? ';box-shadow:0 0 0 2px var(--gold)' : ''}">
+        <div class="row"><b class="grow">${esc(g.name)}</b>${typeBadge(g.typeId)}</div>
+        <div class="small muted" style="margin-top:4px">${esc(g.trainerNames || 'тренер не назначен')}${g.schedule ? ' · ' + esc(g.schedule) : ''}</div>
+        <div class="small" style="margin-top:6px">Участников: <b>${ids(g.clientIds).length}</b>${ids(g.clientIds).length ? ' — ' + esc(g.clientNames.split(', ').slice(0, 4).join(', ')) + (ids(g.clientIds).length > 4 ? '…' : '') : ''}</div>
+        <div class="small muted">Проведено за 2 мес.: ${n}</div>
+        <div class="row" style="margin-top:10px"><button class="btn sm pri" data-run="${g.id}">${ic('check')}Отметить занятие</button>${staff ? `<button class="btn sm" data-eg="${g.id}">${ic('edit')}Изменить</button>` : ''}</div></div>`;
+    }).join('') || `<div class="card">${empty(staff ? 'Создайте первую группу: танцпрактика, сборы, турнирная команда…' : 'Вы пока не ведёте постоянных групп')}</div>`}</div>`;
+  ui.open = '';
+  $$('[data-t]').forEach(c => c.onclick = () => { ui.t = c.dataset.t; VIEWS.groups(); });
+  if ($('#garch')) $('#garch').onclick = () => { ui.arch = !ui.arch; VIEWS.groups(); };
+  if ($('#ng')) $('#ng').onclick = () => groupForm({typeId: ui.t});
+  $$('[data-eg]').forEach(b => b.onclick = () => groupForm(S.m.groups[b.dataset.eg]));
+  $$('[data-run]').forEach(b => b.onclick = () => {
+    const g = S.m.groups[b.dataset.run];
+    eventForm({typeId: g.typeId, type: g.typeId, title: g.name, trainerIds: g.trainerIds, clientIds: g.clientIds, groupId: g.id, deduct: typeInfo(g.typeId).deduct});
+  });
+};
+function groupForm(o) {
+  o = o || {};
+  const types = typesOf(['group', 'event']);
+  const bg = modal(o.id ? 'Группа' : 'Новая группа', `<div class="fg">
+    ${fld('Название', inp('name', o.name, 'placeholder="Танцпрактика вторник, Сборы к Кубку, Турнирная команда…"'), 'full')}
+    ${fld('Вид', sel('typeId', types.map(t => [t.id, t.name]), o.typeId || (types[0] || {}).id))}
+    ${fld('Расписание', inp('schedule', o.schedule, 'placeholder="Вт, Чт 19:00"'))}
+    ${fld('Тренеры', multi('trainerIds', (S.D.trainers || []).filter(t => t.active).map(t => [t.id, t.name]), ids(o.trainerIds)), 'full')}
+    ${fld('Участники', multi('clientIds', S.D.clients.filter(c => c.active).sort((a, b) => a.name.localeCompare(b.name)).map(c => [c.id, c.name, c.company || '']), ids(o.clientIds), 'Найти ученика…'), 'full')}
+    ${fld('Заметки', txt('notes', o.notes), 'full')}
+    ${o.id ? `<div class="full">${chk('active', 'Активна (снимите — группа уйдёт в архив)', o.active !== false)}</div>` : ''}
+  </div>`, [
+    o.id ? {t: ic('trash') + 'Удалить', cls: 'danger', left: 1, fn: async () => { if (!confirm('Удалить группу? Проведённые занятия останутся.')) return false; await call('deleteGroup', {id: o.id}); toast('Удалено'); await reload(); }} : null,
+    {t: 'Отмена'},
+    {t: 'Сохранить', cls: 'pri', fn: async m => { const v = vals(m); v.id = o.id; if (!o.id) v.active = true; await call('saveGroup', v); toast('Сохранено'); await reload(); }},
+  ].filter(Boolean), {wide: true});
+  wireMulti(bg);
+}
+
 // --- отчёты ---
 VIEWS.reports = (tab) => {
   tab = tab || S.ui.rtab || 'sum'; S.ui.rtab = tab;
   const pp = periodPicker('rp', () => VIEWS.reports(tab));
   const tabs = [['sum', 'Сводная по тренерам'], ['pair', 'Тренер × ученик'], ['pivot', 'Разрезы'], ['subs', 'Абонементы'], ['acts', 'Акты']];
+  S.ui.rpLabel = () => fd(pp.p.from) + ' — ' + fd(pp.p.to);
   $('#main').innerHTML = `<div class="head"><h1>Отчёты и акты</h1></div>
     <div class="tabs">${tabs.map(t => `<a data-tab="${t[0]}" class="${tab === t[0] ? 'on' : ''}">${t[1]}</a>`).join('')}</div>
     ${['subs', 'acts'].includes(tab) ? '' : pp.html}<div id="rr" class="sect"></div>`;
@@ -959,27 +1340,32 @@ VIEWS.reports = (tab) => {
   }).catch(fail);
 };
 function reportSum(r, p) {
+  const used = {};
+  r.facts.filter(x => x.n > 0).forEach(x => { used[x.type] = 1; });
+  const tcols = Object.keys(used).sort((a, b) => (+typeInfo(a).order || 0) - (+typeInfo(b).order || 0));
   const rows = S.D.trainers.map(t => {
     const f = r.facts.filter(x => x.tr === t.id);
-    const h = ty => sum(f.filter(x => x.type === ty), x => x.th);
-    const o = {t, ind: h('ind'), grp: h('group'), ev: h('event'), n: sum(f, x => x.n), cl: new Set(f.filter(x => x.cl).map(x => x.cl)).size};
-    o.total = o.ind + o.grp + o.ev;
-    o.amount = o.ind * (+t.rateInd || 0) + o.grp * (+t.rateGroup || 0) + o.ev * (+t.rateEvent || 0);
-    return o;
-  }).filter(o => o.total > 0 || o.t.active).sort((a, b) => b.total - a.total);
+    const by = {};
+    f.filter(x => x.n > 0).forEach(x => { const o = by[x.type] = by[x.type] || {h: 0, u: 0}; o.h += x.th; o.u += x.n; });
+    const total = sum(Object.values(by), o => o.h);
+    const amount = sum(Object.keys(by), k => payOf(t, k, by[k].h, by[k].u));
+    return {t, by, total, amount, n: sum(f, x => x.n), cl: new Set(f.filter(x => x.cl).map(x => x.cl)).size};
+  }).filter(o => o.total > 0 || o.n > 0 || o.t.active).sort((a, b) => b.total - a.total);
   const T = k => sum(rows, o => o[k]);
+  const cell = (k, o) => !o ? '' : typeInfo(k).mode === 'fixed' ? o.u + ' уч.' : fh(o.h);
   const mx = Math.max(1, ...rows.map(o => o.total));
   $('#rr').innerHTML = `
-    <div class="kpis"><div class="kpi"><b>${fh(T('total'))}</b><span>часов всего</span></div><div class="kpi"><b>${T('n')}</b><span>занятий</span></div><div class="kpi"><b>${money(T('amount'))}</b><span>к оплате по ставкам</span></div></div>
-    <div class="row sect" style="margin-bottom:8px"><h2 class="grow">Отработанные часы, ${fd(p.from)} — ${fd(p.to)}</h2><button class="btn sm" id="csv">${ic('dl')}CSV для Excel</button></div>
-    <div class="tw"><table class="t"><thead><tr><th>Тренер</th><th class="n">Индивид.</th><th class="n">Групп.</th><th class="n">Мероприятия</th><th class="n">Всего, ч</th><th class="n">Занятий</th><th class="n">Учеников</th><th class="n">Сумма</th><th></th></tr></thead><tbody>
-    ${rows.map(o => `<tr><td><a style="cursor:pointer" data-t="${o.t.id}">${esc(o.t.name)}</a><div class="bar" style="height:4px;margin-top:4px;max-width:160px"><i style="width:${o.total / mx * 100}%"></i></div></td><td class="n">${fh(o.ind)}</td><td class="n">${fh(o.grp)}</td><td class="n">${fh(o.ev)}</td><td class="n"><b>${fh(o.total)}</b></td><td class="n">${o.n}</td><td class="n">${o.cl}</td><td class="n">${money(o.amount)}</td>
-      <td>${o.total > 0 ? `<button class="btn sm gold" data-act="${o.t.id}">Акт</button>` : ''}</td></tr>`).join('')}
-    </tbody><tfoot><tr><td>Итого</td><td class="n">${fh(T('ind'))}</td><td class="n">${fh(T('grp'))}</td><td class="n">${fh(T('ev'))}</td><td class="n">${fh(T('total'))}</td><td class="n">${T('n')}</td><td></td><td class="n">${money(T('amount'))}</td><td></td></tr></tfoot></table></div>`;
-  $$('[data-t]').forEach(a => a.onclick = () => go('trainer', a.dataset.t));
+    <div class="kpis"><div class="kpi"><b>${fh(T('total'))}</b><span>часов всего</span></div><div class="kpi"><b>${T('n')}</b><span>занятий и участий</span></div><div class="kpi"><b>${money(T('amount'))}</b><span>к оплате по ставкам</span></div></div>
+    <div class="row sect" style="margin-bottom:8px"><h2 class="grow">Отработанные часы, ${fd(p.from)} — ${fd(p.to)}</h2><button class="btn sm" id="prn">${ic('print')}Печать</button><button class="btn sm" id="csv">${ic('dl')}CSV для Excel</button></div>
+    <div class="tw" id="sumt"><table class="t"><thead><tr><th>Тренер</th>${tcols.map(k => `<th class="n"><span class="dot" style="background:${esc(typeColor(k))}"></span>${esc(typeInfo(k).name)}</th>`).join('')}<th class="n">Всего, ч</th><th class="n">Занятий</th><th class="n">Учеников</th><th class="n">Сумма</th><th class="noprint"></th></tr></thead><tbody>
+    ${rows.map(o => `<tr><td><a style="cursor:pointer" data-t="${o.t.id}">${esc(o.t.name)}</a><div class="bar" style="height:4px;margin-top:4px;max-width:160px"><i style="width:${o.total / mx * 100}%"></i></div></td>${tcols.map(k => `<td class="n">${cell(k, o.by[k])}</td>`).join('')}<td class="n"><b>${fh(o.total)}</b></td><td class="n">${o.n}</td><td class="n">${o.cl}</td><td class="n">${money(o.amount)}</td>
+      <td class="noprint">${o.total > 0 || o.n > 0 ? `<button class="btn sm gold" data-act="${o.t.id}">Акт</button>` : ''}</td></tr>`).join('')}
+    </tbody><tfoot><tr><td>Итого</td>${tcols.map(k => { const h = sum(rows, o => (o.by[k] || {}).h || 0), u = sum(rows, o => (o.by[k] || {}).u || 0); return `<td class="n">${typeInfo(k).mode === 'fixed' ? u + ' уч.' : fh(h)}</td>`; }).join('')}<td class="n">${fh(T('total'))}</td><td class="n">${T('n')}</td><td></td><td class="n">${money(T('amount'))}</td><td class="noprint"></td></tr></tfoot></table></div>`;
+  $$('[data-t]', $('#rr')).forEach(a => a.onclick = () => go('trainer', a.dataset.t));
   $$('[data-act]').forEach(b => b.onclick = () => actDialog(b.dataset.act, p.from, p.to));
-  $('#csv').onclick = () => tableCsv('Часы тренеров ' + p.from + '_' + p.to, ['Тренер', 'Индивид., ч', 'Групп., ч', 'Мероприятия, ч', 'Всего, ч', 'Занятий', 'Учеников', 'Сумма, ₽'],
-    rows.map(o => [o.t.name, fh(o.ind), fh(o.grp), fh(o.ev), fh(o.total), o.n, o.cl, String(o.amount).replace('.', ',')]));
+  $('#prn').onclick = () => printEl('Сводная по тренерам', $('#sumt'), fd(p.from) + ' — ' + fd(p.to));
+  $('#csv').onclick = () => tableCsv('Часы тренеров ' + p.from + '_' + p.to, ['Тренер'].concat(tcols.map(k => typeInfo(k).name)).concat(['Всего, ч', 'Занятий', 'Учеников', 'Сумма, ₽']),
+    rows.map(o => [o.t.name].concat(tcols.map(k => cell(k, o.by[k]))).concat([fh(o.total), o.n, o.cl, String(Math.round(o.amount * 100) / 100).replace('.', ',')])));
 }
 function reportPair(r, p) {
   const ui = S.ui.pair || (S.ui.pair = {tr: '', cl: ''});
@@ -996,7 +1382,8 @@ function reportPair(r, p) {
     $$('#pt [data-c]').forEach(a => a.onclick = () => { S.prev = ['reports', 'pair']; go('client', a.dataset.c); });
     $('#csv').onclick = () => tableCsv('Тренер-ученик ' + p.from + '_' + p.to, ['Тренер', 'Ученик', 'Индивид., ч', 'В группах, ч', 'Всего, ч', 'Посещений'], rows.map(o => [tName(o.tr), cName(o.cl), fh(o.ind), fh(o.grp), fh(o.ind + o.grp), o.n]));
   };
-  $('#rr').innerHTML = `<div class="row" style="margin-bottom:12px">${sel('tr', trOpts(true, 'Все тренеры'), ui.tr, 'id="ptr" style="width:auto"')}${sel('cl', clOpts(S.D.clients, 'Все ученики'), ui.cl, 'id="pcl" style="width:auto"')}<span class="spacer"></span><button class="btn sm" id="csv">${ic('dl')}CSV</button></div><div class="tw" id="pt"></div>`;
+  $('#rr').innerHTML = `<div class="row" style="margin-bottom:12px">${sel('tr', trOpts(true, 'Все тренеры'), ui.tr, 'id="ptr" style="width:auto"')}${sel('cl', clOpts(S.D.clients, 'Все ученики'), ui.cl, 'id="pcl" style="width:auto"')}<span class="spacer"></span><button class="btn sm" id="prn">${ic('print')}Печать</button><button class="btn sm" id="csv">${ic('dl')}CSV</button></div><div class="tw" id="pt"></div>`;
+  $('#prn').onclick = () => printEl('Тренер × ученик', $('#pt'), fd(p.from) + ' — ' + fd(p.to));
   $('#ptr').onchange = e => { ui.tr = e.target.value; draw(); };
   $('#pcl').onchange = e => { ui.cl = e.target.value; draw(); };
   draw();
@@ -1039,7 +1426,8 @@ function reportPivot(r, p) {
   $('#rr').innerHTML = `<div class="row" style="margin-bottom:12px">
     <span class="small muted">Строки</span>${dsel('pr', ui.rows, true)}<span class="small muted">Столбцы</span>${dsel('pc', ui.cols)}
     <span class="small muted">Показатель</span><select class="inp" id="pm" style="width:auto">${Object.entries(METR).map(e => `<option value="${e[0]}" ${ui.metric === e[0] ? 'selected' : ''}>${e[1]}</option>`).join('')}</select>
-    <span class="spacer"></span><button class="btn sm" id="csv">${ic('dl')}CSV</button></div><div id="pvt"></div>`;
+    <span class="spacer"></span><button class="btn sm" id="prn">${ic('print')}Печать</button><button class="btn sm" id="csv">${ic('dl')}CSV</button></div><div id="pvt"></div>`;
+  $('#prn').onclick = () => printEl('Отчёт: ' + DIMS[ui.rows] + (ui.cols !== 'none' ? ' × ' + DIMS[ui.cols] : '') + ' — ' + METR[ui.metric], $('#pvt'), fd(p.from) + ' — ' + fd(p.to));
   $('#pr').onchange = e => { ui.rows = e.target.value; draw(); };
   $('#pc').onchange = e => { ui.cols = e.target.value; draw(); };
   $('#pm').onchange = e => { ui.metric = e.target.value; draw(); };
@@ -1061,7 +1449,8 @@ function reportSubs() {
   };
   $('#rr').innerHTML = `<div class="row" style="margin-bottom:12px"><div class="chips">${[['active', 'Активные'], ['attention', 'Требуют внимания'], ['all', 'Все']].map(x => `<span class="chip ${ui.f === x[0] ? 'on' : ''}" data-f="${x[0]}">${x[1]}</span>`).join('')}</div>
     ${sel('p', [['', 'Все абонементы'], ['*', 'Только партнёрские']].concat((S.D.partners || []).map(p => [p.id, 'Партнёр: ' + p.name])), ui.partner, 'id="spp" style="width:auto"')}
-    <span class="spacer"></span><button class="btn sm" id="ns">${ic('plus')}Абонемент</button><button class="btn sm" id="csv">${ic('dl')}CSV</button></div><div class="tw" id="st"></div>`;
+    <span class="spacer"></span><button class="btn sm" id="ns">${ic('plus')}Абонемент</button><button class="btn sm" id="prn">${ic('print')}Печать</button><button class="btn sm" id="csv">${ic('dl')}CSV</button></div><div class="tw" id="st"></div>`;
+  $('#prn').onclick = () => printEl('Абонементы', $('#st'), 'на ' + fd(today()));
   $$('[data-f]').forEach(c => c.onclick = () => { ui.f = c.dataset.f; $$('[data-f]').forEach(x => x.classList.toggle('on', x === c)); draw(); });
   $('#spp').onchange = e => { ui.partner = e.target.value; draw(); };
   $('#ns').onclick = () => subForm();
@@ -1069,13 +1458,17 @@ function reportSubs() {
 }
 function reportActs() {
   const list = (S.D.acts || []).slice().sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-  $('#rr').innerHTML = `<div class="row" style="margin-bottom:12px"><span class="grow small muted">Акт формируется из «Сводной по тренерам» или из карточки тренера.</span><button class="btn gold" id="na">${ic('doc')}Новый акт</button></div>
+  const admin = role() === 'admin';
+  $('#rr').innerHTML = `<div class="row" style="margin-bottom:12px"><span class="grow small muted">Акт формируется из «Сводной по тренерам» или из карточки тренера. Открыть, напечатать или сохранить его можно прямо здесь.</span><button class="btn gold" id="na">${ic('doc')}Новый акт</button></div>
     <div class="tw"><table class="t"><thead><tr><th>№</th><th>Тренер</th><th>Период</th><th class="n">Часов</th><th class="n">Сумма</th><th>Создан</th><th></th></tr></thead><tbody>
-    ${list.map(a => `<tr><td><b>${esc(a.number)}</b></td><td>${esc(a.trainerName)}</td><td class="nowrap">${fd(a.dateFrom)} — ${fd(a.dateTo)}</td><td class="n">${fh(a.hours)}</td><td class="n">${money(a.amount)}</td><td class="small muted">${esc(a.createdAt.slice(0, 10).split('-').reverse().join('.'))}<br>${esc(a.createdBy)}</td>
-      <td class="nowrap"><a class="btn sm" href="${esc(a.pdfUrl)}" target="_blank">PDF</a> <a class="btn sm" href="${esc(a.docUrl)}" target="_blank">Док</a></td></tr>`).join('') || `<tr><td colspan="7">${empty('Актов пока нет')}</td></tr>`}
+    ${list.map(a => `<tr><td><b>${esc(a.number)}</b></td><td>${esc(a.trainerName)}</td><td class="nowrap">${fd(a.dateFrom)} — ${fd(a.dateTo)}</td><td class="n">${fh(a.hours)}</td><td class="n">${money(a.amount)}</td><td class="small muted">${esc(String(a.createdAt).slice(0, 10).split('-').reverse().join('.'))}<br>${esc(a.createdBy)}</td>
+      <td class="nowrap"><button class="btn sm pri" data-open="${a.id}">${ic('eye')}Открыть</button>${a.docUrl ? ` <a class="btn sm" href="${esc(a.docUrl)}" target="_blank">Google Док</a>` : ''}${admin ? ` <button class="btn sm" data-num="${a.id}" title="Изменить номер">№</button> <button class="btn sm danger" data-del="${a.id}">${ic('trash')}</button>` : ''}</td></tr>`).join('') || `<tr><td colspan="7">${empty('Актов пока нет')}</td></tr>`}
     </tbody></table></div>`;
   const p = S.ui.rp || {from: monthStart(today(), -1), to: monthEnd(today(), -1)};
   $('#na').onclick = () => actDialog((S.D.trainers.find(t => t.active) || {}).id, p.from, p.to);
+  $$('[data-open]').forEach(b => b.onclick = () => openAct(S.m.acts[b.dataset.open]));
+  $$('[data-del]').forEach(b => b.onclick = async () => { if (!confirm('Удалить акт? Копии в Google Диске уйдут в корзину.')) return; try { await call('deleteAct', {id: b.dataset.del}); toast('Удалено'); await reload(); } catch (e) { fail(e); } });
+  $$('[data-num]').forEach(b => b.onclick = () => { const a = S.m.acts[b.dataset.num]; modal('Номер акта', fld('Номер', inp('number', a.number)), [{t: 'Отмена'}, {t: 'Сохранить', cls: 'pri', fn: async m => { await call('editAct', {id: a.id, number: vals(m).number}); toast('Сохранено'); await reload(); }}]); });
 }
 
 // --- аренда ---
@@ -1089,21 +1482,24 @@ VIEWS.rent = () => {
     </tbody></table></div>`;
   pp.wire($('#main'));
   $('#nr').onclick = () => rentForm();
+  const hd = $('#main .head'); const pb = document.createElement('button'); pb.className = 'btn'; pb.innerHTML = ic('print') + 'Печать'; hd.insertBefore(pb, $('#nr'));
+  pb.onclick = () => printEl('Аренда', $('#main .tw'), fd(pp.p.from) + ' — ' + fd(pp.p.to));
   $$('[data-r]').forEach(r => r.onclick = () => rentForm(S.D.rent.find(x => x.id === r.dataset.r)));
 };
 function rentForm(o) {
   o = o || {};
   const halls = String(S.D.settings.halls || '').split(',').map(x => x.trim()).filter(Boolean);
-  modal(o.id ? 'Аренда' : 'Новая аренда', `<div class="fg">
+  const bg = modal(o.id ? 'Аренда' : 'Новая аренда', `<div class="fg">
     ${fld('Арендатор', inp('renter', o.renter, 'list="renters"') + `<datalist id="renters">${[...new Set(S.D.rent.map(x => x.renter))].map(x => `<option value="${esc(x)}">`).join('')}</datalist>`, 'full')}
     ${fld('Дата', inp('date', o.date || today(), 'type="date"'))}${fld('Время', inp('time', o.time || '', 'type="time"'))}
     ${fld('Часов', inp('hours', o.hours || 1, 'type="number" step="0.5" min="0.5"'))}${fld('Зал', sel('hall', [['', '—']].concat(halls.map(h => [h, h])), o.hall || ''))}
     ${fld('Сумма, ₽', inp('amount', o.amount || '', 'type="number" min="0"'))}<div style="align-self:end">${chk('paid', 'Оплачено', o.paid)}</div>
     ${fld('Заметки', inp('notes', o.notes), 'full')}
-    <div class="full">${o.contractNo ? `<span class="badge gold">Договор № ${esc(o.contractNo)}</span>` : chk('makeContract', 'Присвоить номер договора аренды', false)}</div>
+    ${contractFields('rent', o)}
   </div>`, [
     o.id ? {t: ic('trash') + 'Удалить', cls: 'danger', left: 1, fn: async () => { if (!confirm('Удалить запись аренды?')) return false; await call('deleteRent', {id: o.id}); await reload(); }} : null,
     {t: 'Отмена'}, {t: 'Сохранить', cls: 'pri', fn: async m => { const v = vals(m); v.id = o.id; await call('saveRent', v); toast('Сохранено'); await reload(); }}].filter(Boolean));
+  wireForm(bg, 'rent', o);
 }
 
 // --- партнёры ---
@@ -1121,9 +1517,11 @@ VIEWS.partners = (id) => {
 };
 function partnerForm(o) {
   o = o || {};
-  modal(o.id ? 'Партнёр' : 'Новый партнёр', `<div class="fg">${fld('Название', inp('name', o.name), 'full')}${fld('Контактное лицо', inp('contact', o.contact))}${fld('Телефон', inp('phone', o.phone, 'type="tel"'))}${fld('Заметки', txt('notes', o.notes), 'full')}
-    <div class="full">${o.contractNo ? `<span class="badge gold">Договор № ${esc(o.contractNo)}</span>` : chk('makeContract', 'Присвоить номер договора', !o.id)}</div>${o.id ? `<div class="full">${chk('active', 'Активен', o.active)}</div>` : ''}</div>`,
-    [{t: 'Отмена'}, {t: 'Сохранить', cls: 'pri', fn: async m => { const v = vals(m); v.id = o.id; if (!o.id) v.active = true; await call('savePartner', v); toast('Сохранено'); await reload(); }}]);
+  const bg = modal(o.id ? 'Партнёр' : 'Новый партнёр', `<div class="fg">${fld('Название', inp('name', o.name), 'full')}${fld('Контактное лицо', inp('contact', o.contact))}${fld('Телефон', inp('phone', o.phone, 'type="tel"'))}
+    ${contractFields('partner', o)}${fld('Заметки', txt('notes', o.notes), 'full')}${o.id ? `<div class="full">${chk('active', 'Активен', o.active)}</div>` : ''}</div>`,
+    [o.id && role() === 'admin' ? {t: ic('trash') + 'Удалить', cls: 'danger', left: 1, fn: async () => { if (!confirm('Удалить партнёра?')) return false; await call('deletePartner', {id: o.id}); toast('Удалено'); await reload(); go('partners'); }} : null,
+     {t: 'Отмена'}, {t: 'Сохранить', cls: 'pri', fn: async m => { const v = vals(m); v.id = o.id; if (!o.id) v.active = true; await call('savePartner', v); toast('Сохранено'); await reload(); }}].filter(Boolean));
+  wireForm(bg, 'partner', o);
 }
 function partnerCard(id) {
   const p = S.m.partners[id]; if (!p) return go('partners');
@@ -1132,46 +1530,81 @@ function partnerCard(id) {
   const used = sum(S.D.lessons.filter(l => l.date >= ms && subs.some(s => s.id === l.subId)), l => l.hours);
   $('#main').innerHTML = `<div class="head"><button class="btn sm" id="bk">${ic('back')}</button><h1>${esc(p.name)}</h1><button class="btn" id="ed">${ic('edit')}Изменить</button><button class="btn pri" id="ns">${ic('plus')}Абонемент партнёра</button></div>
     <div class="kpis"><div class="kpi"><b>${subs.filter(s => (s.status || 'active') === 'active').length}</b><span>активных абонементов</span></div><div class="kpi"><b>${fh(sum(subs.filter(s => (s.status || 'active') === 'active'), s => Math.max(0, s.remaining)))}</b><span>часов осталось</span></div><div class="kpi"><b>${fh(used)}</b><span>часов использовано в этом месяце</span></div></div>
-    <div class="card sect">${p.contractNo ? `<span class="badge gold">Договор № ${esc(p.contractNo)}</span> ` : `<button class="btn sm" id="ct">${ic('doc')}Присвоить договор</button> `}<span class="small">${esc([p.contact, p.phone].filter(Boolean).join(' · '))}</span>${p.notes ? `<div class="small muted" style="margin-top:6px">${esc(p.notes)}</div>` : ''}</div>
+    <div class="card sect">${p.contractNo ? ctrBadge(p, true) + ' ' : `<button class="btn sm" id="ct">${ic('doc')}Присвоить договор</button> `}<span class="small">${esc([p.contact, p.phone].filter(Boolean).join(' · '))}</span>${p.notes ? `<div class="small muted" style="margin-top:6px">${esc(p.notes)}</div>` : ''}</div>
     <div class="sect"><h2>Абонементы партнёра</h2><div class="card">${subs.map(s => `<div data-c="${s.clientId}" class="click"><div class="small muted" style="margin-top:8px">${esc(cName(s.clientId))}</div>${subBlock(s)}</div>`).join('') || empty('Нет абонементов')}</div></div>`;
   $('#bk').onclick = () => go('partners');
   $('#ed').onclick = () => partnerForm(p);
   $('#ns').onclick = () => subForm({partnerId: id});
   if ($('#ct')) $('#ct').onclick = contractBtn('partner', id);
+  wireCtr($('#main'));
   $$('[data-c]').forEach(e => e.onclick = () => { S.prev = ['partners', id]; go('client', e.dataset.c); });
 }
 
 // --- договоры ---
 VIEWS.contracts = () => {
-  const ui = S.ui.ct || (S.ui.ct = {k: ''});
+  const ui = S.ui.ct || (S.ui.ct = {k: '', q: ''});
   const st = S.D.settings;
-  const list = (S.D.contracts || []).filter(c => !ui.k || c.kind === ui.k).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   const next = k => st['prefix_' + k] !== undefined ? esc((st['prefix_' + k] || '') + String(st['next_' + k] || 1).padStart(4, '0')) : '—';
-  $('#main').innerHTML = `<div class="head"><h1>Договоры</h1><button class="btn pri" id="nc">${ic('plus')}Новый договор</button></div>
+  $('#main').innerHTML = `<div class="head"><h1>Договоры</h1><button class="btn" id="cprn">${ic('print')}Печать</button><button class="btn pri" id="nc">${ic('plus')}Новый договор</button></div>
     <div class="kpis">${Object.keys(KINDS).map(k => `<div class="kpi"><b style="font-size:18px">${next(k)}</b><span>следующий: ${KINDS[k].toLowerCase()}</span></div>`).join('')}</div>
-    <div class="chips sect" style="margin-bottom:12px">${[['', 'Все']].concat(Object.entries(KINDS)).map(x => `<span class="chip ${ui.k === x[0] ? 'on' : ''}" data-k="${x[0]}">${x[1]}</span>`).join('')}</div>
-    <div class="tw"><table class="t"><thead><tr><th>Номер</th><th>Дата</th><th>Вид</th><th>Сторона</th><th>Заметки</th></tr></thead><tbody>
-    ${list.map(c => `<tr><td><b>${esc(c.number)}</b></td><td>${fd(c.date)}</td><td>${KINDS[c.kind] || ''}</td><td>${esc(c.partyName)}</td><td class="small muted">${esc(c.notes)}</td></tr>`).join('') || `<tr><td colspan="5">${empty('Договоров пока нет')}</td></tr>`}
-    </tbody></table></div><p class="small muted">Нумерация сквозная и ведётся отдельно по каждому виду. Префиксы и следующий номер меняются в Настройках.</p>`;
-  $$('[data-k]').forEach(c => c.onclick = () => { ui.k = c.dataset.k; VIEWS.contracts(); });
-  $('#nc').onclick = () => {
-    const without = {
-      client: S.D.clients.filter(c => !c.contractNo && c.active).map(c => [c.id, c.name]),
-      trainer: S.D.trainers.filter(c => !c.contractNo && c.active).map(c => [c.id, c.name]),
-      partner: S.D.partners.filter(c => !c.contractNo && c.active).map(c => [c.id, c.name]),
-    };
-    const bg = modal('Новый договор', `<div class="fg">
-      ${fld('Вид договора', sel('kind', Object.entries(KINDS).filter(e => e[0] !== 'rent'), 'client'), 'full')}
-      <div class="full" data-party></div>
-      ${fld('Дата', inp('date', today(), 'type="date"'))}${fld('Заметки', inp('notes', ''))}</div>`,
-      [{t: 'Отмена'}, {t: 'Присвоить номер', cls: 'pri', fn: async m => { const n = await call('assignContract', vals(m)); toast('Договор № ' + n); await reload(); }}]);
-    const party = () => {
-      const k = $('[name=kind]', bg).value;
-      $('[data-party]', bg).innerHTML = k === 'other' ? fld('Сторона договора', inp('partyName', '')) : fld('Без договора', sel('partyId', [['', '— выберите —']].concat(without[k] || [])));
-    };
-    $('[name=kind]', bg).onchange = party; party();
+    <div class="row sect" style="margin-bottom:12px"><div class="search grow">${ic('search')}<input class="inp" id="cq" placeholder="Номер, сторона, заметки" value="${esc(ui.q)}"></div>
+      <div class="chips">${[['', 'Все']].concat(Object.entries(KINDS)).map(x => `<span class="chip ${ui.k === x[0] ? 'on' : ''}" data-k="${x[0]}">${x[1]}</span>`).join('')}</div></div>
+    <div class="tw" id="ctt"></div>
+    <p class="small muted">Номер можно ввести вручную или нажать «Авто» — подставится следующий свободный по счётчику. Править и удалять договоры могут администратор и менеджер. Префиксы и счётчики — в «Настройки → Нумерация».</p>`;
+  const draw = () => {
+    const q = ui.q.toLowerCase();
+    const list = (S.D.contracts || []).filter(c => (!ui.k || c.kind === ui.k) && (!q || [c.number, c.partyName, c.notes].join(' ').toLowerCase().includes(q)))
+      .sort((a, b) => String(b.date).localeCompare(String(a.date)) || String(b.number).localeCompare(String(a.number)));
+    $('#ctt').innerHTML = `<table class="t"><thead><tr><th>Номер</th><th>Дата</th><th>Вид</th><th>Сторона</th><th>Действует до</th><th class="n">Сумма</th><th>Файл</th></tr></thead><tbody>
+    ${list.map(c => `<tr class="click" data-c="${c.id}"><td><b>${esc(c.number)}</b></td><td class="nowrap">${fd(c.date)}</td><td>${KINDS[c.kind] || ''}</td><td>${esc(c.partyName)}${c.notes ? `<div class="small muted">${esc(c.notes)}</div>` : ''}</td><td class="nowrap">${fd(c.endDate)}</td><td class="n">${+c.amount ? money(c.amount) : ''}</td>
+      <td>${c.fileId ? `<button class="btn sm" data-f="${esc(c.fileId)}">${ic('clip')}Открыть</button>` : ''}</td></tr>`).join('') || `<tr><td colspan="7">${empty('Договоров нет')}</td></tr>`}
+    </tbody></table>`;
+    $$('#ctt [data-c]').forEach(r => r.onclick = e => { if (e.target.closest('[data-f]')) return; contractForm(S.m.contracts[r.dataset.c]); });
+    $$('#ctt [data-f]').forEach(b => b.onclick = () => viewFile(b.dataset.f).catch(fail));
   };
+  $('#cq').oninput = e => { ui.q = e.target.value; draw(); };
+  $$('[data-k]').forEach(c => c.onclick = () => { ui.k = c.dataset.k; $$('[data-k]').forEach(x => x.classList.toggle('on', x === c)); draw(); });
+  $('#nc').onclick = () => contractForm({kind: ui.k || 'client'});
+  $('#cprn').onclick = () => printEl('Договоры' + (ui.k ? ': ' + KINDS[ui.k] : ''), $('#ctt'), 'на ' + fd(today()));
+  draw();
 };
+function contractForm(o) {
+  o = o || {};
+  const kind = o.kind || 'client';
+  const partyList = k => ({client: S.D.clients, trainer: S.D.trainers, partner: S.D.partners,
+    rent: (S.D.rent || []).map(r => ({id: r.id, name: r.renter + ' · ' + fd(r.date), contractNo: r.contractNo}))}[k] || [])
+    .slice().sort((a, b) => a.name.localeCompare(b.name)).map(x => [x.id, x.name + (x.contractNo && x.contractNo !== o.number ? ' (дог. ' + x.contractNo + ')' : '')]);
+  const bg = modal(o.id ? 'Договор № ' + esc(o.number) : 'Новый договор', `<div class="fg">
+    ${fld('Вид', sel('kind', Object.entries(KINDS), kind))}
+    ${fld('Номер', `<div class="row" style="gap:6px;flex-wrap:nowrap"><input class="inp" name="number" value="${esc(o.number || '')}" placeholder="например, У-0015"><button type="button" class="btn sm" id="cauto">Авто</button></div>`)}
+    <div class="full" data-party></div>
+    ${fld('Дата', inp('date', o.date || today(), 'type="date"'))}
+    ${fld('Действует до', inp('endDate', o.endDate || '', 'type="date"'))}
+    ${fld('Сумма, ₽', inp('amount', +o.amount || '', 'type="number" min="0"'))}
+    ${fld('Заметки', inp('notes', o.notes), 'full')}
+    ${fld('Файл договора (скан, PDF, до 10 МБ)', `${o.fileId ? `<div class="row" style="margin-bottom:6px"><span class="badge">${ic('clip', 12)} ${esc(o.fileName || 'файл')}</span><button type="button" class="btn sm" id="fview">${ic('eye')}Открыть</button><button type="button" class="btn sm danger" id="frm">Убрать файл</button></div>` : ''}<input type="file" id="cfile" class="inp" accept=".pdf,image/*,.doc,.docx">`, 'full')}
+  </div>`, [
+    o.id ? {t: ic('trash') + 'Удалить', cls: 'danger', left: 1, fn: async () => { if (!confirm('Удалить договор № ' + o.number + '? Номер освободится, у стороны договора он исчезнет.')) return false; await call('deleteContract', {id: o.id}); toast('Удалено'); await reload(); }} : null,
+    {t: 'Отмена'},
+    {t: 'Сохранить', cls: 'pri', fn: async m => {
+      const v = vals(m); v.id = o.id;
+      const r = await call('saveContract', v);
+      const f = $('#cfile', m).files[0];
+      if (f) { toast('Загружаю файл…'); await uploadFile(r.id, f); }
+      toast('Договор № ' + r.number + ' сохранён'); await reload();
+    }}].filter(Boolean), {wide: true});
+  const party = () => {
+    const k = $('[name=kind]', bg).value;
+    $('[data-party]', bg).innerHTML = k === 'other' ? fld('Сторона договора', inp('partyName', o.kind === 'other' ? o.partyName : ''))
+      : fld('Сторона договора', sel('partyId', [['', '— выберите —']].concat(partyList(k)), o.kind === k ? o.partyId : ''));
+  };
+  $('[name=kind]', bg).onchange = () => { party(); if (!o.id) autoNo(bg, $('[name=kind]', bg).value); };
+  party();
+  $('#cauto', bg).onclick = () => autoNo(bg, $('[name=kind]', bg).value);
+  if (!o.id && !o.number) autoNo(bg, kind);
+  if ($('#fview', bg)) $('#fview', bg).onclick = () => viewFile(o.fileId).catch(fail);
+  if ($('#frm', bg)) $('#frm', bg).onclick = async () => { if (!confirm('Убрать файл из договора?')) return; try { await call('removeContractFile', {id: o.id}); toast('Файл удалён'); await reload(); bg.remove(); } catch (e) { fail(e); } };
+}
 
 // --- чат ---
 let pollT = null;
@@ -1229,12 +1662,13 @@ function userForm(o) {
     ${fld(o.id ? 'Новый пароль (если нужно сбросить)' : 'Пароль', inp('password', pass, 'autocomplete="new-password"'))}
     ${o.id ? `<div class="full">${chk('active', 'Доступ разрешён', o.active)}</div>` : ''}
     <div class="full small muted">Передайте логин и пароль человеку. При первом входе приложение попросит сменить пароль.</div>
-  </div>`, [{t: 'Отмена'}, {t: 'Сохранить', cls: 'pri', fn: async m => {
+  </div>`, [o.id && o.id !== S.user.id ? {t: ic('trash') + 'Удалить', cls: 'danger', left: 1, fn: async () => { if (!confirm('Удалить пользователя ' + o.login + '? Он больше не сможет войти.')) return false; await call('deleteUser', {id: o.id}); toast('Удалено'); await reload(); }} : null,
+    {t: 'Отмена'}, {t: 'Сохранить', cls: 'pri', fn: async m => {
     const v = vals(m); v.id = o.id; if (!o.id) v.active = true;
     await call('saveUser', v); await reload();
     if (v.password) modal('Данные для входа', `<div class="card" style="background:var(--soft)">Логин: <b>${esc(v.login.toLowerCase())}</b><br>Пароль: <b>${esc(v.password)}</b></div><p class="small muted">Сохраните или отправьте эти данные — пароль больше не будет показан.</p>`, [{t: 'Готово', cls: 'pri'}]);
     else toast('Сохранено');
-  }}]);
+  }}].filter(Boolean));
   const link = () => {
     const r = $('[name=role]', bg).value;
     $('[data-link]', bg).innerHTML = r === 'trainer' ? fld('Карточка тренера', sel('trainerId', trOpts(true, '— выберите —'), o.trainerId || ''))
@@ -1245,27 +1679,102 @@ function userForm(o) {
   $('[name=role]', bg).onchange = link; link();
 }
 
-// --- настройки ---
-VIEWS.settings = () => {
+// --- настройки и справочники (администратор) ---
+VIEWS.settings = (tab) => {
+  tab = tab || S.ui.stab || 'main'; S.ui.stab = tab;
   const st = S.D.settings;
-  const xlsx = st.spreadsheetUrl ? st.spreadsheetUrl.replace(/\/edit.*$/, '') + '/export?format=xlsx' : '';
+  const tabs = [['main', 'Общие'], ['types', 'Виды занятий'], ['programs', 'Программы'], ['fields', 'Доп. поля'], ['num', 'Нумерация'], ['db', 'База данных']];
   $('#main').innerHTML = `<div class="head"><h1>Настройки</h1></div>
-    <div class="card"><form id="sf" class="fg">
-      ${fld('Название клуба (для актов)', inp('clubName', st.clubName), 'full')}
+    <div class="tabs">${tabs.map(t => `<a data-tab="${t[0]}" class="${tab === t[0] ? 'on' : ''}">${t[1]}</a>`).join('')}</div><div id="sv"></div>`;
+  $$('[data-tab]').forEach(a => a.onclick = () => go('settings', a.dataset.tab));
+  const box = $('#sv');
+  const saveForm = form => form.onsubmit = async e => { e.preventDefault(); try { await call('saveSettings', vals(e.target)); toast('Настройки сохранены'); await reload(); } catch (er) { fail(er); } };
+  if (tab === 'main') {
+    box.innerHTML = `<div class="card"><form id="sf" class="fg">
+      ${fld('Название клуба (для актов и печати)', inp('clubName', st.clubName), 'full')}
       ${fld('Реквизиты клуба (ИНН, адрес…)', txt('clubRequisites', st.clubRequisites), 'full')}
       ${fld('Руководитель (подпись в актах)', inp('director', st.director))}${fld('Город', inp('city', st.city))}
       ${fld('Залы (через запятую)', inp('halls', st.halls), 'full')}
-      ${fld('Предупреждать, когда осталось часов ≤', inp('lowHours', st.lowHours, 'type="number" step="0.5" min="0"'))}
-      ${fld('Тренер может править отметки, дней', inp('trainerEditDays', st.trainerEditDays, 'type="number" min="0"'))}
-      <div class="full"><h3 style="margin-top:8px">Нумерация договоров и актов</h3></div>
+      ${fld('Предупреждать, когда в абонементе осталось часов ≤', inp('lowHours', st.lowHours, 'type="number" step="0.5" min="0"'))}
+      ${fld('Тренер может править свои отметки, дней', inp('trainerEditDays', st.trainerEditDays, 'type="number" min="0"'))}
+      <div class="full sect-t">Текст акта</div>
+      ${fld('Заголовок', inp('actTitle', st.actTitle))}${fld('Подзаголовок', inp('actSubtitle', st.actSubtitle))}
+      ${fld('Текст после суммы', txt('actText', st.actText), 'full')}
+      <div class="full">${chk('actSaveCopy', 'Сохранять копию каждого акта на Google Диск (Документ + PDF)', String(st.actSaveCopy) !== 'false')}</div>
+      <div class="full"><button class="btn pri">Сохранить</button></div></form></div>`;
+    saveForm($('#sf'));
+  }
+  if (tab === 'num') {
+    box.innerHTML = `<div class="card"><form id="sf" class="fg">
       ${Object.entries(Object.assign({}, KINDS, {act: 'Акты'})).map(([k, n]) => fld(n + ': префикс', inp('prefix_' + k, st['prefix_' + k])) + fld(n + ': следующий №', inp('next_' + k, st['next_' + k], 'type="number" min="1"'))).join('')}
-      <div class="full"><button class="btn pri">Сохранить</button></div>
-    </form></div>
-    <div class="card sect stack"><h2>База данных</h2>
-      <div class="small muted">Все данные хранятся в Google Таблице на вашем Google Диске. Пользователи приложения к ней доступа не имеют.</div>
+      <div class="full small muted">Номер договора можно вводить вручную в карточке или в «Договорах». «Авто» берёт следующий свободный номер из счётчика выше.</div>
+      <div class="full"><button class="btn pri">Сохранить</button></div></form></div>`;
+    saveForm($('#sf'));
+  }
+  if (tab === 'types') {
+    const list = dictList('type', true);
+    box.innerHTML = `<div class="row" style="margin-bottom:12px"><span class="grow small muted">Виды занятий используются в отметках, группах, расписании, отчётах и актах. Ставка «за участие» удобна для турниров; ставки каждого тренера задаются в его карточке.</span><button class="btn pri" id="nd">${ic('plus')}Вид занятия</button></div>
+      <div class="tw"><table class="t"><thead><tr><th>Вид</th><th>Категория</th><th>Оплата</th><th class="n">Ставка по умолч.</th><th>Списывать с абонемента</th><th class="n">Порядок</th><th>Статус</th></tr></thead><tbody>
+      ${list.map(d => `<tr class="click" data-d="${esc(d.id)}" style="${d.active === false ? 'opacity:.5' : ''}"><td><span class="dot" style="background:${esc(d.color)}"></span><b>${esc(d.name)}</b></td><td>${KINDNAME[d.kind] || ''}</td><td>${d.mode === 'fixed' ? 'за участие' : 'за час'}</td><td class="n">${+d.rate ? money(d.rate) : '—'}</td><td>${d.deduct ? 'да' : 'нет'}</td><td class="n">${+d.order || ''}</td><td>${d.active === false ? 'скрыт' : '<span class="badge ok">активен</span>'}</td></tr>`).join('')}
+      </tbody></table></div>`;
+    $('#nd').onclick = () => dictForm('type', {});
+    $$('[data-d]').forEach(r => r.onclick = () => dictForm('type', S.D.dict.find(d => d.id === r.dataset.d)));
+  }
+  if (tab === 'programs') {
+    const list = dictList('program', true);
+    box.innerHTML = `<div class="card"><form class="row" id="pf"><input class="inp grow" name="name" placeholder="Новая программа, например «Латина Pro-Am»"><button class="btn pri">${ic('plus')}Добавить</button></form>
+      <div class="small muted" style="margin-top:6px">Программы отмечаются в карточке тренера и используются в фильтре на странице «Тренеры».</div></div>
+      <div class="tw sect"><table class="t"><thead><tr><th>Программа</th><th class="n">Тренеров</th><th>Статус</th><th></th></tr></thead><tbody>
+      ${list.map(d => `<tr style="${d.active === false ? 'opacity:.5' : ''}"><td><b>${esc(d.name)}</b></td><td class="n">${S.D.trainers.filter(t => progs(t.programs).includes(d.name)).length}</td><td>${d.active === false ? 'скрыта' : 'активна'}</td><td class="right"><button class="btn sm" data-d="${esc(d.id)}">${ic('edit')}Изменить</button></td></tr>`).join('') || `<tr><td colspan="4">${empty('Программ нет')}</td></tr>`}
+      </tbody></table></div>`;
+    $('#pf').onsubmit = async e => { e.preventDefault(); const n = e.target.name.value.trim(); if (!n) return; try { await call('saveDict', {list: 'program', name: n}); toast('Добавлено'); await reload(); } catch (er) { fail(er); } };
+    $$('[data-d]').forEach(b => b.onclick = () => dictForm('program', S.D.dict.find(d => d.id === b.dataset.d)));
+  }
+  if (tab === 'fields') {
+    const list = dictList('field', true);
+    const MODES = {text: 'Текст', number: 'Число', date: 'Дата', select: 'Выбор из списка', check: 'Да / нет'};
+    box.innerHTML = `<div class="row" style="margin-bottom:12px"><span class="grow small muted">Свои поля для карточек тренеров и учеников: класс, уровень, размер костюма, разряд… Поля «выбор из списка» у тренеров становятся фильтрами на странице «Тренеры».</span><button class="btn pri" id="nd">${ic('plus')}Поле</button></div>
+      <div class="tw"><table class="t"><thead><tr><th>Поле</th><th>Для</th><th>Тип</th><th>Варианты</th><th>Статус</th></tr></thead><tbody>
+      ${list.map(d => `<tr class="click" data-d="${esc(d.id)}" style="${d.active === false ? 'opacity:.5' : ''}"><td><b>${esc(d.name)}</b></td><td>${d.kind === 'client' ? 'Ученик' : 'Тренер'}</td><td>${MODES[d.mode] || ''}</td><td class="small">${esc(d.options)}</td><td>${d.active === false ? 'скрыто' : 'активно'}</td></tr>`).join('') || `<tr><td colspan="5">${empty('Дополнительных полей пока нет')}</td></tr>`}
+      </tbody></table></div>`;
+    $('#nd').onclick = () => dictForm('field', {});
+    $$('[data-d]').forEach(r => r.onclick = () => dictForm('field', S.D.dict.find(d => d.id === r.dataset.d)));
+  }
+  if (tab === 'db') {
+    const xlsx = st.spreadsheetUrl ? st.spreadsheetUrl.replace(/\/edit.*$/, '') + '/export?format=xlsx' : '';
+    box.innerHTML = `<div class="card stack"><h2>База данных</h2>
+      <div class="small muted">Все данные хранятся в Google Таблице на вашем Google Диске. Пользователи приложения к ней доступа не имеют. Справочники — на листе «Справочники».</div>
       <div class="row">${st.spreadsheetUrl ? `<a class="btn" href="${esc(st.spreadsheetUrl)}" target="_blank">${ic('doc')}Открыть таблицу</a><a class="btn" href="${esc(xlsx)}" target="_blank">${ic('dl')}Скачать в Excel (.xlsx)</a>` : ''}</div></div>`;
-  $('#sf').onsubmit = async e => { e.preventDefault(); try { await call('saveSettings', vals(e.target)); toast('Настройки сохранены'); await reload(); } catch (er) { fail(er); } };
+  }
 };
+function dictForm(list, o) {
+  o = o || {};
+  const builtin = list === 'type' && BUILTIN[o.id];
+  const title = {type: 'Вид занятия', program: 'Программа', field: 'Дополнительное поле'}[list];
+  const body = list === 'type' ? `<div class="fg">
+      ${fld('Название', inp('name', o.name, 'placeholder="Танцпрактика, сборы, турнир, мастер-класс…"'), 'full')}
+      ${fld('Категория', sel('kind', o.id === 'ind' ? [['ind', KINDNAME.ind]] : [['group', KINDNAME.group], ['event', KINDNAME.event], ['ind', KINDNAME.ind]], o.kind || 'group'))}
+      ${fld('Оплата тренеру', sel('mode', [['hour', 'Ставка за час'], ['fixed', 'Ставка за участие (турнир)']], o.mode || 'hour'))}
+      ${fld('Ставка по умолчанию, ₽', inp('rate', +o.rate || '', 'type="number" min="0" placeholder="если у тренера не задана своя"'))}
+      ${fld('Цвет', `<input type="color" class="swatch" name="color" value="${esc(o.color || '#3f7cac')}">`)}
+      ${fld('Порядок в списках', inp('order', o.order || '', 'type="number"'))}
+      <div style="align-self:end">${chk('deduct', 'Списывать часы с абонементов', o.id ? o.deduct : true)}</div>
+      <div class="full">${chk('active', 'Активен (снимите — вид скроется из списков, история останется)', o.active !== false)}</div>
+      <div class="full small muted">Категория «Групповое» — занятия с несколькими учениками (танцпрактика, сборы). «Мероприятие / турнир» — события с участниками. «Индивидуальное» — занятие с одним учеником.</div></div>`
+    : list === 'program' ? `<div class="fg">${fld('Название', inp('name', o.name), 'full')}${fld('Порядок', inp('order', o.order || '', 'type="number"'))}
+      <div class="full">${chk('active', 'Активна', o.active !== false)}</div><div class="full small muted">При переименовании программа обновится у всех тренеров.</div></div>`
+    : `<div class="fg">${fld('Название поля', inp('name', o.name, 'placeholder="Класс, разряд, размер костюма…"'), 'full')}
+      ${fld('Для карточки', sel('kind', [['trainer', 'Тренера'], ['client', 'Ученика']], o.kind || 'trainer'))}
+      ${fld('Тип', sel('mode', [['text', 'Текст'], ['number', 'Число'], ['date', 'Дата'], ['select', 'Выбор из списка'], ['check', 'Да / нет']], o.mode || 'text'))}
+      ${fld('Варианты (для «выбор из списка», через запятую)', inp('options', o.options, 'placeholder="E, D, C, B, A, S, M"'), 'full')}
+      ${fld('Порядок', inp('order', o.order || '', 'type="number"'))}
+      <div class="full">${chk('active', 'Активно', o.active !== false)}</div></div>`;
+  modal(o.id ? title : 'Новое: ' + title.toLowerCase(), body, [
+    o.id && !builtin ? {t: ic('trash') + 'Удалить', cls: 'danger', left: 1, fn: async () => { if (!confirm('Удалить «' + o.name + '»?')) return false; await call('deleteDict', {id: o.id}); toast('Удалено'); await reload(); }} : null,
+    {t: 'Отмена'},
+    {t: 'Сохранить', cls: 'pri', fn: async m => { const v = vals(m); v.id = o.id; v.list = list; await call('saveDict', v); toast('Сохранено'); await reload(); }},
+  ].filter(Boolean), {wide: list !== 'program'});
+}
 
 // --- кабинет ученика ---
 VIEWS.mysubs = () => {

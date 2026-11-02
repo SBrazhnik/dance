@@ -28,12 +28,15 @@ const TABLES = {
     ['id', 'ID'], ['name', 'ФИО'], ['phone', 'Телефон'], ['email', 'Email'], ['spec', 'Направление'],
     ['rateInd', 'Ставка индивид., ₽/ч', 'n'], ['rateGroup', 'Ставка групп., ₽/ч', 'n'], ['rateEvent', 'Ставка мероприятия, ₽/ч', 'n'],
     ['contractNo', '№ договора'], ['contractDate', 'Дата договора', 'd'], ['active', 'Активен', 'b'],
-    ['notes', 'Заметки'], ['createdAt', 'Создан']]],
+    ['notes', 'Заметки'], ['createdAt', 'Создан'],
+    ['phone2', 'Доп. телефон'], ['telegram', 'Мессенджер'], ['address', 'Адрес'], ['birthDate', 'Дата рождения', 'd'],
+    ['height', 'Рост, см', 'n'], ['programs', 'Программы'], ['rateTour', 'Ставка турнир, ₽', 'n'],
+    ['rates', 'Ставки по видам (JSON)'], ['extra', 'Доп. поля (JSON)']]],
   clients: ['Ученики', [
     ['id', 'ID'], ['name', 'ФИО'], ['phone', 'Телефон'], ['email', 'Email'], ['birthDate', 'Дата рождения', 'd'],
     ['company', 'Компания'], ['trainerIds', 'ID тренеров'], ['trainerNames', 'Тренеры'], ['partnerId', 'ID партнёра'],
     ['contractNo', '№ договора'], ['contractDate', 'Дата договора', 'd'], ['active', 'Активен', 'b'],
-    ['notes', 'Заметки'], ['createdAt', 'Создан']]],
+    ['notes', 'Заметки'], ['createdAt', 'Создан'], ['extra', 'Доп. поля (JSON)']]],
   partners: ['Партнёры', [
     ['id', 'ID'], ['name', 'Название'], ['contact', 'Контактное лицо'], ['phone', 'Телефон'],
     ['contractNo', '№ договора'], ['contractDate', 'Дата договора', 'd'], ['active', 'Активен', 'b'],
@@ -51,7 +54,16 @@ const TABLES = {
   events: ['Группы и мероприятия', [
     ['id', 'ID'], ['type', 'Тип'], ['title', 'Название'], ['date', 'Дата', 'd'], ['time', 'Время', 't'], ['hours', 'Часов', 'n'],
     ['trainerIds', 'ID тренеров'], ['trainerNames', 'Тренеры'], ['clientIds', 'ID участников'], ['clientNames', 'Участники'],
-    ['deduct', 'Списывать с абонемента', 'b'], ['notes', 'Заметки'], ['createdBy', 'Кто создал'], ['createdAt', 'Создано']]],
+    ['deduct', 'Списывать с абонемента', 'b'], ['notes', 'Заметки'], ['createdBy', 'Кто создал'], ['createdAt', 'Создано'],
+    ['groupId', 'ID группы'], ['location', 'Место'], ['results', 'Итоги']]],
+  groups: ['Группы', [
+    ['id', 'ID'], ['name', 'Название'], ['typeId', 'Вид'], ['trainerIds', 'ID тренеров'], ['trainerNames', 'Тренеры'],
+    ['clientIds', 'ID участников'], ['clientNames', 'Участники'], ['schedule', 'Расписание'], ['notes', 'Заметки'],
+    ['active', 'Активна', 'b'], ['createdAt', 'Создана']]],
+  dict: ['Справочники', [
+    ['id', 'ID'], ['list', 'Список'], ['name', 'Название'], ['kind', 'Категория'], ['mode', 'Режим'],
+    ['rate', 'Ставка по умолч.', 'n'], ['deduct', 'Списывать с абонемента', 'b'], ['options', 'Варианты'],
+    ['color', 'Цвет'], ['order', 'Порядок', 'n'], ['active', 'Активен', 'b'], ['createdAt', 'Создан']]],
   slots: ['Расписание', [
     ['id', 'ID'], ['date', 'Дата', 'd'], ['time', 'Время', 't'], ['hours', 'Часов', 'n'], ['trainerId', 'ID тренера'],
     ['trainerName', 'Тренер'], ['type', 'Тип'], ['title', 'Название'], ['capacity', 'Мест', 'n'], ['status', 'Статус'],
@@ -64,11 +76,12 @@ const TABLES = {
     ['notes', 'Заметки'], ['createdAt', 'Создано']]],
   contracts: ['Договоры', [
     ['id', 'ID'], ['number', 'Номер'], ['kind', 'Вид'], ['partyId', 'ID стороны'], ['partyName', 'Сторона'],
-    ['date', 'Дата', 'd'], ['notes', 'Заметки'], ['createdAt', 'Создан']]],
+    ['date', 'Дата', 'd'], ['notes', 'Заметки'], ['createdAt', 'Создан'],
+    ['endDate', 'Действует до', 'd'], ['amount', 'Сумма', 'n'], ['fileId', 'Файл ID'], ['fileName', 'Файл']]],
   acts: ['Акты', [
     ['id', 'ID'], ['number', 'Номер'], ['trainerId', 'ID тренера'], ['trainerName', 'Тренер'], ['dateFrom', 'С', 'd'],
     ['dateTo', 'По', 'd'], ['hours', 'Часов', 'n'], ['amount', 'Сумма', 'n'], ['docUrl', 'Документ'], ['pdfUrl', 'PDF'],
-    ['createdBy', 'Кто создал'], ['createdAt', 'Создан']]],
+    ['createdBy', 'Кто создал'], ['createdAt', 'Создан'], ['data', 'Данные (JSON)']]],
   messages: ['Чат', [
     ['id', 'ID'], ['channel', 'Канал'], ['userId', 'ID автора'], ['userName', 'Автор'], ['text', 'Текст'], ['createdAt', 'Время']]],
   settings: ['Настройки', [['key', 'Параметр'], ['value', 'Значение']]],
@@ -89,9 +102,26 @@ const DEFAULT_SETTINGS = {
   prefix_other: 'Д-', next_other: 1,
   prefix_act: '', next_act: 1,
   actsFolderId: '',
+  actTitle: 'АКТ',
+  actSubtitle: 'об оказанных услугах',
+  actText: 'Вышеперечисленные услуги выполнены полностью и в срок. Заказчик претензий по объёму, качеству и срокам оказания услуг не имеет.',
+  actSaveCopy: 'true',
 };
 const PUBLIC_SETTINGS = ['clubName', 'halls', 'lowHours', 'trainerEditDays'];
 const KINDS = { client: 'Ученик', trainer: 'Тренер', partner: 'Партнёр', rent: 'Аренда', other: 'Прочее' };
+const TABLE_OF = { client: 'clients', trainer: 'trainers', partner: 'partners', rent: 'rent' };
+// Встроенные виды занятий: [id, название, категория, оплата, списывать с абонемента, цвет]
+// категория: ind — индивидуальное, group — групповое, event — мероприятие/турнир
+// оплата: hour — ставка за час, fixed — ставка за участие
+const BUILTIN_TYPES = [
+  ['ind', 'Индивидуальное', 'ind', 'hour', true, '#32467a'],
+  ['group', 'Групповое', 'group', 'hour', true, '#3f7cac'],
+  ['practice', 'Танцпрактика', 'group', 'hour', true, '#2a9d8f'],
+  ['camp', 'Сборы', 'group', 'hour', false, '#8e5ea2'],
+  ['event', 'Мероприятие', 'event', 'hour', false, '#c9a24a'],
+  ['tournament', 'Турнир', 'event', 'fixed', false, '#c93d3d'],
+];
+const DEFAULT_PROGRAMS = ['Стандарт', 'Латина', '10 танцев', 'Pro-Am', 'Свадебный танец'];
 
 // ---------------------------------------------------------------------------
 // Точки входа
@@ -156,6 +186,7 @@ function removeTestData() {
   n.bookings = del_('bookings', tbl_('bookings').rows.filter(b => has(slots, b.slotId) || has(cl, b.clientId)).map(b => b.id));
   n.slots = del_('slots', slots);
   n.users = del_('users', tbl_('users').rows.filter(u => has(tr, u.trainerId) || has(cl, u.clientId)).map(u => u.id));
+  n.groups = del_('groups', tbl_('groups').rows.filter(g => /^ТЕСТ/i.test(g.name)).map(g => g.id));
   n.contracts = del_('contracts', tbl_('contracts').rows.filter(c => has(tr, c.partyId) || has(cl, c.partyId)).map(c => c.id));
   n.trainers = del_('trainers', tr);
   n.clients = del_('clients', cl);
@@ -220,7 +251,24 @@ const HANDLERS = {
   deleteMessage: { roles: STAFF, write: true, fn: (u, p) => del_('messages', p.id) },
 
   saveUser: { roles: ['admin'], write: true, fn: saveUser_ },
+  deleteUser: { roles: ['admin'], write: true, fn: deleteUser_ },
   saveSettings: { roles: ['admin'], write: true, fn: saveSettings_ },
+  saveDict: { roles: ['admin'], write: true, fn: saveDict_ },
+  deleteDict: { roles: ['admin'], write: true, fn: deleteDict_ },
+  deleteTrainer: { roles: ['admin'], write: true, fn: deleteTrainer_ },
+  deleteClient: { roles: ['admin'], write: true, fn: deleteClient_ },
+  deletePartner: { roles: ['admin'], write: true, fn: deletePartner_ },
+  deleteAct: { roles: ['admin'], write: true, fn: deleteAct_ },
+  editAct: { roles: ['admin'], write: true, fn: editAct_ },
+
+  saveGroup: { roles: STAFF, write: true, fn: saveGroup_ },
+  deleteGroup: { roles: STAFF, write: true, fn: (u, p) => del_('groups', must_('groups', p.id, 'Группа').id) },
+  saveContract: { roles: STAFF, write: true, fn: saveContract_ },
+  deleteContract: { roles: STAFF, write: true, fn: deleteContract_ },
+  nextContractNo: { roles: STAFF, fn: (u, p) => nextNo_(KINDS[p.kind] ? p.kind : 'other').number },
+  uploadContractFile: { roles: STAFF, write: true, fn: uploadContractFile_ },
+  removeContractFile: { roles: STAFF, write: true, fn: removeContractFile_ },
+  getFile: { roles: STAFF, fn: getFile_ },
 };
 
 // ---------------------------------------------------------------------------
@@ -233,7 +281,7 @@ function tz_() { return ss_().getSpreadsheetTimeZone() || Session.getScriptTimeZ
 
 function ensureSchema_() {
   const props = PropertiesService.getScriptProperties();
-  const ver = 'schema-3';
+  const ver = 'schema-4';
   if (props.getProperty('schema') === ver) return;
   const ss = ss_();
   Object.keys(TABLES).forEach(key => {
@@ -257,6 +305,7 @@ function ensureSchema_() {
   if (def && def.getLastRow() === 0 && ss.getSheets().length > 1) ss.deleteSheet(def);
   const S = settings_();
   Object.keys(DEFAULT_SETTINGS).forEach(k => { if (!(k in S)) setSetting_(k, DEFAULT_SETTINGS[k]); });
+  seedDict_();
   props.setProperty('schema', ver);
 }
 
@@ -613,6 +662,7 @@ function load_(user) {
     if (k !== 'Первичный пароль admin') res.settings[k] = S[k];
   });
   if (user.role === 'admin') res.settings.spreadsheetUrl = ss_().getUrl();
+  res.dict = tbl_('dict').rows;
 
   const trainers = tbl_('trainers').rows;
   const clients = tbl_('clients').rows;
@@ -628,15 +678,17 @@ function load_(user) {
     Object.assign(res, {
       trainers, clients, subs, lessons, events, slots, bookings,
       partners: tbl_('partners').rows, rent: tbl_('rent').rows,
-      contracts: tbl_('contracts').rows, acts: tbl_('acts').rows,
+      contracts: tbl_('contracts').rows, acts: tbl_('acts').rows, groups: tbl_('groups').rows,
     });
     if (user.role === 'admin') res.users = tbl_('users').rows.map(pubUserFull_);
   } else if (user.role === 'trainer') {
     const mine = trainerClientIds_(user.trainerId);
-    const me = trainers.find(t => t.id === user.trainerId);
+    const me = Object.assign({}, trainers.find(t => t.id === user.trainerId) || {});
+    ['rates', 'rateInd', 'rateGroup', 'rateEvent', 'rateTour'].forEach(k => delete me[k]);
     Object.assign(res, {
-      me,
-      trainers: trainers.map(t => ({ id: t.id, name: t.name, spec: t.spec, active: t.active })),
+      me: me.id ? me : null,
+      groups: tbl_('groups').rows.filter(g => ids_(g.trainerIds).indexOf(user.trainerId) >= 0),
+      trainers: trainers.map(t => ({ id: t.id, name: t.name, spec: t.spec, programs: t.programs, height: t.height, active: t.active })),
       clients: clients.filter(c => mine[c.id]).map(c => ({ id: c.id, name: c.name, phone: c.phone, company: c.company, trainerIds: c.trainerIds, notes: c.notes, active: c.active, birthDate: c.birthDate })),
       allClients: lite(clients.filter(c => c.active)),
       subs: subs.filter(s => mine[s.clientId]).map(s => { const x = Object.assign({}, s); delete x.price; delete x.paid; return x; }),
@@ -654,7 +706,7 @@ function load_(user) {
     bookings.forEach(b => { if (b.status === 'booked') cnt[b.slotId] = (cnt[b.slotId] || 0) + 1; });
     Object.assign(res, {
       me: me ? { id: me.id, name: me.name, contractNo: me.contractNo, trainerIds: me.trainerIds } : null,
-      trainers: trainers.filter(t => t.active).map(t => ({ id: t.id, name: t.name, spec: t.spec })),
+      trainers: trainers.filter(t => t.active).map(t => ({ id: t.id, name: t.name, spec: t.spec, programs: t.programs })),
       subs: subs.filter(s => s.clientId === cid).map(s => { const x = Object.assign({}, s); delete x.notes; return x; }),
       lessons: tbl_('lessons').rows.filter(l => l.clientId === cid),
       slots: fut.filter(s => s.status === 'open').map(s => Object.assign({}, s, { booked: cnt[s.id] || 0 })),
@@ -669,14 +721,23 @@ function pubUserFull_(u) { const x = pubUser_(u); x.active = u.active; x.created
 // Справочники
 // ---------------------------------------------------------------------------
 function saveTrainer_(u, p) {
+  const rates = {};
+  Object.keys(p.rates || {}).forEach(k => {
+    const v = p.rates[k];
+    if (v !== '' && v !== null && v !== undefined && !isNaN(Number(v))) rates[k] = Number(v);
+  });
+  const programs = [].concat(p.programs || []).filter(Boolean);
   const d = {
-    name: String(req_(p.name, 'Укажите ФИО')).trim(), phone: p.phone || '', email: p.email || '', spec: p.spec || '',
-    rateInd: Number(p.rateInd) || 0, rateGroup: Number(p.rateGroup) || 0, rateEvent: Number(p.rateEvent) || 0,
+    name: String(req_(p.name, 'Укажите ФИО')).trim(), phone: p.phone || '', phone2: p.phone2 || '', email: p.email || '',
+    telegram: p.telegram || '', address: p.address || '', birthDate: isDate_(p.birthDate) ? p.birthDate : '',
+    height: Number(p.height) || '', programs: programs.join(', '), spec: programs.join(', '),
+    rates: JSON.stringify(rates), rateInd: rates.ind || 0, rateGroup: rates.group || 0, rateEvent: rates.event || 0,
+    rateTour: rates.tournament || 0, extra: JSON.stringify(p.extra || {}),
     active: p.active !== false, notes: p.notes || ''
   };
   let id = p.id;
   if (id) update_('trainers', id, d); else id = insert_('trainers', d);
-  if (p.makeContract && !find_('trainers', id).contractNo) assignContract_({ kind: 'trainer', partyId: id, date: p.contractDate });
+  contractFromForm_('trainer', id, p);
   return id;
 }
 
@@ -686,11 +747,11 @@ function saveClient_(u, p) {
     name: String(req_(p.name, 'Укажите ФИО')).trim(), phone: p.phone || '', email: p.email || '',
     birthDate: isDate_(p.birthDate) ? p.birthDate : '', company: p.company || '',
     trainerIds: tids.join(','), trainerNames: tids.map(t => nameOf_('trainers', t)).join(', '),
-    partnerId: p.partnerId || '', active: p.active !== false, notes: p.notes || ''
+    partnerId: p.partnerId || '', active: p.active !== false, notes: p.notes || '', extra: JSON.stringify(p.extra || {})
   };
   let id = p.id;
   if (id) update_('clients', id, d); else id = insert_('clients', d);
-  if (p.makeContract && !find_('clients', id).contractNo) assignContract_({ kind: 'client', partyId: id, date: p.contractDate });
+  contractFromForm_('client', id, p);
   return id;
 }
 
@@ -698,7 +759,7 @@ function savePartner_(u, p) {
   const d = { name: String(req_(p.name, 'Укажите название')).trim(), contact: p.contact || '', phone: p.phone || '', active: p.active !== false, notes: p.notes || '' };
   let id = p.id;
   if (id) update_('partners', id, d); else id = insert_('partners', d);
-  if (p.makeContract && !find_('partners', id).contractNo) assignContract_({ kind: 'partner', partyId: id, date: p.contractDate });
+  contractFromForm_('partner', id, p);
   return id;
 }
 
@@ -735,31 +796,329 @@ function saveRent_(u, p) {
   };
   let id = p.id;
   if (id) update_('rent', id, d); else id = insert_('rent', d);
-  if (p.makeContract && !find_('rent', id).contractNo) assignContract_({ kind: 'rent', partyId: id, date: d.date });
+  contractFromForm_('rent', id, p);
   return id;
 }
 
-// Сквозная нумерация договоров
+// ---------------------------------------------------------------------------
+// Договоры: сквозная нумерация + ручные номера, правка и удаление
+// ---------------------------------------------------------------------------
+function numberUsed_(number, exceptId) {
+  const n = String(number).trim().toLowerCase();
+  return tbl_('contracts').rows.some(c => c.id !== exceptId && String(c.number).trim().toLowerCase() === n);
+}
+function nextNo_(kind) {
+  const S = settings_();
+  const prefix = S['prefix_' + kind] || '';
+  let n = Math.max(1, parseInt(S['next_' + kind], 10) || 1);
+  let number = prefix + String(n).padStart(4, '0');
+  while (numberUsed_(number)) { n++; number = prefix + String(n).padStart(4, '0'); }
+  return { number, n };
+}
+/** Если номер введён по шаблону счётчика — сдвигаем счётчик дальше, чтобы «Авто» не выдал его снова. */
+function bumpCounter_(kind, number) {
+  const S = settings_();
+  const prefix = S['prefix_' + kind] || '';
+  const s = String(number);
+  if (prefix && s.indexOf(prefix) !== 0) return;
+  const rest = s.slice(prefix.length);
+  if (!/^\d+$/.test(rest)) return;
+  const n = parseInt(rest, 10);
+  const next = parseInt(S['next_' + kind], 10) || 1;
+  if (n === next) { // взят очередной номер — двигаем счётчик на следующий свободный
+    let m = n + 1;
+    while (numberUsed_(prefix + String(m).padStart(4, '0'))) m++;
+    setSetting_('next_' + kind, m);
+  }
+}
+function unlinkParty_(c) {
+  const t = TABLE_OF[c.kind];
+  if (!t || !c.partyId) return;
+  const party = find_(t, c.partyId);
+  if (party && party.contractNo === c.number) update_(t, party.id, { contractNo: '', contractDate: '' });
+}
+
+function saveContract_(u, p) {
+  const kind = KINDS[p.kind] ? p.kind : 'other';
+  const old = p.id ? must_('contracts', p.id, 'Договор') : null;
+  let number = String(p.number || '').trim();
+  if (!number) number = nextNo_(kind).number;
+  if (numberUsed_(number, old && old.id)) throw new Error('Договор № ' + number + ' уже есть');
+  const tableOf = TABLE_OF[kind];
+  let partyId = tableOf ? (p.partyId || '') : '';
+  let partyName = String(p.partyName || '').trim();
+  if (partyId) { const party = must_(tableOf, partyId, 'Сторона договора'); partyName = party.name || party.renter; }
+  if (!partyName) throw new Error('Укажите сторону договора');
+  const d = {
+    number, kind, partyId, partyName, date: isDate_(p.date) ? p.date : today_(),
+    endDate: isDate_(p.endDate) ? p.endDate : '', amount: Number(p.amount) || 0, notes: p.notes || ''
+  };
+  if (old) unlinkParty_(old);
+  let id;
+  if (old) { update_('contracts', old.id, d); id = old.id; } else id = insert_('contracts', d);
+  if (tableOf && partyId) {
+    const patch = { contractNo: number };
+    if (kind !== 'rent') patch.contractDate = d.date;
+    update_(tableOf, partyId, patch);
+  }
+  bumpCounter_(kind, number);
+  return { id, number };
+}
+
+function deleteContract_(u, p) {
+  const c = must_('contracts', p.id, 'Договор');
+  unlinkParty_(c);
+  if (c.fileId) { try { DriveApp.getFileById(c.fileId).setTrashed(true); } catch (e) { /* уже удалён */ } }
+  return del_('contracts', c.id);
+}
+
+/** Кнопка «Присвоить договор» — следующий номер по счётчику. */
 function assignContract_(p) {
   const kind = KINDS[p.kind] ? p.kind : 'other';
-  const S = settings_();
-  const n = Math.max(1, parseInt(S['next_' + kind], 10) || 1);
-  const number = (S['prefix_' + kind] || '') + String(n).padStart(4, '0');
-  const date = isDate_(p.date) ? p.date : today_();
-  const tableOf = { client: 'clients', trainer: 'trainers', partner: 'partners', rent: 'rent' }[kind];
-  let partyName = p.partyName || '';
+  const tableOf = TABLE_OF[kind];
   if (tableOf && p.partyId) {
     const party = must_(tableOf, p.partyId, 'Сторона договора');
     if (party.contractNo && !p.force) throw new Error('У этой записи уже есть договор № ' + party.contractNo);
-    partyName = party.name || party.renter;
-    const patch = { contractNo: number };
-    if (kind !== 'rent') patch.contractDate = date;
-    update_(tableOf, party.id, patch);
   }
-  if (!partyName) throw new Error('Укажите сторону договора');
-  insert_('contracts', { number, kind, partyId: p.partyId || '', partyName, date, notes: p.notes || '' });
-  setSetting_('next_' + kind, n + 1);
-  return number;
+  return saveContract_(null, { kind, partyId: p.partyId, partyName: p.partyName, number: p.number, date: p.date, notes: p.notes }).number;
+}
+
+/** Номер договора из карточки ученика/тренера/партнёра/аренды: можно ввести вручную, изменить или очистить. */
+function contractFromForm_(kind, partyId, p) {
+  if (p.contractNo === undefined) {
+    if (p.makeContract) { const party = find_(TABLE_OF[kind], partyId); if (party && !party.contractNo) assignContract_({ kind, partyId, date: p.contractDate }); }
+    return;
+  }
+  const t = TABLE_OF[kind];
+  const party = must_(t, partyId);
+  const number = String(p.contractNo || '').trim();
+  const cur = party.contractNo ? tbl_('contracts').rows.find(c => c.kind === kind && c.partyId === partyId && c.number === party.contractNo) : null;
+  const date = isDate_(p.contractDate) ? p.contractDate : (party.contractDate || party.date || today_());
+  if (!number) {
+    if (party.contractNo) { if (cur) del_('contracts', cur.id); update_(t, partyId, { contractNo: '', contractDate: '' }); }
+    return;
+  }
+  if (cur) saveContract_(null, { id: cur.id, kind, partyId, number, date, endDate: cur.endDate, amount: cur.amount, notes: cur.notes });
+  else saveContract_(null, { kind, partyId, number, date });
+}
+
+function folder_(key, title) {
+  const S = settings_();
+  const k = key === 'acts' ? 'actsFolderId' : 'folder_' + key;
+  if (S[k]) { try { return DriveApp.getFolderById(S[k]); } catch (e) { /* создадим заново */ } }
+  const parent = DriveApp.getFileById(ss_().getId()).getParents();
+  const base = parent.hasNext() ? parent.next() : DriveApp.getRootFolder();
+  const f = base.createFolder(title + ' — ' + CLUB_NAME);
+  setSetting_(k, f.getId());
+  return f;
+}
+function uploadContractFile_(u, p) {
+  const c = must_('contracts', p.id, 'Договор');
+  if (!p.data) throw new Error('Файл пустой');
+  const bytes = Utilities.base64Decode(p.data);
+  if (bytes.length > 15 * 1024 * 1024) throw new Error('Файл больше 15 МБ');
+  const name = String(p.name || 'файл').slice(0, 120);
+  const file = folder_('contracts', 'Договоры').createFile(Utilities.newBlob(bytes, p.mime || 'application/octet-stream', name));
+  file.setName(c.number + ' — ' + name);
+  if (c.fileId) { try { DriveApp.getFileById(c.fileId).setTrashed(true); } catch (e) { /* нет */ } }
+  update_('contracts', c.id, { fileId: file.getId(), fileName: name });
+  return true;
+}
+function removeContractFile_(u, p) {
+  const c = must_('contracts', p.id, 'Договор');
+  if (c.fileId) { try { DriveApp.getFileById(c.fileId).setTrashed(true); } catch (e) { /* нет */ } }
+  update_('contracts', c.id, { fileId: '', fileName: '' });
+  return true;
+}
+function getFile_(u, p) {
+  const c = tbl_('contracts').rows.find(x => x.fileId && x.fileId === p.fileId);
+  if (!c) throw new Error('Файл не найден');
+  const b = DriveApp.getFileById(c.fileId).getBlob();
+  return { name: c.fileName || b.getName(), mime: b.getContentType(), data: Utilities.base64Encode(b.getBytes()) };
+}
+
+// ---------------------------------------------------------------------------
+// Справочники: виды занятий, программы, доп. поля
+// ---------------------------------------------------------------------------
+function seedDict_() {
+  const rows = tbl_('dict').rows;
+  const add = [];
+  if (!rows.some(r => r.list === 'type')) BUILTIN_TYPES.forEach((b, i) => add.push({ id: b[0], list: 'type', name: b[1], kind: b[2], mode: b[3], deduct: b[4], color: b[5], order: i + 1, active: true, rate: 0 }));
+  if (!rows.some(r => r.list === 'program')) DEFAULT_PROGRAMS.forEach((n, i) => add.push({ list: 'program', name: n, order: i + 1, active: true }));
+  insertMany_('dict', add);
+  delete _cache.__types;
+}
+function types_() {
+  if (_cache.__types) return _cache.__types;
+  const m = {};
+  BUILTIN_TYPES.forEach((b, i) => { m[b[0]] = { id: b[0], name: b[1], kind: b[2], mode: b[3], deduct: b[4], color: b[5], rate: 0, order: i + 1, active: true }; });
+  tbl_('dict').rows.filter(d => d.list === 'type').forEach(d => { m[d.id] = d; });
+  return (_cache.__types = m);
+}
+function typeOf_(id) { return types_()[id] || { id: id, name: id || '—', kind: 'group', mode: 'hour', rate: 0, order: 99 }; }
+function typeKind_(id) { return typeOf_(id).kind || 'group'; }
+function parseJson_(s, def) { try { return s ? JSON.parse(s) : def; } catch (e) { return def; } }
+function progs_(s) { return String(s || '').split(',').map(x => x.trim()).filter(Boolean); }
+function trainerRates_(t) {
+  const r = parseJson_(t.rates, {}) || {};
+  [['ind', 'rateInd'], ['group', 'rateGroup'], ['event', 'rateEvent'], ['tournament', 'rateTour']].forEach(x => {
+    if ((r[x[0]] === undefined || r[x[0]] === '') && Number(t[x[1]])) r[x[0]] = Number(t[x[1]]);
+  });
+  return r;
+}
+/** Ставка тренера по виду: своя ставка → ставка вида по умолчанию → базовая ставка категории (групповая/мероприятия, если оплата тоже почасовая). */
+function rateOf_(t, typeId) {
+  const r = trainerRates_(t);
+  const has = k => r[k] !== undefined && r[k] !== '' && r[k] !== null;
+  if (has(typeId)) return Number(r[typeId]) || 0;
+  const ty = typeOf_(typeId);
+  if (Number(ty.rate)) return Number(ty.rate);
+  const base = ty.mode === 'hour' ? { group: 'group', event: 'event', ind: 'ind' }[ty.kind] : '';
+  return base && has(base) ? Number(r[base]) || 0 : 0;
+}
+
+function saveDict_(u, p) {
+  const list = ['type', 'program', 'field'].indexOf(p.list) >= 0 ? p.list : '';
+  if (!list) throw new Error('Неизвестный справочник');
+  const name = String(req_(p.name, 'Укажите название')).trim();
+  const rows = tbl_('dict').rows.filter(d => d.list === list);
+  if (rows.some(d => d.id !== p.id && d.name.toLowerCase() === name.toLowerCase() && (list !== 'field' || d.kind === p.kind))) throw new Error('«' + name + '» уже есть в списке');
+  const d = { list, name, order: Number(p.order) || rows.length + 1, active: p.active !== false, color: p.color || '', options: '', kind: '', mode: '', rate: 0, deduct: false };
+  if (list === 'type') {
+    d.kind = p.id === 'ind' ? 'ind' : (['ind', 'group', 'event'].indexOf(p.kind) >= 0 ? p.kind : 'group');
+    d.mode = p.mode === 'fixed' ? 'fixed' : 'hour';
+    d.rate = Number(p.rate) || 0;
+    d.deduct = !!p.deduct;
+    if (!d.color) d.color = '#3f7cac';
+  }
+  if (list === 'field') {
+    d.kind = p.kind === 'client' ? 'client' : 'trainer';
+    d.mode = ['text', 'number', 'date', 'select', 'check'].indexOf(p.mode) >= 0 ? p.mode : 'text';
+    d.options = progs_(p.options).join(', ');
+  }
+  delete _cache.__types;
+  const old = p.id ? find_('dict', p.id) : null;
+  if (old) {
+    if (list === 'program' && old.name !== name) {
+      tbl_('trainers').rows.forEach(t => {
+        const a = progs_(t.programs); const i = a.indexOf(old.name);
+        if (i >= 0) { a[i] = name; update_('trainers', t.id, { programs: a.join(', '), spec: a.join(', ') }); }
+      });
+    }
+    update_('dict', old.id, d);
+    return old.id;
+  }
+  if (p.id && BUILTIN_TYPES.some(b => b[0] === p.id)) d.id = p.id;
+  return insert_('dict', d);
+}
+
+function deleteDict_(u, p) {
+  const d = must_('dict', p.id, 'Запись');
+  if (d.list === 'type') {
+    if (BUILTIN_TYPES.some(b => b[0] === d.id)) throw new Error('Встроенный вид нельзя удалить. Снимите «Активен» — он скроется из списков.');
+    const used = tbl_('lessons').rows.some(l => l.type === d.id) || tbl_('events').rows.some(e => e.type === d.id) ||
+      tbl_('groups').rows.some(g => g.typeId === d.id) || tbl_('slots').rows.some(s => s.type === d.id);
+    if (used) throw new Error('Этот вид уже есть в занятиях. Снимите «Активен» вместо удаления.');
+  }
+  if (d.list === 'program') {
+    tbl_('trainers').rows.forEach(t => {
+      const a = progs_(t.programs);
+      if (a.indexOf(d.name) >= 0) { const n = a.filter(x => x !== d.name).join(', '); update_('trainers', t.id, { programs: n, spec: n }); }
+    });
+  }
+  delete _cache.__types;
+  return del_('dict', d.id);
+}
+
+// ---------------------------------------------------------------------------
+// Постоянные группы (состав, тренеры, вид)
+// ---------------------------------------------------------------------------
+function saveGroup_(u, p) {
+  const typeId = req_(p.typeId, 'Выберите вид');
+  if (typeKind_(typeId) === 'ind') throw new Error('Для группы выберите групповой вид, мероприятие или турнир');
+  const tids = [].concat(p.trainerIds || []).filter(Boolean);
+  const cids = [].concat(p.clientIds || []).filter(Boolean);
+  const d = {
+    name: String(req_(p.name, 'Укажите название')).trim(), typeId,
+    trainerIds: tids.join(','), trainerNames: tids.map(x => nameOf_('trainers', x)).join(', '),
+    clientIds: cids.join(','), clientNames: cids.map(x => nameOf_('clients', x)).join(', '),
+    schedule: p.schedule || '', notes: p.notes || '', active: p.active !== false
+  };
+  if (p.id) { update_('groups', must_('groups', p.id, 'Группа').id, d); return p.id; }
+  return insert_('groups', d);
+}
+
+// ---------------------------------------------------------------------------
+// Удаление записей (администратор)
+// ---------------------------------------------------------------------------
+function delUsersOf_(field, id) {
+  const users = tbl_('users').rows.filter(x => x[field] === id).map(x => x.id);
+  if (!users.length) return;
+  const st = tbl_('sessions');
+  st.rows.filter(s => users.indexOf(s.userId) >= 0).map(s => s._r).sort((a, b) => b - a).forEach(r => st.sh.deleteRow(r));
+  delete _cache.sessions;
+  del_('users', users);
+}
+function dropFromList_(table, field, namesField, nameTable, id) {
+  tbl_(table).rows.forEach(r => {
+    const a = ids_(r[field]);
+    if (a.indexOf(id) < 0) return;
+    const n = a.filter(x => x !== id);
+    const patch = {}; patch[field] = n.join(','); patch[namesField] = n.map(x => nameOf_(nameTable, x)).join(', ');
+    update_(table, r.id, patch);
+  });
+}
+function deleteTrainer_(u, p) {
+  const t = must_('trainers', p.id, 'Тренер');
+  const used = tbl_('lessons').rows.some(l => l.trainerId === t.id) || tbl_('events').rows.some(e => ids_(e.trainerIds).indexOf(t.id) >= 0) ||
+    tbl_('subs').rows.some(s => s.trainerId === t.id) || tbl_('slots').rows.some(s => s.trainerId === t.id) || tbl_('acts').rows.some(a => a.trainerId === t.id);
+  if (used) throw new Error('У тренера есть занятия, абонементы или акты — удалить нельзя. Снимите «Активен», и он уйдёт в архив.');
+  const name = t.name;
+  dropFromList_('groups', 'trainerIds', 'trainerNames', 'trainers', t.id);
+  dropFromList_('clients', 'trainerIds', 'trainerNames', 'trainers', t.id);
+  delUsersOf_('trainerId', t.id);
+  del_('trainers', t.id);
+  return name;
+}
+function deleteClient_(u, p) {
+  const c = must_('clients', p.id, 'Ученик');
+  const used = tbl_('lessons').rows.some(l => l.clientId === c.id) || tbl_('subs').rows.some(s => s.clientId === c.id) || tbl_('bookings').rows.some(b => b.clientId === c.id);
+  if (used) throw new Error('У ученика есть занятия, абонементы или записи — удалить нельзя. Снимите «Активен», и он уйдёт в архив.');
+  dropFromList_('groups', 'clientIds', 'clientNames', 'clients', c.id);
+  delUsersOf_('clientId', c.id);
+  return del_('clients', c.id);
+}
+function deletePartner_(u, p) {
+  const x = must_('partners', p.id, 'Партнёр');
+  if (tbl_('subs').rows.some(s => s.partnerId === x.id) || tbl_('clients').rows.some(c => c.partnerId === x.id)) throw new Error('У партнёра есть ученики или абонементы — снимите «Активен» вместо удаления.');
+  return del_('partners', x.id);
+}
+function deleteUser_(admin, p) {
+  if (p.id === admin.id) throw new Error('Нельзя удалить самого себя');
+  const u = must_('users', p.id, 'Пользователь');
+  const st = tbl_('sessions');
+  st.rows.filter(s => s.userId === u.id).forEach(s => CacheService.getScriptCache().remove('s_' + s.token));
+  st.rows.filter(s => s.userId === u.id).map(s => s._r).sort((a, b) => b - a).forEach(r => st.sh.deleteRow(r));
+  delete _cache.sessions;
+  return del_('users', u.id);
+}
+function trashUrl_(url) {
+  const m = String(url || '').match(/\/d\/([-\w]+)/);
+  if (m) { try { DriveApp.getFileById(m[1]).setTrashed(true); } catch (e) { /* нет */ } }
+}
+function deleteAct_(u, p) {
+  const a = must_('acts', p.id, 'Акт');
+  trashUrl_(a.docUrl); trashUrl_(a.pdfUrl);
+  return del_('acts', a.id);
+}
+function editAct_(u, p) {
+  const a = must_('acts', p.id, 'Акт');
+  const number = String(req_(p.number, 'Укажите номер')).trim();
+  if (tbl_('acts').rows.some(x => x.id !== a.id && String(x.number) === number)) throw new Error('Акт № ' + number + ' уже есть');
+  const data = parseJson_(a.data, null);
+  if (data) data.number = number;
+  update_('acts', a.id, { number, data: data ? JSON.stringify(data) : a.data });
+  return true;
 }
 
 // ---------------------------------------------------------------------------
@@ -817,7 +1176,8 @@ function deleteLesson_(user, p) {
 }
 
 function saveEvent_(user, p) {
-  const type = p.type === 'event' ? 'event' : 'group';
+  const type = p.typeId || p.type || 'group';
+  if (typeKind_(type) === 'ind') throw new Error('Выберите групповой вид, мероприятие или турнир');
   const tids = [].concat(p.trainerIds || []).filter(Boolean);
   if (user.role === 'trainer' && tids.indexOf(user.trainerId) < 0) tids.unshift(user.trainerId);
   if (!tids.length) throw new Error('Выберите тренера');
@@ -837,7 +1197,7 @@ function saveEvent_(user, p) {
     type, title: String(req_(p.title, 'Укажите название')).trim(), date, time: p.time || '', hours,
     trainerIds: tids.join(','), trainerNames: tids.map(x => nameOf_('trainers', x)).join(', '),
     clientIds: cids.join(','), clientNames: cids.map(x => nameOf_('clients', x)).join(', '),
-    deduct: !!p.deduct, notes: p.notes || ''
+    deduct: !!p.deduct, notes: p.notes || '', groupId: p.groupId || '', location: p.location || '', results: p.results || ''
   };
   let id = p.id;
   if (id) update_('events', id, d); else { d.createdBy = user.name; id = insert_('events', d); }
@@ -887,11 +1247,12 @@ function clientHistory_(user, p) {
 function saveSlot_(user, p) {
   const trainerId = trainerOf_(user, p);
   const t = must_('trainers', trainerId, 'Тренер');
-  const type = p.type === 'group' ? 'group' : 'ind';
+  const type = p.type && typeKind_(p.type) !== 'event' ? p.type : 'ind';
+  const isInd = typeKind_(type) === 'ind';
   const d = {
     date: req_(isDate_(p.date) ? p.date : '', 'Укажите дату'), time: req_(p.time, 'Укажите время'), hours: hoursOk_(p.hours),
-    trainerId, trainerName: t.name, type, title: p.title || (type === 'ind' ? 'Индивидуальное' : 'Групповое'),
-    capacity: type === 'ind' ? 1 : Math.max(1, Number(p.capacity) || 10), notes: p.notes || ''
+    trainerId, trainerName: t.name, type, title: p.title || typeOf_(type).name,
+    capacity: isInd ? 1 : Math.max(1, Number(p.capacity) || 10), notes: p.notes || ''
   };
   const repeat = Math.min(Math.max(Number(p.repeatWeeks) || 0, 0), 12);
   if (p.id) {
@@ -928,10 +1289,10 @@ function completeSlot_(user, p) {
   const hours = p.hours ? hoursOk_(p.hours) : s.hours;
   let resultId;
   const asUser = Object.assign({}, user, { role: user.role === 'trainer' ? 'admin' : user.role }); // клиенты из записи доступны тренеру
-  if (s.type === 'ind' && cids.length === 1) {
+  if (typeKind_(s.type) === 'ind' && cids.length === 1) {
     resultId = saveLesson_(asUser, { trainerId: s.trainerId, clientId: cids[0], date: s.date, time: s.time, hours, subId: 'auto', notes: 'По записи' });
   } else {
-    resultId = saveEvent_(asUser, { type: 'group', title: s.title, date: s.date, time: s.time, hours, trainerIds: [s.trainerId], clientIds: cids, deduct: true, notes: 'По записи' });
+    resultId = saveEvent_(asUser, { type: typeKind_(s.type) === 'ind' ? 'group' : s.type, title: s.title, date: s.date, time: s.time, hours, trainerIds: [s.trainerId], clientIds: cids, deduct: true, notes: 'По записи' });
   }
   update_('slots', s.id, { status: 'done', resultId });
   tbl_('bookings').rows.filter(b => b.slotId === s.id && b.status !== 'cancelled')
@@ -966,11 +1327,12 @@ function cancelBooking_(user, p) {
 // ---------------------------------------------------------------------------
 /** Плоский список фактов за период: th — часы тренера, ch — часы ученика. */
 function facts_(from, to, trainerFilter) {
+  // th — часы тренера, ch — часы ученика, n — 1 за проведённое занятие/участие (для оплаты «за участие»)
   const facts = [];
   tbl_('lessons').rows.forEach(l => {
     if (l.date < from || l.date > to) return;
     if (l.eventId) facts.push({ date: l.date, tr: l.trainerId, cl: l.clientId, type: l.type, th: 0, ch: l.hours, n: 0, ev: l.eventId, sub: l.subId });
-    else facts.push({ date: l.date, tr: l.trainerId, cl: l.clientId, type: 'ind', th: l.hours, ch: l.hours, n: 1, sub: l.subId });
+    else facts.push({ date: l.date, tr: l.trainerId, cl: l.clientId, type: l.type || 'ind', th: l.hours, ch: l.hours, n: 1, sub: l.subId });
   });
   tbl_('events').rows.forEach(e => {
     if (e.date < from || e.date > to) return;
@@ -986,7 +1348,7 @@ function report_(user, p) {
   const facts = facts_(from, to, tr);
   const res = { from, to, facts };
   const evIds = {}; facts.forEach(f => { if (f.ev) evIds[f.ev] = 1; });
-  res.events = tbl_('events').rows.filter(e => evIds[e.id]).map(e => ({ id: e.id, title: e.title, type: e.type, date: e.date, hours: e.hours, clientIds: e.clientIds }));
+  res.events = tbl_('events').rows.filter(e => evIds[e.id]).map(e => ({ id: e.id, title: e.title, type: e.type, date: e.date, hours: e.hours, clientIds: e.clientIds, location: e.location, results: e.results }));
   if (user.role === 'trainer') {
     const cl = {}; facts.forEach(f => { if (f.cl) cl[f.cl] = 1; });
     res.clients = tbl_('clients').rows.filter(c => cl[c.id]).map(c => ({ id: c.id, name: c.name, company: c.company }));
@@ -996,13 +1358,14 @@ function report_(user, p) {
 
 function actCalc_(trainerId, from, to) {
   const t = must_('trainers', trainerId, 'Тренер');
-  const f = facts_(from, to, trainerId).filter(x => x.th > 0);
-  const sum = type => round2_(f.filter(x => x.type === type).reduce((a, x) => a + x.th, 0));
-  const lines = [
-    ['Индивидуальные занятия', sum('ind'), t.rateInd],
-    ['Групповые занятия', sum('group'), t.rateGroup],
-    ['Мероприятия', sum('event'), t.rateEvent],
-  ].filter(l => l[1] > 0).map(l => ({ name: l[0], hours: l[1], rate: l[2], amount: round2_(l[1] * l[2]) }));
+  const f = facts_(from, to, trainerId).filter(x => x.n > 0);
+  const by = {};
+  f.forEach(x => { const o = by[x.type] = by[x.type] || { hours: 0, units: 0 }; o.hours += x.th; o.units += x.n; });
+  const lines = Object.keys(by).sort((a, b) => (Number(typeOf_(a).order) || 99) - (Number(typeOf_(b).order) || 99)).map(k => {
+    const ty = typeOf_(k), fixed = ty.mode === 'fixed', rate = rateOf_(t, k);
+    const qty = fixed ? by[k].units : round2_(by[k].hours);
+    return { type: k, name: ty.name, unit: fixed ? 'участие' : 'ч', qty, hours: round2_(by[k].hours), rate, amount: round2_(qty * rate) };
+  });
   return { t, f, lines, hours: round2_(lines.reduce((a, l) => a + l.hours, 0)), amount: round2_(lines.reduce((a, l) => a + l.amount, 0)) };
 }
 
@@ -1010,73 +1373,75 @@ function makeAct_(user, p) {
   const from = req_(isDate_(p.from) ? p.from : '', 'Укажите период');
   const to = req_(isDate_(p.to) ? p.to : '', 'Укажите период');
   const calc = actCalc_(req_(p.trainerId, 'Выберите тренера'), from, to);
-  if (!calc.hours) throw new Error('За период у тренера нет отработанных часов');
+  if (!calc.lines.length) throw new Error('За период у тренера нет занятий');
   const S = settings_();
   const n = Math.max(1, parseInt(S.next_act, 10) || 1);
   const number = (S.prefix_act || '') + n;
   const t = calc.t;
-  const money = v => Number(v).toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const detail = [];
+  const byClient = {};
+  calc.f.filter(x => !x.ev).forEach(x => { byClient[x.cl] = (byClient[x.cl] || 0) + x.th; });
+  Object.keys(byClient).sort((a, b) => nameOf_('clients', a).localeCompare(nameOf_('clients', b)))
+    .forEach(cid => detail.push([nameOf_('clients', cid) + ' (индивидуально)', 'за период', round2_(byClient[cid]) + ' ч']));
+  calc.f.filter(x => x.ev).sort((a, b) => a.date.localeCompare(b.date)).forEach(x => {
+    const ty = typeOf_(x.type);
+    const title = String(x.title || '').trim();
+    detail.push([!title || title === ty.name ? ty.name : ty.name + ': ' + title, x.date, ty.mode === 'fixed' ? '1 участие' : round2_(x.th) + ' ч']);
+  });
+  const data = {
+    number, date: today_(), from, to,
+    trainer: { name: t.name, contractNo: t.contractNo, contractDate: t.contractDate },
+    club: { name: S.clubName || CLUB_NAME, requisites: S.clubRequisites || '', director: S.director || '', city: S.city || '' },
+    texts: { title: S.actTitle || 'АКТ', subtitle: S.actSubtitle || '', text: S.actText || '' },
+    lines: calc.lines, detail, hours: calc.hours, amount: calc.amount
+  };
+  let docUrl = '', pdfUrl = '';
+  if (String(S.actSaveCopy) !== 'false') { const r = actDoc_(data); docUrl = r.docUrl; pdfUrl = r.pdfUrl; }
+  setSetting_('next_act', n + 1);
+  const id = insert_('acts', {
+    number, trainerId: t.id, trainerName: t.name, dateFrom: from, dateTo: to, hours: calc.hours, amount: calc.amount,
+    docUrl, pdfUrl, createdBy: user.name, data: JSON.stringify(data)
+  });
+  return { id, number, docUrl, pdfUrl, hours: calc.hours, amount: calc.amount, data };
+}
 
-  const doc = DocumentApp.create('Акт № ' + number + ' — ' + t.name + ' — ' + ruDate_(from) + '–' + ruDate_(to));
+/** Копия акта в Google Документах и PDF (настройка «Сохранять копию акта на Google Диск»). */
+function actDoc_(d) {
+  const money = v => Number(v).toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const hh = v => String(v).replace('.', ',');
+  const doc = DocumentApp.create('Акт № ' + d.number + ' — ' + d.trainer.name + ' — ' + ruDate_(d.from) + '–' + ruDate_(d.to));
   const body = doc.getBody();
   body.setMarginTop(40).setMarginBottom(40).setMarginLeft(50).setMarginRight(40);
   const center = DocumentApp.HorizontalAlignment.CENTER;
-  body.appendParagraph(S.clubName || CLUB_NAME).setAlignment(center).setFontSize(10).setForegroundColor('#253559');
-  body.appendParagraph('АКТ № ' + number).setHeading(DocumentApp.ParagraphHeading.HEADING1).setAlignment(center);
-  body.appendParagraph('об оказанных услугах').setAlignment(center);
-  body.appendParagraph((S.city ? 'г. ' + S.city + '                                                            ' : '') + ruDate_(today_())).setAlignment(DocumentApp.HorizontalAlignment.RIGHT);
-  body.appendParagraph('Исполнитель: ' + t.name + (t.contractNo ? ', договор № ' + t.contractNo + (t.contractDate ? ' от ' + ruDate_(t.contractDate) : '') : ''));
-  body.appendParagraph('Заказчик: ' + (S.clubName || CLUB_NAME) + (S.clubRequisites ? ', ' + S.clubRequisites : ''));
-  body.appendParagraph('Период оказания услуг: с ' + ruDate_(from) + ' по ' + ruDate_(to));
-  const rows = [['№', 'Наименование услуг', 'Кол-во часов', 'Ставка, ₽/ч', 'Сумма, ₽']];
-  const hh = v => String(v).replace('.', ',');
-  calc.lines.forEach((l, i) => rows.push([String(i + 1), l.name, hh(l.hours), money(l.rate), money(l.amount)]));
-  rows.push(['', 'Итого', hh(calc.hours), '', money(calc.amount)]);
+  body.appendParagraph(d.club.name).setAlignment(center).setFontSize(10).setForegroundColor('#253559');
+  body.appendParagraph((d.texts.title || 'АКТ') + ' № ' + d.number).setHeading(DocumentApp.ParagraphHeading.HEADING1).setAlignment(center);
+  if (d.texts.subtitle) body.appendParagraph(d.texts.subtitle).setAlignment(center);
+  body.appendParagraph((d.club.city ? 'г. ' + d.club.city + '                                                            ' : '') + ruDate_(d.date)).setAlignment(DocumentApp.HorizontalAlignment.RIGHT);
+  body.appendParagraph('Исполнитель: ' + d.trainer.name + (d.trainer.contractNo ? ', договор № ' + d.trainer.contractNo + (d.trainer.contractDate ? ' от ' + ruDate_(d.trainer.contractDate) : '') : ''));
+  body.appendParagraph('Заказчик: ' + d.club.name + (d.club.requisites ? ', ' + d.club.requisites : ''));
+  body.appendParagraph('Период оказания услуг: с ' + ruDate_(d.from) + ' по ' + ruDate_(d.to));
+  const rows = [['№', 'Наименование услуг', 'Кол-во', 'Ед.', 'Ставка, ₽', 'Сумма, ₽']];
+  d.lines.forEach((l, i) => rows.push([String(i + 1), l.name, hh(l.qty), l.unit, money(l.rate), money(l.amount)]));
+  rows.push(['', 'Итого', '', '', '', money(d.amount)]);
   const tbl = body.appendTable(rows);
   tbl.getRow(0).editAsText().setBold(true);
   tbl.getRow(rows.length - 1).editAsText().setBold(true);
-  body.appendParagraph('Всего оказано услуг на сумму ' + money(calc.amount) + ' руб. Вышеперечисленные услуги выполнены полностью и в срок. Заказчик претензий по объёму, качеству и срокам оказания услуг не имеет.');
-
-  // Расшифровка: с кем и сколько
-  body.appendParagraph('Расшифровка').setHeading(DocumentApp.ParagraphHeading.HEADING3);
-  const byClient = {};
-  calc.f.filter(x => x.type === 'ind').forEach(x => { byClient[x.cl] = (byClient[x.cl] || 0) + x.th; });
-  const det = [['Ученик / группа', 'Дата', 'Часов']];
-  Object.keys(byClient).sort((a, b) => nameOf_('clients', a).localeCompare(nameOf_('clients', b)))
-    .forEach(cid => det.push([nameOf_('clients', cid) + ' (индивидуально)', 'за период', hh(round2_(byClient[cid]))]));
-  calc.f.filter(x => x.type !== 'ind').sort((a, b) => a.date.localeCompare(b.date))
-    .forEach(x => det.push([(x.type === 'event' ? 'Мероприятие: ' : 'Группа: ') + (x.title || ''), ruDate_(x.date), hh(x.th)]));
-  const dt = body.appendTable(det);
-  dt.getRow(0).editAsText().setBold(true);
-  dt.editAsText().setFontSize(9);
-
+  body.appendParagraph('Всего оказано услуг на сумму ' + money(d.amount) + ' руб. ' + (d.texts.text || ''));
+  if (d.detail.length) {
+    body.appendParagraph('Расшифровка').setHeading(DocumentApp.ParagraphHeading.HEADING3);
+    const dt = body.appendTable([['Ученик / событие', 'Дата', 'Объём']].concat(d.detail.map(r => [String(r[0]), isDate_(r[1]) ? ruDate_(r[1]) : String(r[1]), String(r[2]).replace('.', ',')])));
+    dt.getRow(0).editAsText().setBold(true);
+    dt.editAsText().setFontSize(9);
+  }
   body.appendParagraph('');
-  const sig = body.appendTable([
-    ['Исполнитель', 'Заказчик'],
-    ['_______________ / ' + t.name, '_______________ / ' + (S.director || '')],
-  ]);
+  const sig = body.appendTable([['Исполнитель', 'Заказчик'], ['_______________ / ' + d.trainer.name, '_______________ / ' + (d.club.director || '')]]);
   sig.setBorderWidth(0);
   doc.saveAndClose();
-
-  const folder = actsFolder_(S);
+  const folder = folder_('acts', 'Акты');
   const file = DriveApp.getFileById(doc.getId());
   file.moveTo(folder);
   const pdf = folder.createFile(file.getAs('application/pdf')).setName(doc.getName() + '.pdf');
-  setSetting_('next_act', n + 1);
-  insert_('acts', {
-    number, trainerId: t.id, trainerName: t.name, dateFrom: from, dateTo: to, hours: calc.hours, amount: calc.amount,
-    docUrl: doc.getUrl(), pdfUrl: pdf.getUrl(), createdBy: user.name
-  });
-  return { number, docUrl: doc.getUrl(), pdfUrl: pdf.getUrl(), hours: calc.hours, amount: calc.amount };
-}
-
-function actsFolder_(S) {
-  if (S.actsFolderId) { try { return DriveApp.getFolderById(S.actsFolderId); } catch (e) { /* создадим заново */ } }
-  const parent = DriveApp.getFileById(ss_().getId()).getParents();
-  const base = parent.hasNext() ? parent.next() : DriveApp.getRootFolder();
-  const f = base.createFolder('Акты — ' + CLUB_NAME);
-  setSetting_('actsFolderId', f.getId());
-  return f;
+  return { docUrl: doc.getUrl(), pdfUrl: pdf.getUrl() };
 }
 
 // ---------------------------------------------------------------------------
