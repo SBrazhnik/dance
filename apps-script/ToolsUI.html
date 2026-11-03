@@ -39,7 +39,7 @@ const TL = {
     const r = role();
     if (r === 'client') return [['my', 'Мой прогресс'], ['league', 'Лига'], ['tg', 'Telegram']];
     if (r === 'trainer') return [['pair', 'Подбор пары'], ['passport', 'Паспорт танцора'], ['league', 'Лига'], ['tg', 'Telegram']];
-    return [['pair', 'Подбор пары'], ['passport', 'Паспорт танцора'], ['league', 'Корпоративная лига'], ['hr', 'Отчёт для HR'], ['bot', 'Telegram-бот']];
+    return [['bot', 'Telegram-бот'], ['pair', 'Подбор пары'], ['passport', 'Паспорт танцора'], ['league', 'Корпоративная лига'], ['hr', 'Отчёт для HR']];
   },
   async load(force) {
     if (S.T && !force) return S.T;
