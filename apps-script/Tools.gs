@@ -68,7 +68,7 @@ function toolsLoad_(user) {
     me: { tg: myTg_(user) },
   };
   if (isStaff_(user)) {
-    res.tg = tbl_('tg').rows.map(r => ({ id: r.id, kind: r.kind, refId: r.refId, name: r.name, linked: !!r.chatId, notify: r.notify, linkedAt: r.linkedAt, lastSent: r.lastSent }));
+    res.tg = tbl_('tg').rows.map(r => ({ id: r.id, kind: r.kind, refId: r.refId, name: r.name, linked: !!r.chatId, notify: r.notify, linkedAt: r.linkedAt, lastSent: r.lastSent, phone: r.kind === 'pending' ? r.code : '' }));
     res.bot = botStatus_(user);
     Object.assign(res.settings, { bot_hour: +T.bot_hour, bot_remind: T.bot_remind === 'true', bot_low: T.bot_low === 'true', bot_lowHours: +T.bot_lowHours,
       bot_inactive: +T.bot_inactive, bot_digest: T.bot_digest === 'true', bot_nudge: T.bot_nudge === 'true', tools_dances: T.tools_dances });
@@ -320,8 +320,10 @@ function tgCall_(method, payload) {
   if (!j.ok) throw new Error('Telegram: ' + (j.description || ('код ' + r.getResponseCode())));
   return j.result;
 }
-function tgSend_(chatId, text) {
-  try { tgCall_('sendMessage', { chat_id: chatId, text: text, parse_mode: 'HTML', disable_web_page_preview: true }); return true; }
+function tgSend_(chatId, text, markup) {
+  const p = { chat_id: chatId, text: text, parse_mode: 'HTML', disable_web_page_preview: true };
+  if (markup) p.reply_markup = markup;
+  try { tgCall_('sendMessage', p); return true; }
   catch (e) { return false; }
 }
 function num_(n) { return String(round2_(+n || 0)).replace('.', ','); }
@@ -331,8 +333,9 @@ function botStatus_(user) {
   const T = toolSettings_();
   let trig = false;
   try { trig = ScriptApp.getProjectTriggers().some(t => t.getHandlerFunction() === 'botPoll'); } catch (e) { /* нет прав */ }
-  return { connected: !!tgToken_(), name: T.bot_name || '', triggers: trig,
-    linked: tbl_('tg').rows.filter(r => r.chatId).length, total: tbl_('tg').rows.length, admin: user.role === 'admin' };
+  const rows = tbl_('tg').rows.filter(r => r.kind !== 'pending');
+  return { connected: !!tgToken_(), name: T.bot_name || '', link: T.bot_name ? 'https://t.me/' + T.bot_name : '', triggers: trig,
+    linked: rows.filter(r => r.chatId).length, total: rows.length, pending: tbl_('tg').rows.filter(r => r.kind === 'pending').length, admin: user.role === 'admin' };
 }
 function botSave_(user, p) {
   if (user.role !== 'admin') throw new Error('Подключить бота может только администратор');
@@ -408,6 +411,27 @@ function tgTest_(user, p) {
   return true;
 }
 
+/** Подтвердить заявку: привязать чат из «ждут подтверждения» к карточке. */
+function tgAssign_(user, p) {
+  const pend = must_('tg', p.id, 'Заявка');
+  if (pend.kind !== 'pending') throw new Error('Это не заявка');
+  const kind = p.kind, refId = p.refId;
+  if (['client', 'trainer', 'user'].indexOf(kind) < 0 || !refId) throw new Error('Выберите, кого подключить');
+  const name = kind === 'user' ? must_('users', refId, 'Пользователь').name : nameOf_(kind === 'client' ? 'clients' : 'trainers', refId);
+  if (!name) throw new Error('Карточка не найдена');
+  const chatId = pend.chatId;
+  del_('tg', pend.id);
+  tgBind_(kind, refId, name, chatId);
+  tgSend_(chatId, 'Готово, ' + tgEsc_(name) + '! Менеджер подтвердил подключение к боту «' + tgEsc_(settings_().clubName || CLUB_NAME) + '».\n' + botHelp_(), TG_NO_KB);
+  return true;
+}
+function tgReject_(user, p) {
+  const pend = must_('tg', p.id, 'Заявка');
+  if (pend.kind !== 'pending') throw new Error('Это не заявка');
+  del_('tg', pend.id);
+  return true;
+}
+
 /** Запускается каждую минуту: отвечает на команды бота. */
 function botPoll() {
   if (!tgToken_()) return;
@@ -422,24 +446,77 @@ function botPoll() {
     ups.forEach(u => { try { botHandle_(u.message); } catch (e) { try { logError_('бот', 'botPoll', e.message, e.stack, ''); } catch (x) { /* без журнала */ } } });
   });
 }
+const TG_PHONE_KB = { keyboard: [[{ text: '📱 Поделиться номером', request_contact: true }]], resize_keyboard: true, one_time_keyboard: true };
+const TG_NO_KB = { remove_keyboard: true };
+/** Номер для сравнения: последние 10 цифр (+7, 8 и пробелы не важны). */
+function phoneKey_(s) { const d = String(s || '').replace(/\D/g, ''); return d.length >= 10 ? d.slice(-10) : ''; }
+/** Привязать чат к карточке (создать запись, если её ещё нет). */
+function tgBind_(kind, refId, name, chatId) {
+  const r = tbl_('tg').rows.find(x => x.kind === kind && x.refId === refId);
+  if (r) update_('tg', r.id, { chatId, linkedAt: now_(), notify: true, name });
+  else insert_('tg', { kind, refId, name, chatId, code: newId_(12), notify: true, linkedAt: now_() });
+}
+/** Найти карточки по номеру телефона: ученики и тренеры. */
+function tgFindByPhone_(phone) {
+  const k = phoneKey_(phone);
+  if (!k) return [];
+  const out = [];
+  tbl_('clients').rows.forEach(c => { if (c.active && phoneKey_(c.phone) === k) out.push({ kind: 'client', id: c.id, name: c.name }); });
+  tbl_('trainers').rows.forEach(t => { if (t.active && (phoneKey_(t.phone) === k || phoneKey_(t.phone2) === k)) out.push({ kind: 'trainer', id: t.id, name: t.name }); });
+  return out;
+}
+/** Тренер по нику Telegram из карточки (поле «Мессенджер»). */
+function tgFindByNick_(nick) {
+  nick = String(nick || '').toLowerCase().replace(/^@/, '');
+  if (!nick) return [];
+  return tbl_('trainers').rows.filter(t => t.active && String(t.telegram || '').toLowerCase().replace(/^@/, '').trim() === nick).map(t => ({ kind: 'trainer', id: t.id, name: t.name }));
+}
+function tgWelcome_(chatId, found, club) {
+  found.forEach(f => tgBind_(f.kind, f.id, f.name, chatId));
+  const names = Array.from(new Set(found.map(f => f.name))).join(', ');
+  return tgSend_(chatId, 'Готово, ' + tgEsc_(names) + '! Вы подключены к боту «' + tgEsc_(club) + '».\n' + botHelp_(), TG_NO_KB);
+}
 function botHandle_(m) {
-  if (!m || !m.chat || !m.text) return;
+  if (!m || !m.chat) return;
   const chatId = String(m.chat.id);
-  const text = String(m.text).trim();
+  const text = String(m.text || '').trim();
   const club = settings_().clubName || CLUB_NAME;
-  const mine = tbl_('tg').rows.filter(r => r.chatId === chatId);
+  const mine = tbl_('tg').rows.filter(r => r.chatId === chatId && r.kind !== 'pending');
+  // человек поделился номером
+  if (m.contact) {
+    if (m.from && m.contact.user_id && String(m.contact.user_id) !== String(m.from.id)) return tgSend_(chatId, 'Пожалуйста, отправьте свой номер кнопкой «Поделиться номером».', TG_PHONE_KB);
+    const phone = m.contact.phone_number;
+    const found = tgFindByPhone_(phone);
+    const clientsFound = found.filter(f => f.kind === 'client');
+    if (found.length && clientsFound.length <= 1) {
+      tbl_('tg').rows.filter(r => r.kind === 'pending' && r.chatId === chatId).forEach(r => del_('tg', r.id));
+      return tgWelcome_(chatId, found, club);
+    }
+    const who = [m.from && m.from.first_name, m.from && m.from.last_name].filter(Boolean).join(' ') + (m.from && m.from.username ? ' (@' + m.from.username + ')' : '');
+    const pend = tbl_('tg').rows.find(r => r.kind === 'pending' && r.chatId === chatId);
+    const d = { kind: 'pending', refId: '', name: who || 'Без имени', chatId, code: '+' + String(phone).replace(/\D/g, ''), notify: true, linkedAt: now_() };
+    if (pend) update_('tg', pend.id, d); else insert_('tg', d);
+    return tgSend_(chatId, (found.length ? 'Этот номер указан у нескольких человек.' : 'Не нашли ваш номер в карточках клуба.') + ' Мы передали заявку менеджеру — он подтвердит подключение, и бот напишет вам.', TG_NO_KB);
+  }
+  if (!text) return;
   const st = text.match(/^\/start(?:\s+(\S+))?/);
   if (st) {
     const code = st[1];
-    const r = code ? tbl_('tg').rows.find(x => x.code === code) : null;
-    if (!r) {
-      if (mine.length) return tgSend_(chatId, 'Вы уже подключены: ' + tgEsc_(mine.map(x => x.name).join(', ')) + '\n' + botHelp_());
-      return tgSend_(chatId, 'Здравствуйте! Это бот «' + tgEsc_(club) + '». Чтобы получать уведомления, попросите у менеджера клуба личную ссылку для подключения.');
+    const r = code ? tbl_('tg').rows.find(x => x.code === code && x.kind !== 'pending') : null;
+    if (r) {
+      update_('tg', r.id, { chatId, linkedAt: now_(), notify: true });
+      return tgSend_(chatId, 'Готово, ' + tgEsc_(r.name) + '! Вы подключены к боту «' + tgEsc_(club) + '».\n' + botHelp_(), TG_NO_KB);
     }
-    update_('tg', r.id, { chatId, linkedAt: now_(), notify: true });
-    return tgSend_(chatId, 'Готово, ' + tgEsc_(r.name) + '! Вы подключены к боту «' + tgEsc_(club) + '».\n' + botHelp_());
+    if (mine.length) return tgSend_(chatId, 'Вы уже подключены: ' + tgEsc_(mine.map(x => x.name).join(', ')) + '\n' + botHelp_(), TG_NO_KB);
+    const byNick = tgFindByNick_(m.from && m.from.username);
+    if (byNick.length === 1) return tgWelcome_(chatId, byNick, club);
+    if (tbl_('tg').rows.some(x => x.kind === 'pending' && x.chatId === chatId)) return tgSend_(chatId, 'Ваша заявка у менеджера. Как только он подтвердит, бот напишет вам.');
+    return tgSend_(chatId, 'Здравствуйте! Это бот «' + tgEsc_(club) + '».\nЧтобы подключиться, нажмите кнопку <b>«📱 Поделиться номером»</b> внизу — мы найдём вас по номеру телефона из карточки клуба.', TG_PHONE_KB);
   }
-  if (!mine.length) return tgSend_(chatId, 'Вы ещё не подключены. Попросите у менеджера клуба личную ссылку.');
+  if (!mine.length) {
+    if (tbl_('tg').rows.some(x => x.kind === 'pending' && x.chatId === chatId)) return tgSend_(chatId, 'Ваша заявка у менеджера. Как только он подтвердит, бот напишет вам.');
+    return tgSend_(chatId, 'Вы ещё не подключены. Нажмите «📱 Поделиться номером», чтобы мы нашли вас по номеру телефона.', TG_PHONE_KB);
+  }
   if (/^\/stop/.test(text)) { mine.forEach(r => update_('tg', r.id, { notify: false })); return tgSend_(chatId, 'Уведомления выключены. Включить снова: /on'); }
   if (/^\/on/.test(text)) { mine.forEach(r => update_('tg', r.id, { notify: true })); return tgSend_(chatId, 'Уведомления включены.'); }
   if (/^\/(balance|остаток)/i.test(text)) return tgSend_(chatId, mine.map(botBalance_).join('\n\n'));
@@ -663,6 +740,8 @@ function toolHandlersAll_() {
   tgSetNotify: { roles: ALL, write: true, fn: tgSetNotify_ },
   tgUnlink: { roles: STAFF, write: true, fn: tgUnlink_ },
   tgTest: { roles: STAFF, fn: tgTest_ },
+  tgAssign: { roles: STAFF, write: true, fn: tgAssign_ },
+  tgReject: { roles: STAFF, write: true, fn: tgReject_ },
   botBroadcast: { roles: STAFF, fn: botBroadcast_ },
   botBroadcasts: { roles: STAFF, fn: botBroadcasts_ },
   };

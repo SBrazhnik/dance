@@ -23,6 +23,8 @@
 .tl-step li:before{content:counter(s);position:absolute;left:0;top:0;width:22px;height:22px;border-radius:50%;background:var(--navy);color:#fff;font-size:12px;display:flex;align-items:center;justify-content:center}
 .tl-link{word-break:break-all;background:var(--soft);padding:10px 12px;border-radius:8px;font-family:ui-monospace,Consolas,monospace;font-size:13px}
 .tl-sw{display:flex;align-items:center;gap:8px;cursor:pointer}
+.tl-qr{display:flex;gap:18px;align-items:flex-start;flex-wrap:wrap}
+.tl-qrbox{width:200px;max-width:100%;flex:none;background:#fff;border:1px solid var(--line);border-radius:12px;padding:6px}
 </style>
 <script>
 I.spark = '<path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/>';
@@ -296,6 +298,25 @@ TLV.tg = () => {
   if ($('#tlme')) $('#tlme').onclick = () => tgLinkModal({self: true});
   if ($('#tlnot')) $('#tlnot').onchange = async e => { try { await call('tgSetNotify', {id: me.id, notify: e.target.checked}); await tlRefresh(); toast('Сохранено'); } catch (er) { fail(er); } };
 };
+function tlQrLib() {
+  if (window.qrcode) return Promise.resolve();
+  return new Promise((res, rej) => {
+    const sc = document.createElement('script');
+    sc.src = 'https:' + '/' + '/cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js';
+    sc.onload = () => res(); sc.onerror = () => rej(new Error('Не удалось загрузить генератор QR-кода — проверьте интернет'));
+    document.head.appendChild(sc);
+  });
+}
+async function tlQr(text, cell) {
+  await tlQrLib();
+  const q = qrcode(0, 'M'); q.addData(text); q.make();
+  const n = q.getModuleCount(), pad = 4, size = (n + pad * 2) * cell;
+  const c = document.createElement('canvas'); c.width = c.height = size;
+  const g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, size, size); g.fillStyle = '#1a2643';
+  for (let r = 0; r < n; r++) for (let k = 0; k < n; k++) if (q.isDark(r, k)) g.fillRect((k + pad) * cell, (r + pad) * cell, cell, cell);
+  c.style.width = '100%'; c.style.height = 'auto'; c.style.imageRendering = 'pixelated';
+  return c;
+}
 const BC_KINDS = [['info', '📢 Объявление'], ['important', '❗ Важно'], ['event', '🎉 Мероприятие'], ['schedule', '🗓 Изменение расписания'], ['tech', '⚠️ Технические работы'], ['other', '💬 Сообщение']];
 function bcHistory() {
   const my = S.pageSeq;
@@ -349,7 +370,8 @@ function broadcastForm() {
 TLV.bot = () => {
   const b = S.T.bot, s = S.T.settings, admin = role() === 'admin';
   const ui = S.ui.tlbot || (S.ui.tlbot = {k: 'client', q: ''});
-  const rows = (S.T.tg || []);
+  const rows = (S.T.tg || []).filter(r => r.kind !== 'pending');
+  const pend = (S.T.tg || []).filter(r => r.kind === 'pending');
   const rowOf = (k, id) => rows.find(r => r.kind === k && r.refId === id);
   const people = ui.k === 'client' ? TL.clients().map(c => ({k: 'client', id: c.id, name: c.name, sub: c.company || ''}))
     : ui.k === 'trainer' ? (S.D.trainers || []).filter(t => t.active).map(t => ({k: 'trainer', id: t.id, name: t.name, sub: t.phone || ''}))
@@ -374,6 +396,20 @@ TLV.bot = () => {
           ${fld('«Давно не был» — дней', inp('bot_inactive', s.bot_inactive, 'type="number" min="3"'))}</div></div>
         ${admin ? `<div class="row" style="margin-top:12px"><button class="btn pri" id="tlbsave">Сохранить</button>${b.connected ? `<button class="btn" id="tlbrun">${ic('send')}Отправить сейчас</button><span class="spacer"></span><button class="btn danger sm" id="tlboff">Отключить бота</button>` : ''}</div>` : ''}</div>
     </div>
+    ${b.connected && b.link ? `<div class="card sect"><div class="tl-qr">
+      <div class="tl-qrbox" id="tlqr">${empty('QR-код…')}</div>
+      <div class="grow" style="min-width:0"><h2 style="margin-top:0">Подключение для всех</h2>
+        <p style="margin:6px 0">Одна ссылка для всех учеников и тренеров. Человек открывает её или наводит камеру на QR-код, нажимает «Запустить» и «📱 Поделиться номером» — бот сам найдёт его по номеру телефона из карточки. Тренеров с указанным @ником в карточке бот узнаёт сразу.</p>
+        <div class="tl-link" id="tlgl">${esc(b.link)}</div>
+        <div class="row" style="margin-top:10px"><button class="btn pri" id="tlqrs">${ic('dl')}Скачать QR-код</button><button class="btn" id="tlqrp">${ic('print')}Плакат для зала</button><button class="btn" id="tlqrc">Скопировать ссылку</button></div>
+      </div></div></div>` : ''}
+    ${pend.length ? `<div class="card sect" style="border-color:var(--gold)"><h2 style="margin-top:0">Ждут подтверждения · ${pend.length}</h2>
+      <p class="small muted" style="margin-top:-4px">Эти люди поделились номером, но бот не нашёл его в карточках (или номер есть у нескольких человек). Выберите, кто это, и нажмите «Подключить».</p>
+      <div class="tw"><table class="t"><thead><tr><th>Telegram</th><th>Номер</th><th>Кто это</th><th></th></tr></thead><tbody>
+      ${pend.map(r => `<tr><td><b>${esc(r.name)}</b><div class="small muted">${esc(String(r.linkedAt || '').slice(0, 16))}</div></td><td class="nowrap">${esc(r.phone)}</td>
+        <td style="min-width:220px">${sel('pa_' + r.id, [['', '— выберите —']].concat(TL.clients().map(c => ['client|' + c.id, c.name + ' · ученик']), (S.D.trainers || []).filter(t => t.active).map(t => ['trainer|' + t.id, t.name + ' · тренер']), (S.D.users || []).filter(u => u.active && ['admin', 'manager'].includes(u.role)).map(u => ['user|' + u.id, u.name + ' · сотрудник'])), '', 'data-pa="' + r.id + '"')}</td>
+        <td class="nowrap"><button class="btn sm pri" data-pok="${r.id}">Подключить</button> <button class="btn sm" data-pno="${r.id}">${ic('trash')}</button></td></tr>`).join('')}
+      </tbody></table></div></div>` : ''}
     <div class="card sect"><div class="row"><div class="grow"><h2 style="margin:0">Рассылка</h2>
       <div class="small muted">Свободное сообщение: важные новости, мероприятия, изменения расписания, технические работы.</div></div>
       <button class="btn pri" id="tlbcn" ${b.connected ? '' : 'disabled title="Сначала подключите бота"'}>${ic('send')}Новая рассылка</button></div>
@@ -389,6 +425,24 @@ TLV.bot = () => {
       <td class="nowrap"><button class="btn sm" data-lk="${p.k}|${p.id}">${ic('send')}Ссылка</button>${r && r.linked ? ` <button class="btn sm" data-tt2="${r.id}">Проверка</button> <button class="btn sm" data-ul="${r.id}">Отключить</button>` : ''}</td></tr>`; }).join('') || `<tr><td colspan="4">${empty('Никого не найдено')}</td></tr>`}
     </tbody></table></div>`;
   $('#tlbcn').onclick = () => broadcastForm();
+  if ($('#tlqr')) {
+    tlQr(b.link, 8).then(c => { const box = $('#tlqr'); if (box) { box.innerHTML = ''; box.appendChild(c); } }).catch(e => { const box = $('#tlqr'); if (box) box.innerHTML = '<div class="small muted">' + esc(e.message) + '</div>'; });
+    $('#tlqrs').onclick = async () => { try { const c = await tlQr(b.link, 16); c.toBlob(bl => saveBlob('QR-бот-клуба.png', bl), 'image/png'); } catch (e) { fail(e); } };
+    $('#tlqrp').onclick = async () => { try { const c = await tlQr(b.link, 12); showDoc('Плакат: подключение к боту', `<div style="text-align:center;padding:20px 10px">
+      <h1 style="font-size:30px;margin:10px 0">Уведомления клуба в Telegram</h1>
+      <p style="font-size:17px;margin:6px 0 18px">Напоминания о занятиях, остаток часов и новости клуба</p>
+      <div><img src="${c.toDataURL('image/png')}" style="width:300px;height:300px;image-rendering:pixelated"></div>
+      <ol style="text-align:left;display:inline-block;font-size:17px;line-height:1.7;margin-top:18px"><li>Наведите камеру телефона на QR-код</li><li>Нажмите «Запустить» в Telegram</li><li>Нажмите «📱 Поделиться номером»</li></ol>
+      <p style="font-size:15px;color:#555">или откройте ссылку: <b>${esc(b.link)}</b></p></div>`); } catch (e) { fail(e); } };
+    $('#tlqrc').onclick = async () => { try { await navigator.clipboard.writeText(b.link); toast('Ссылка скопирована'); } catch (e) { const sl = getSelection(), rg = document.createRange(); rg.selectNodeContents($('#tlgl')); sl.removeAllRanges(); sl.addRange(rg); toast('Выделено — скопируйте вручную'); } };
+  }
+  $$('[data-pok]').forEach(x => x.onclick = async () => {
+    const v = ($('[data-pa="' + x.dataset.pok + '"]') || {}).value || '';
+    if (!v) return toast('Выберите, кто это', true);
+    const [kind, refId] = v.split('|');
+    try { await call('tgAssign', {id: x.dataset.pok, kind, refId}); toast('Подключено — бот отправил приветствие'); await tlRefresh(); } catch (e) { fail(e); }
+  });
+  $$('[data-pno]').forEach(x => x.onclick = async () => { try { await call('tgReject', {id: x.dataset.pno}); toast('Заявка удалена'); await tlRefresh(); } catch (e) { fail(e); } });
   bcHistory();
   $$('[data-tk]').forEach(c => c.onclick = () => { ui.k = c.dataset.tk; TLV.bot(); });
   $('#tlq').oninput = e => { ui.q = e.target.value; clearTimeout(TL.qt); TL.qt = setTimeout(() => { TLV.bot(); const q = $('#tlq'); if (q) { q.focus(); q.setSelectionRange(q.value.length, q.value.length); } }, 300); };
