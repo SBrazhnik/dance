@@ -557,6 +557,83 @@ function botRunNow_(user) {
 // ---------------------------------------------------------------------------
 // Регистрация действий
 // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// Рассылки: свободное сообщение всем или выбранным
+// ---------------------------------------------------------------------------
+const BC_TYPES = {
+  info: ['📢', 'Объявление'], important: ['❗', 'Важно'], event: ['🎉', 'Мероприятие'],
+  schedule: ['🗓', 'Изменение расписания'], tech: ['⚠️', 'Технические работы'], other: ['💬', 'Сообщение'],
+};
+/** Кто получит рассылку: подключённые к боту люди по фильтрам. */
+function bcRecipients_(p) {
+  const kinds = [].concat(p.kinds || []).filter(k => ['client', 'trainer', 'user'].indexOf(k) >= 0);
+  const picked = [].concat(p.ids || []).filter(Boolean);
+  let inGroup = null;
+  if (p.groupId) {
+    const g = must_('groups', p.groupId, 'Группа');
+    inGroup = {}; ids_(g.clientIds).forEach(x => { inGroup['client:' + x] = 1; }); ids_(g.trainerIds).forEach(x => { inGroup['trainer:' + x] = 1; });
+  }
+  let comp = null;
+  if (p.company) { comp = {}; tbl_('clients').rows.forEach(c => { if (companyOf_(c) === p.company) comp[c.id] = 1; }); }
+  const C = {}; tbl_('clients').rows.forEach(c => { C[c.id] = c; });
+  const T = {}; tbl_('trainers').rows.forEach(t => { T[t.id] = t; });
+  const U = {}; tbl_('users').rows.forEach(u => { U[u.id] = u; });
+  const seen = {};
+  return tbl_('tg').rows.filter(r => {
+    if (!r.chatId) return false;
+    if (!p.force && !r.notify) return false;
+    if (picked.length) return picked.indexOf(r.id) >= 0;
+    if (kinds.indexOf(r.kind) < 0) return false;
+    if (r.kind === 'client' && !(C[r.refId] && C[r.refId].active)) return false;
+    if (r.kind === 'trainer' && !(T[r.refId] && T[r.refId].active)) return false;
+    if (r.kind === 'user' && !(U[r.refId] && U[r.refId].active)) return false;
+    if (inGroup && !inGroup[r.kind + ':' + r.refId]) return false;
+    if (comp && !(r.kind === 'client' && comp[r.refId])) return false;
+    return true;
+  }).filter(r => { if (seen[r.chatId]) return false; seen[r.chatId] = 1; return true; });
+}
+function bcAudience_(p) {
+  const names = { client: 'ученики', trainer: 'тренеры', user: 'сотрудники' };
+  if ([].concat(p.ids || []).length) return 'выбранные: ' + [].concat(p.ids).length;
+  const parts = [[].concat(p.kinds || []).map(k => names[k]).filter(Boolean).join(', ') || '—'];
+  if (p.groupId) { const g = find_('groups', p.groupId); if (g) parts.push('группа «' + g.name + '»'); }
+  if (p.company) parts.push('компания «' + p.company + '»');
+  if (p.force) parts.push('включая отключивших уведомления');
+  return parts.join('; ');
+}
+function bcText_(p) {
+  const t = BC_TYPES[p.category] || BC_TYPES.info;
+  const club = tgEsc_(settings_().clubName || CLUB_NAME);
+  const title = String(p.title || '').trim();
+  return t[0] + ' <b>' + tgEsc_(title || t[1]) + '</b>\n\n' + tgEsc_(String(p.text || '').trim()) + '\n\n— ' + club;
+}
+function botBroadcast_(user, p) {
+  const text = String(p.text || '').trim();
+  const list = bcRecipients_(p);
+  if (p.dry) return { total: list.length, names: list.slice(0, 12).map(r => r.name) };
+  if (!text) throw new Error('Напишите текст сообщения');
+  if (text.length > 3500) throw new Error('Слишком длинное сообщение: до 3500 символов');
+  if (!list.length && !p.news) throw new Error('Нет получателей: никто из выбранных не подключил бота');
+  if (list.length && !tgToken_()) throw new Error('Сначала подключите бота');
+  const msg = bcText_(p);
+  let sent = 0, failed = 0;
+  list.forEach((r, i) => {
+    if (tgSend_(r.chatId, msg)) sent++; else failed++;
+    if (i % 25 === 24) Utilities.sleep(1000); // ограничение Telegram — не больше ~30 сообщений в секунду
+  });
+  const cat = (BC_TYPES[p.category] || BC_TYPES.info)[1];
+  withLock_(() => {
+    Object.keys(_cache).forEach(k => delete _cache[k]);
+    insert_('broadcasts', { author: user.name, category: cat, title: String(p.title || '').slice(0, 200), text: text.slice(0, 3500),
+      audience: bcAudience_(p), total: list.length, sent, failed });
+    if (p.news) insert_('messages', { channel: 'news', userId: user.id, userName: user.name, text: ((p.title ? p.title + '\n' : '') + text).slice(0, 2000) });
+  });
+  return { total: list.length, sent, failed };
+}
+function botBroadcasts_() {
+  return tbl_('broadcasts').rows.slice(-50).reverse();
+}
+
 /** Кому сейчас открыт модуль. Чтобы открыть менеджерам, тренерам и ученикам — добавьте их роли сюда и в ToolsUI.html. */
 const TOOLS_OPEN_TO = ['admin'];
 
@@ -586,5 +663,7 @@ function toolHandlersAll_() {
   tgSetNotify: { roles: ALL, write: true, fn: tgSetNotify_ },
   tgUnlink: { roles: STAFF, write: true, fn: tgUnlink_ },
   tgTest: { roles: STAFF, fn: tgTest_ },
+  botBroadcast: { roles: STAFF, fn: botBroadcast_ },
+  botBroadcasts: { roles: STAFF, fn: botBroadcasts_ },
   };
 }

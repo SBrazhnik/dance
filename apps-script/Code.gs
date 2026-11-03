@@ -7,7 +7,7 @@
  */
 
 const CLUB_NAME = 'Клуб корпоративных бальных танцев';
-const APP_VER = '2026-11-02.14'; // меняется при каждом обновлении — открытые страницы предложат перезагрузку
+const APP_VER = '2026-11-03.1'; // меняется при каждом обновлении — открытые страницы предложат перезагрузку
 const STAFF = ['admin', 'manager'];
 const ALL = ['admin', 'manager', 'trainer', 'client'];
 const SESSION_DAYS = 30;
@@ -99,6 +99,9 @@ const TABLES = {
   awards: ['Баллы лиги', [
     ['id', 'ID'], ['date', 'Дата', 'd'], ['clientId', 'ID ученика'], ['clientName', 'Ученик'], ['title', 'За что'],
     ['points', 'Баллы', 'n'], ['createdAt', 'Создано']]],
+  broadcasts: ['Рассылки', [
+    ['id', 'ID'], ['createdAt', 'Время'], ['author', 'Кто отправил'], ['category', 'Тип'], ['title', 'Заголовок'],
+    ['text', 'Текст'], ['audience', 'Кому'], ['total', 'Получателей', 'n'], ['sent', 'Доставлено', 'n'], ['failed', 'Не доставлено', 'n']]],
   tg: ['Telegram', [
     ['id', 'ID'], ['kind', 'Тип'], ['refId', 'ID карточки'], ['name', 'Имя'], ['chatId', 'Чат'], ['code', 'Код подключения'],
     ['notify', 'Уведомления', 'b'], ['linkedAt', 'Подключён'], ['lastSent', 'Последнее сообщение'], ['createdAt', 'Создано']]],
@@ -415,7 +418,7 @@ function tz_() { return ss_().getSpreadsheetTimeZone() || Session.getScriptTimeZ
 
 function ensureSchema_() {
   const props = PropertiesService.getScriptProperties();
-  const ver = 'schema-6';
+  const ver = 'schema-7';
   if (props.getProperty('schema') === ver) return;
   const ss = ss_();
   Object.keys(TABLES).forEach(key => {

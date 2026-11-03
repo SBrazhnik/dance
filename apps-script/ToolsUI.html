@@ -296,6 +296,56 @@ TLV.tg = () => {
   if ($('#tlme')) $('#tlme').onclick = () => tgLinkModal({self: true});
   if ($('#tlnot')) $('#tlnot').onchange = async e => { try { await call('tgSetNotify', {id: me.id, notify: e.target.checked}); await tlRefresh(); toast('Сохранено'); } catch (er) { fail(er); } };
 };
+const BC_KINDS = [['info', '📢 Объявление'], ['important', '❗ Важно'], ['event', '🎉 Мероприятие'], ['schedule', '🗓 Изменение расписания'], ['tech', '⚠️ Технические работы'], ['other', '💬 Сообщение']];
+function bcHistory() {
+  const my = S.pageSeq;
+  call('botBroadcasts', {}, true).then(list => {
+    if (S.pageSeq !== my || !$('#tlbch')) return;
+    $('#tlbch').innerHTML = list.length ? `<div class="tw"><table class="t"><thead><tr><th>Когда</th><th>Тип</th><th>Сообщение</th><th>Кому</th><th class="n">Доставлено</th><th>Кто</th></tr></thead><tbody>
+      ${list.map(x => `<tr><td class="nowrap">${esc(fd(String(x.createdAt).slice(0, 10)))} ${esc(String(x.createdAt).slice(11, 16))}</td><td class="nowrap">${esc(x.category)}</td>
+        <td><b>${esc(x.title)}</b>${x.title ? '<br>' : ''}<span class="small">${esc(String(x.text).slice(0, 160))}${String(x.text).length > 160 ? '…' : ''}</span></td>
+        <td class="small">${esc(x.audience)}</td><td class="n">${x.sent} из ${x.total}${x.failed ? ` <span class="badge warn">${x.failed} не дошло</span>` : ''}</td><td class="small">${esc(x.author)}</td></tr>`).join('')}
+    </tbody></table></div>` : `<div class="small muted">Рассылок пока не было.</div>`;
+  }).catch(fail);
+}
+function broadcastForm() {
+  const groups = (S.D.groups || []).filter(g => g.active !== false);
+  const comps = S.T.companies || [];
+  const bg = modal('Новая рассылка', `<div class="fg">
+    ${fld('Тип', sel('category', BC_KINDS, 'info'))}
+    ${fld('Заголовок', inp('title', '', 'placeholder="Например: Кубок клуба 15 декабря"'))}
+    ${fld('Текст сообщения', `<textarea class="inp" name="text" rows="6" placeholder="Что случилось, когда, что нужно сделать"></textarea><div class="small muted" id="bclen">0 / 3500</div>`, 'full')}
+    <div class="full sect-t">Кому</div>
+    <div class="full chips">${[['client', 'Ученики'], ['trainer', 'Тренеры'], ['user', 'Сотрудники']].map(k => `<label class="chip on"><input type="checkbox" data-multi="1" name="kinds" value="${k[0]}" checked hidden>${k[1]}</label>`).join('')}</div>
+    ${fld('Только группа', sel('groupId', [['', 'все']].concat(groups.map(g => [g.id, g.name])), ''))}
+    ${fld('Только компания (ученики)', sel('company', [['', 'все']].concat(comps.map(c => [c.name, c.name])), ''))}
+    <div class="full">${chk('force', 'Отправить и тем, кто выключил уведомления (для срочного: отмена занятий, технические проблемы)', false)}</div>
+    <div class="full">${chk('news', 'Также опубликовать в «Объявлениях» приложения', true)}</div>
+    <div class="full card tight" style="background:var(--soft);border-color:transparent" id="bccnt">Считаю получателей…</div>
+  </div>`, [{t: 'Отмена'}, {t: ic('send') + 'Отправить', cls: 'pri', fn: async m => {
+    const v = vals(m);
+    if (!v.text) throw new Error('Напишите текст сообщения');
+    const r = await call('botBroadcast', v);
+    toast(r.total ? 'Отправлено: ' + r.sent + ' из ' + r.total + (r.failed ? ', не дошло: ' + r.failed : '') : 'Опубликовано в «Объявлениях» приложения');
+    bcHistory();
+  }}], {wide: true, sticky: true});
+  TL.wireChips(bg);
+  let t = null;
+  const count = () => {
+    clearTimeout(t);
+    t = setTimeout(async () => {
+      const v = vals(bg); v.dry = true;
+      try {
+        const r = await call('botBroadcast', v, true);
+        const box = $('#bccnt', bg); if (!box) return;
+        box.innerHTML = r.total ? `Получат: <b>${r.total}</b> чел. — ${esc(r.names.join(', '))}${r.total > r.names.length ? ' и другие' : ''}` : '<span style="color:var(--bad)">В Telegram никто не получит: среди выбранных нет подключивших бота.</span>' + (v.news ? ' Сообщение появится только в «Объявлениях» приложения.' : '');
+      } catch (e) { fail(e); }
+    }, 350);
+  };
+  bg.addEventListener('change', count);
+  $('[name=text]', bg).oninput = e => { $('#bclen', bg).textContent = e.target.value.length + ' / 3500'; };
+  count();
+}
 TLV.bot = () => {
   const b = S.T.bot, s = S.T.settings, admin = role() === 'admin';
   const ui = S.ui.tlbot || (S.ui.tlbot = {k: 'client', q: ''});
@@ -324,6 +374,10 @@ TLV.bot = () => {
           ${fld('«Давно не был» — дней', inp('bot_inactive', s.bot_inactive, 'type="number" min="3"'))}</div></div>
         ${admin ? `<div class="row" style="margin-top:12px"><button class="btn pri" id="tlbsave">Сохранить</button>${b.connected ? `<button class="btn" id="tlbrun">${ic('send')}Отправить сейчас</button><span class="spacer"></span><button class="btn danger sm" id="tlboff">Отключить бота</button>` : ''}</div>` : ''}</div>
     </div>
+    <div class="card sect"><div class="row"><div class="grow"><h2 style="margin:0">Рассылка</h2>
+      <div class="small muted">Свободное сообщение: важные новости, мероприятия, изменения расписания, технические работы.</div></div>
+      <button class="btn pri" id="tlbcn" ${b.connected ? '' : 'disabled title="Сначала подключите бота"'}>${ic('send')}Новая рассылка</button></div>
+      <div id="tlbch" style="margin-top:12px">${empty('Загрузка…')}</div></div>
     <h2 class="sect">Кому отправлять</h2>
     <p class="small muted" style="margin-top:-4px">Нажмите «Ссылка» и отправьте её человеку — после подключения ему будут приходить уведомления. Снимите галку, чтобы не отправлять конкретному человеку.</p>
     <div class="row" style="margin-bottom:10px"><div class="chips">${[['client', 'Ученики', cnt('client')], ['trainer', 'Тренеры', cnt('trainer')], ['user', 'Сотрудники', cnt('user')]].map(x => `<span class="chip ${ui.k === x[0] ? 'on' : ''}" data-tk="${x[0]}">${x[1]} · ${x[2]}</span>`).join('')}</div>
@@ -334,6 +388,8 @@ TLV.bot = () => {
       <td>${r ? `<label class="tl-sw"><input type="checkbox" data-nt="${r.id}" ${r.notify ? 'checked' : ''}> отправлять</label>` : '<span class="small muted">после подключения</span>'}</td>
       <td class="nowrap"><button class="btn sm" data-lk="${p.k}|${p.id}">${ic('send')}Ссылка</button>${r && r.linked ? ` <button class="btn sm" data-tt2="${r.id}">Проверка</button> <button class="btn sm" data-ul="${r.id}">Отключить</button>` : ''}</td></tr>`; }).join('') || `<tr><td colspan="4">${empty('Никого не найдено')}</td></tr>`}
     </tbody></table></div>`;
+  $('#tlbcn').onclick = () => broadcastForm();
+  bcHistory();
   $$('[data-tk]').forEach(c => c.onclick = () => { ui.k = c.dataset.tk; TLV.bot(); });
   $('#tlq').oninput = e => { ui.q = e.target.value; clearTimeout(TL.qt); TL.qt = setTimeout(() => { TLV.bot(); const q = $('#tlq'); if (q) { q.focus(); q.setSelectionRange(q.value.length, q.value.length); } }, 300); };
   $$('[data-nt]').forEach(c => c.onchange = async () => { try { await call('tgSetNotify', {id: c.dataset.nt, notify: c.checked}, true); const r = rows.find(x => x.id === c.dataset.nt); if (r) r.notify = c.checked; toast(c.checked ? 'Уведомления включены' : 'Уведомления выключены'); } catch (e) { c.checked = !c.checked; fail(e); } });
