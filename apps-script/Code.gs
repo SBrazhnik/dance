@@ -7,7 +7,7 @@
  */
 
 const CLUB_NAME = 'Клуб корпоративных бальных танцев';
-const APP_VER = '2026-11-03.3'; // меняется при каждом обновлении — открытые страницы предложат перезагрузку
+const APP_VER = '2026-11-03.4'; // меняется при каждом обновлении — открытые страницы предложат перезагрузку
 const STAFF = ['admin', 'manager'];
 const ALL = ['admin', 'manager', 'trainer', 'client'];
 const SESSION_DAYS = 30;
@@ -74,7 +74,8 @@ const TABLES = {
   rent: ['Аренда', [
     ['id', 'ID'], ['date', 'Дата', 'd'], ['time', 'Время', 't'], ['hours', 'Часов', 'n'], ['renter', 'Арендатор'],
     ['hall', 'Зал'], ['amount', 'Сумма', 'n'], ['paid', 'Оплачено', 'b'], ['contractNo', '№ договора'],
-    ['notes', 'Заметки'], ['createdAt', 'Создано']]],
+    ['notes', 'Заметки'], ['createdAt', 'Создано'],
+    ['unit', 'Тип аренды'], ['endDate', 'По дату', 'd']]],
   contracts: ['Договоры', [
     ['id', 'ID'], ['number', 'Номер'], ['kind', 'Вид'], ['partyId', 'ID стороны'], ['partyName', 'Сторона'],
     ['date', 'Дата', 'd'], ['notes', 'Заметки'], ['createdAt', 'Создан'],
@@ -418,7 +419,7 @@ function tz_() { return ss_().getSpreadsheetTimeZone() || Session.getScriptTimeZ
 
 function ensureSchema_() {
   const props = PropertiesService.getScriptProperties();
-  const ver = 'schema-7';
+  const ver = 'schema-8';
   if (props.getProperty('schema') === ver) return;
   const ss = ss_();
   Object.keys(TABLES).forEach(key => {
@@ -998,15 +999,42 @@ function deleteSub_(u, p) {
 }
 
 function saveRent_(u, p) {
+  const unit = p.unit === 'day' ? 'day' : 'hour';
+  const date = isDate_(p.date) ? p.date : today_();
+  let endDate = '';
+  if (unit === 'day') {
+    endDate = isDate_(p.endDate) ? p.endDate : date;
+    if (endDate < date) throw new Error('Дата окончания раньше даты начала');
+    if (daysBetween_(date, endDate) > 366) throw new Error('Слишком длинный период аренды (больше года)');
+  }
   const d = {
-    date: isDate_(p.date) ? p.date : today_(), time: p.time || '', hours: hoursOk_(p.hours),
+    unit, date, endDate, time: p.time || '',
+    hours: unit === 'day' ? (Number(p.hours) > 0 ? hoursOk_(p.hours) : 0) : hoursOk_(p.hours),
     renter: String(req_(p.renter, 'Укажите арендатора')).trim(), hall: p.hall || '', amount: Number(p.amount) || 0,
     paid: !!p.paid, notes: p.notes || ''
   };
   let id = p.id;
   if (id) update_('rent', id, d); else id = insert_('rent', d);
-  contractFromForm_('rent', id, p);
+  rentContract_(id, d, p);
   return id;
+}
+/**
+ * Договор аренды. Один договор можно использовать для многих аренд (рамочный):
+ * p.contractMode = 'existing' + p.contractId — взять существующий договор;
+ * 'new' + p.contractNo — создать новый (номер вручную или «Авто»); 'none' — без договора.
+ * Без contractMode — старое поведение (поле «№ договора»).
+ */
+function rentContract_(id, d, p) {
+  if (!p.contractMode) return contractFromForm_('rent', id, p);
+  if (p.contractMode === 'none') { update_('rent', id, { contractNo: '' }); return; }
+  if (p.contractMode === 'existing') {
+    const c = must_('contracts', req_(p.contractId, 'Выберите договор'), 'Договор');
+    update_('rent', id, { contractNo: c.number });
+    return;
+  }
+  const number = String(p.contractNo || '').trim() || nextNo_('rent').number;
+  const r = saveContract_(null, { kind: 'rent', partyName: d.renter, number, date: isDate_(p.contractDate) ? p.contractDate : d.date, endDate: p.contractEnd || '' });
+  update_('rent', id, { contractNo: r.number });
 }
 
 // ---------------------------------------------------------------------------
@@ -1041,6 +1069,10 @@ function bumpCounter_(kind, number) {
   }
 }
 function unlinkParty_(c) {
+  if (c.kind === 'rent') {
+    tbl_('rent').rows.filter(r => r.contractNo === c.number).forEach(r => update_('rent', r.id, { contractNo: '' }));
+    return;
+  }
   const t = TABLE_OF[c.kind];
   if (!t || !c.partyId) return;
   const party = find_(t, c.partyId);
@@ -1055,6 +1087,7 @@ function saveContract_(u, p) {
   if (numberUsed_(number, old && old.id)) throw new Error('Договор № ' + number + ' уже есть');
   const tableOf = TABLE_OF[kind];
   let partyId = tableOf ? (p.partyId || '') : '';
+  if (kind === 'rent' && partyId && !find_('rent', partyId)) partyId = '';
   let partyName = String(p.partyName || '').trim();
   if (partyId) { const party = must_(tableOf, partyId, 'Сторона договора'); partyName = party.name || party.renter; }
   if (!partyName) throw new Error('Укажите сторону договора');
@@ -1062,7 +1095,10 @@ function saveContract_(u, p) {
     number, kind, partyId, partyName, date: isDate_(p.date) ? p.date : today_(),
     endDate: isDate_(p.endDate) ? p.endDate : '', amount: Number(p.amount) || 0, notes: p.notes || ''
   };
-  if (old) unlinkParty_(old);
+  if (old && old.kind === 'rent') {
+    // договор аренды может быть рамочным: при смене номера переносим его во все аренды
+    if (old.number !== number) tbl_('rent').rows.filter(r => r.contractNo === old.number).forEach(r => update_('rent', r.id, { contractNo: number }));
+  } else if (old) unlinkParty_(old);
   let id;
   if (old) { update_('contracts', old.id, d); id = old.id; } else id = insert_('contracts', d);
   if (tableOf && partyId) {
@@ -1541,7 +1577,8 @@ function facts_(from, to, trainerFilter) {
   tbl_('lessons').rows.forEach(l => {
     if (l.date < from || l.date > to) return;
     if (l.eventId) facts.push({ date: l.date, tr: l.trainerId, cl: l.clientId, type: l.type, th: 0, ch: l.hours, n: 0, ev: l.eventId, sub: l.subId });
-    else facts.push({ date: l.date, tr: l.trainerId, cl: l.clientId, type: l.type || 'ind', th: l.hours, ch: l.hours, n: 1, sub: l.subId });
+    // индивидуальное без абонемента ученик оплачивает тренеру сам — в расчёты клуба и акты не входит (own)
+    else facts.push({ date: l.date, tr: l.trainerId, cl: l.clientId, type: l.type || 'ind', th: l.hours, ch: l.hours, n: 1, sub: l.subId, own: l.subId ? 0 : 1 });
   });
   tbl_('events').rows.forEach(e => {
     if (e.date < from || e.date > to) return;
@@ -1567,7 +1604,8 @@ function report_(user, p) {
 
 function actCalc_(trainerId, from, to) {
   const t = must_('trainers', trainerId, 'Тренер');
-  const f = facts_(from, to, trainerId).filter(x => x.n > 0);
+  // в акт — только занятия по абонементу и групповые/события; без абонемента ученик платит тренеру сам
+  const f = facts_(from, to, trainerId).filter(x => x.n > 0 && !x.own);
   const by = {};
   f.forEach(x => { const o = by[x.type] = by[x.type] || { hours: 0, units: 0 }; o.hours += x.th; o.units += x.n; });
   const lines = Object.keys(by).sort((a, b) => (Number(typeOf_(a).order) || 99) - (Number(typeOf_(b).order) || 99)).map(k => {
@@ -1582,7 +1620,7 @@ function makeAct_(user, p) {
   const from = req_(isDate_(p.from) ? p.from : '', 'Укажите период');
   const to = req_(isDate_(p.to) ? p.to : '', 'Укажите период');
   const calc = actCalc_(req_(p.trainerId, 'Выберите тренера'), from, to);
-  if (!calc.lines.length) throw new Error('За период у тренера нет занятий');
+  if (!calc.lines.length) throw new Error('За период у тренера нет занятий по абонементам и групповых — акт не нужен');
   const S = settings_();
   const n = Math.max(1, parseInt(S.next_act, 10) || 1);
   const number = (S.prefix_act || '') + n;
