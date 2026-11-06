@@ -7,7 +7,7 @@
  */
 
 const CLUB_NAME = 'Клуб корпоративных бальных танцев';
-const APP_VER = '2026-11-06.1'; // меняется при каждом обновлении — открытые страницы предложат перезагрузку
+const APP_VER = '2026-11-06.2'; // меняется при каждом обновлении — открытые страницы предложат перезагрузку
 const STAFF = ['admin', 'manager'];
 const ALL = ['admin', 'manager', 'trainer', 'client'];
 const SESSION_DAYS = 30;
@@ -176,7 +176,9 @@ function doGet(e) {
     return HtmlService.createHtmlOutput(clubHrPage_(e.parameter)).setTitle(CLUB_NAME + ' — отчёт для HR')
       .addMetaTag('viewport', 'width=device-width, initial-scale=1').setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
   }
-  return HtmlService.createTemplateFromFile('Index').evaluate()
+  const tpl = HtmlService.createTemplateFromFile('Index');
+  tpl.loginCode = String((e && e.parameter && e.parameter.code) || '').replace(/[^A-Za-z0-9]/g, '').slice(0, 40);
+  return tpl.evaluate()
     .setTitle(CLUB_NAME)
     .addMetaTag('viewport', 'width=device-width, initial-scale=1, maximum-scale=1')
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
@@ -339,6 +341,7 @@ function api_(token, action, payload) {
     payload = payload || {};
     prefetch_(Object.keys(TABLES).filter(k => (k !== 'messages' || /Message/.test(action)) && (k !== 'errors' || /Error/.test(action)) && (k !== 'avatars' || /vatar/.test(action))));
     if (action === 'login') return { ok: true, data: login_(payload) };
+    if (action === 'loginCode' && typeof loginByCode_ === 'function') return { ok: true, data: loginByCode_(payload) };
     if (action === 'ping') return { ok: true, data: { club: CLUB_NAME } };
     const user = auth_(token);
     if (!user) return { ok: false, error: 'AUTH', message: 'Сессия истекла — войдите снова' };
@@ -737,6 +740,11 @@ function login_(p) {
     throw new Error('Неверный логин или пароль');
   }
   cache.remove(failKey);
+  return newSession_(u);
+}
+/** Новая сессия пользователя (вход по паролю или по одноразовой ссылке из бота). */
+function newSession_(u) {
+  const cache = CacheService.getScriptCache();
   const token = newId_(32) + newId_(32);
   withLock_(() => {
     const t = tbl_('sessions');
@@ -892,6 +900,7 @@ function load_(user) {
   });
   if (user.role === 'admin') res.settings.spreadsheetUrl = ss_().getUrl();
   res.homeLayout = S['home:' + user.id] || '';
+  res.toolsAccess = typeof toolsAccess_ === 'function' ? toolsAccess_() : {};
   res.dict = tbl_('dict').rows;
 
   const trainers = tbl_('trainers').rows;

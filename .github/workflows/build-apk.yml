@@ -55,6 +55,7 @@ jobs:
           gradle -p android assembleRelease -PappUrl="$APP_URL" --no-daemon --stacktrace
           mkdir -p out
           cp android/app/build/outputs/apk/release/app-release.apk "out/DanceClub-${{ github.run_number }}.apk"
+          cp android/app/build/outputs/apk/release/app-release.apk out/DanceClub.apk
           if [ -n "$APP_URL" ]; then echo "URL_NOTE=Адрес приложения встроен." >> "$GITHUB_ENV"; else echo "URL_NOTE=Адрес приложения не задан — его нужно будет ввести при первом запуске." >> "$GITHUB_ENV"; fi
 
       - uses: actions/upload-artifact@v4

@@ -722,12 +722,45 @@ function botBroadcasts_() {
   return tbl_('broadcasts').rows.slice(-50).reverse();
 }
 
-/** Кому сейчас открыт модуль. Чтобы открыть менеджерам, тренерам и ученикам — добавьте их роли сюда и в ToolsUI.html. */
-const TOOLS_OPEN_TO = ['admin'];
-
+/** Вкладки «Инструментов», которые администратор может открыть другим ролям (настройка «Доступ»). Администратору доступно всё. */
+const TOOL_TABS_FOR = {
+  manager: ['bot', 'renew', 'lost', 'rate', 'fests', 'halls', 'subst', 'money', 'pair', 'passport', 'league', 'hr'],
+  trainer: ['pair', 'passport', 'league', 'halls', 'tg'],
+  client: ['my', 'league', 'tg'],
+};
+function toolsAccess_() {
+  const a = parseJson_(settings_().tools_access, {}) || {};
+  const o = {};
+  Object.keys(TOOL_TABS_FOR).forEach(r => { o[r] = [].concat(a[r] || []).filter(t => TOOL_TABS_FOR[r].indexOf(t) >= 0); });
+  return o;
+}
+function saveToolsAccess_(user, p) {
+  const a = p.access || {};
+  const o = {};
+  Object.keys(TOOL_TABS_FOR).forEach(r => { o[r] = [].concat(a[r] || []).filter(t => TOOL_TABS_FOR[r].indexOf(t) >= 0); });
+  setSetting_('tools_access', JSON.stringify(o));
+  return o;
+}
+/** Оставляет у действия только те роли, которым открыта хотя бы одна из его вкладок. '*' — любая вкладка. */
+function gateTools_(all, map) {
+  const acc = toolsAccess_();
+  Object.keys(all).forEach(k => {
+    const tabs = map[k];
+    if (tabs === undefined) return;
+    all[k].roles = all[k].roles.filter(r => r === 'admin' || (tabs === '*' ? (acc[r] || []).length > 0 : tabs.some(t => (acc[r] || []).indexOf(t) >= 0)));
+  });
+  return all;
+}
+const TOOL_HANDLER_TABS = {
+  toolsLoad: '*', saveDancer: ['pair', 'my', 'passport'], toolsMatch: ['pair'],
+  saveProgress: ['passport'], deleteProgress: ['passport'], saveDiary: ['passport'], deleteDiary: ['passport'],
+  leagueTable: ['league'], saveAward: ['league'], deleteAward: ['league'], saveLeague: ['league'], hrReport: ['hr'],
+  botSave: ['bot'], botDisconnect: ['bot'], botRunNow: ['bot'], tgLink: ['bot', 'tg'], tgSetNotify: ['bot', 'tg'],
+  tgUnlink: ['bot'], tgTest: ['bot'], tgAssign: ['bot'], tgReject: ['bot'], botBroadcast: ['bot'], botBroadcasts: ['bot'],
+};
 function toolHandlers_() {
-  const all = toolHandlersAll_();
-  Object.keys(all).forEach(k => { all[k].roles = all[k].roles.filter(r => TOOLS_OPEN_TO.indexOf(r) >= 0); });
+  const all = gateTools_(toolHandlersAll_(), TOOL_HANDLER_TABS);
+  all.saveToolsAccess = { roles: ['admin'], write: true, fn: saveToolsAccess_ };
   return all;
 }
 function toolHandlersAll_() {

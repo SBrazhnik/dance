@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<title>Клуб корпоративных бальных танцев</title>
+<meta name="description" content="Приложение клуба корпоративных бальных танцев: абонементы, запись на занятия, расписание">
+<meta name="theme-color" content="#253559">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/icons/icon-32.png">
+<link rel="apple-touch-icon" href="/icons/icon-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="CorpDance">
+<style>
+  html, body { margin: 0; height: 100%; background: #253559; overflow: hidden; }
+  #app { position: fixed; inset: 0; width: 100%; height: 100%; border: 0; background: #f4f5f8; }
+  #splash { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px;
+    background: #253559; color: #fff; font: 16px -apple-system, Segoe UI, Roboto, Arial, sans-serif; transition: opacity .4s; z-index: 2; text-align: center; padding: 20px; }
+  #splash img { width: 140px; height: 140px; border-radius: 28px; }
+  #splash b { font-size: 19px; }
+  #splash small { opacity: .75; }
+  #splash a { color: #e9c46a; }
+  #splash.hide { opacity: 0; pointer-events: none; }
+</style>
+</head>
+<body>
+<div id="splash"><img src="/icons/icon-512.png" alt=""><b>Клуб корпоративных бальных танцев</b><small id="msg">Загрузка…</small></div>
+<iframe id="app" title="Клуб корпоративных бальных танцев" allow="clipboard-read; clipboard-write; fullscreen" referrerpolicy="no-referrer-when-downgrade"></iframe>
+<script>
+  // Адрес веб-приложения Google Apps Script. Если развёртывание поменяется — достаточно исправить его здесь.
+  var EXEC = 'https://script.google.com/macros/s/AKfycbxiFk2Vp8ES7BW8Y6WUnfSHbBkS3w0lxnHS2lmuf2qPfLxGLo5NsJ2rpdlHRA8XDNYI_g/exec';
+  var q = location.search || '';
+  var f = document.getElementById('app');
+  f.src = EXEC + q;
+  // одноразовый код входа не оставляем в адресной строке и истории
+  if (/[?&]code=/.test(q) && history.replaceState) history.replaceState(null, '', location.pathname);
+  var sp = document.getElementById('splash');
+  f.addEventListener('load', function () { setTimeout(function () { sp.classList.add('hide'); }, 600); });
+  setTimeout(function () {
+    if (!sp.classList.contains('hide')) document.getElementById('msg').innerHTML = 'Долго грузится… <a href="' + EXEC + q + '">Открыть напрямую</a>';
+  }, 15000);
+  if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(function () {});
+</script>
+</body>
+</html>

@@ -45,16 +45,52 @@ const CL = {
 };
 async function clRefresh() { await CL.load(true); await TL.load(true); if (S.route[0] === 'tools' && $('#tlb')) TLV[S.route[1] || TL.tabs()[0][0]](); }
 
+const TOOL_TABS = {bot: 'Telegram-бот', renew: 'Продления', lost: 'Удержание', rate: 'Оценки', fests: 'Мероприятия', halls: 'Залы', subst: 'Замена тренера', money: 'Финансы',
+  pair: 'Подбор пары', passport: 'Паспорт танцора', league: 'Корпоративная лига', hr: 'Отчёт для HR', my: 'Мой прогресс', tg: 'Telegram', access: 'Доступ'};
+const TOOL_FOR = {
+  admin: ['bot', 'renew', 'lost', 'rate', 'fests', 'halls', 'subst', 'money', 'pair', 'passport', 'league', 'hr', 'access'],
+  manager: ['bot', 'renew', 'lost', 'rate', 'fests', 'halls', 'subst', 'money', 'pair', 'passport', 'league', 'hr'],
+  trainer: ['pair', 'passport', 'league', 'halls', 'tg'],
+  client: ['my', 'league', 'tg'],
+};
+const toolAcc = () => (S.D && S.D.toolsAccess) || {};
+const hasTool = k => role() === 'admin' || (toolAcc()[role()] || []).includes(k);
+TL.tabs = () => (TOOL_FOR[role()] || []).filter(hasTool).map(k => [k, k === 'league' && role() !== 'admin' && role() !== 'manager' ? 'Лига' : TOOL_TABS[k]]);
 (function () {
-  const base = TL.tabs;
-  TL.tabs = () => {
-    const t = base();
-    if (role() !== 'admin') return t;
-    const i = t.findIndex(x => x[0] === 'bot') + 1;
-    t.splice(i, 0, ['renew', 'Продления'], ['lost', 'Удержание'], ['rate', 'Оценки'], ['fests', 'Мероприятия'], ['halls', 'Залы'], ['subst', 'Замена тренера'], ['money', 'Финансы']);
-    return t;
+  const pg = PAGES.find(p => p.k === 'tools');
+  if (pg) Object.defineProperty(pg, 'r', {get: () => ['admin'].concat(['manager', 'trainer', 'client'].filter(r => (toolAcc()[r] || []).length)), configurable: true});
+  const baseTools = VIEWS.tools;
+  VIEWS.tools = tab => {
+    if (!TL.tabs().length) { $('#main').innerHTML = `<div class="head"><h1>Инструменты</h1></div><div class="card">${empty('Администратор пока не открыл вам инструменты')}</div>`; return; }
+    baseTools(tab);
   };
 })();
+const ACC_NOTE = {
+  bot: 'рассылки, подключение людей к боту, настройки уведомлений (токен бота меняет только администратор)',
+  renew: 'кому продлевать, напоминания и QR для оплаты, реквизиты', lost: 'кто перестал ходить, «позвать обратно»', rate: 'оценки тренеров от учеников',
+  fests: 'мероприятия, участники, приглашения и итоги', halls: 'календарь залов (тренер видит только свои занятия)', subst: 'замена и отмена занятий тренеров',
+  money: 'доходы, расходы, прибыль — финансы клуба', pair: 'подбор пары и тренера (тренер — среди своих учеников)', passport: 'уровни и дневник (тренер — только своим ученикам)',
+  league: 'рейтинг компаний (ученик видит своё место и топ‑10)', hr: 'отчёт для HR и ссылки для компаний', my: 'свой паспорт танцора и анкета «ищу пару»', tg: 'подключить свой Telegram',
+};
+TLV.access = () => {
+  const acc = JSON.parse(JSON.stringify(toolAcc()));
+  const roles = [['manager', 'Менеджер'], ['trainer', 'Тренер'], ['client', 'Ученик']];
+  const keys = [...new Set(TOOL_FOR.manager.concat(TOOL_FOR.trainer, TOOL_FOR.client))];
+  $('#tlb').innerHTML = `<p class="small muted" style="margin-top:0">Отметьте, какие вкладки «Инструментов» видят другие роли. Администратору доступно всё. Раздел «Инструменты» появится в меню у роли, как только ей открыта хотя бы одна вкладка. Права проверяются и на сервере: закрытую вкладку нельзя открыть в обход.</p>
+    <div class="row" style="gap:8px;margin-bottom:10px"><button class="btn sm" data-pre="none">Только администратор</button><button class="btn sm" data-pre="mgr">Менеджеру всё, кроме финансов</button><button class="btn sm" data-pre="std">Рекомендуемое</button></div>
+    <div class="tw"><table class="t"><thead><tr><th>Вкладка</th>${roles.map(r => `<th style="text-align:center">${r[1]}</th>`).join('')}<th>Что внутри</th></tr></thead><tbody>
+    ${keys.map(k => `<tr><td><b>${esc(TOOL_TABS[k])}</b></td>${roles.map(r => `<td style="text-align:center">${TOOL_FOR[r[0]].includes(k) ? `<input type="checkbox" data-acc="${r[0]}|${k}" ${(acc[r[0]] || []).includes(k) ? 'checked' : ''} style="width:20px;height:20px">` : '<span class="muted">—</span>'}</td>`).join('')}<td class="small muted">${esc(ACC_NOTE[k] || '')}</td></tr>`).join('')}
+    </tbody></table></div>
+    <div class="row" style="margin-top:12px"><span class="spacer"></span><button class="btn pri" id="accs">Сохранить доступ</button></div>`;
+  const set = o => { $$('[data-acc]').forEach(c => { const [r, k] = c.dataset.acc.split('|'); c.checked = (o[r] || []).includes(k); }); };
+  $$('[data-pre]').forEach(b => b.onclick = () => set(b.dataset.pre === 'none' ? {} : b.dataset.pre === 'mgr' ? {manager: TOOL_FOR.manager.filter(k => k !== 'money')}
+    : {manager: TOOL_FOR.manager.filter(k => k !== 'money'), trainer: ['passport', 'league', 'halls', 'tg'], client: ['my', 'league', 'tg']}));
+  $('#accs').onclick = async () => {
+    const o = {manager: [], trainer: [], client: []};
+    $$('[data-acc]').forEach(c => { if (c.checked) { const [r, k] = c.dataset.acc.split('|'); o[r].push(k); } });
+    try { S.D.toolsAccess = await call('saveToolsAccess', {access: o}); toast('Доступ сохранён. У пользователей изменится после обновления страницы'); } catch (e) { fail(e); }
+  };
+};
 
 function payQrText(sum, purpose, payer) {
   const C = S.C.settings, clean = v => String(v || '').replace(/\|/g, ' ').trim();
@@ -445,7 +481,9 @@ function festView(f) {
         ${chk('bot_bday', 'Поздравлять учеников и тренеров с днём рождения', s.bot_bday === 'true')}
         <div class="row" style="gap:8px"><span class="small">«Перестал ходить» — дольше</span><input class="inp" name="lost_days" type="number" min="7" max="120" value="${esc(s.lost_days)}" style="width:70px"><span class="small">дней</span></div></div>
         <div class="stack">${fld('Текст поздравления ({имя} подставится само)', `<textarea class="inp" name="bday_text" rows="3">${esc(s.bday_text)}</textarea>`)}
-        ${fld('Сообщение «Мы скучаем» по умолчанию', `<textarea class="inp" name="call_text" rows="3">${esc(s.call_text)}</textarea>`)}</div></div>
+        ${fld('Сообщение «Мы скучаем» по умолчанию', `<textarea class="inp" name="call_text" rows="3">${esc(s.call_text)}</textarea>`)}
+        ${fld('Адрес приложения для входа из бота', inp('app_link', s.app_link || '', 'placeholder="' + CL.url('corpdance.ru') + ' — пусто: стандартная ссылка Google"'))}</div></div>
+        <p class="small muted" style="margin:8px 0 0">Кнопка бота «🔑 Войти в приложение» присылает одноразовую ссылку (15 минут) — человек входит без логина и пароля. Работает у тех, кому администратор выдал доступ в «Пользователях».</p>
         <div class="row" style="margin-top:10px"><button class="btn pri" id="clbsave">Сохранить</button>${C.bot ? `<button class="btn" id="cltick">${ic('send')}Проверить напоминания сейчас</button>` : ''}
           <span class="small muted grow">Напоминания «Вы придёте?» и просьбы об оценке бот проверяет каждые 10 минут.</span></div>`;
       const anchor = $$('#tlb > .grid')[0];
@@ -510,19 +548,19 @@ diaryForm = function (clientId, o) {
   $('[name=homework]', bg).onchange = upd; upd();
 };
 
-HOME_W.push({k: 'renew', t: 'Продления абонементов', club: true, html: () => hcard('Кому продлевать', '<div id="hw-renew"><div class="empty small">Загрузка…</div></div>', role() === 'admin' ? '<button class="btn sm" data-go="tools/renew">Все</button>' : ''),
+HOME_W.push({k: 'renew', t: 'Продления абонементов', club: true, html: () => hcard('Кому продлевать', '<div id="hw-renew"><div class="empty small">Загрузка…</div></div>', hasTool('renew') ? '<button class="btn sm" data-go="tools/renew">Все</button>' : ''),
   fill: r => { $('#hw-renew').innerHTML = (r.renew || []).length ? r.renew.slice(0, 8).map(x => `<div class="row sub click" data-c="${x.clientId}"><div class="avatar c sm" data-av="client:${x.clientId}">${initials(x.name)}</div><div class="grow"><b>${esc(x.name)}</b><div class="small muted">${esc(x.title)}${x.endDate ? ' · до ' + fd(x.endDate) : ''}${x.price ? ' · ' + money(x.price) : ''}</div></div><span class="badge ${RENEW_R[x.reason][1]}">${x.remaining > 0 ? fh(x.remaining) + ' ч' : RENEW_R[x.reason][0]}</span></div>`).join('') : empty('Продлевать пока некому'); }});
-HOME_W.push({k: 'lost', t: 'Перестали ходить', club: true, html: () => hcard('Перестали ходить', '<div id="hw-lost"><div class="empty small">Загрузка…</div></div>', role() === 'admin' ? '<button class="btn sm" data-go="tools/lost">Все</button>' : ''),
+HOME_W.push({k: 'lost', t: 'Перестали ходить', club: true, html: () => hcard('Перестали ходить', '<div id="hw-lost"><div class="empty small">Загрузка…</div></div>', hasTool('lost') ? '<button class="btn sm" data-go="tools/lost">Все</button>' : ''),
   fill: r => { const l = r.lost || {withSub: [], gone: []}; const list = l.withSub.concat(l.gone).slice(0, 8);
     $('#hw-lost').innerHTML = list.length ? list.map(x => `<div class="row sub click" data-c="${x.id}"><div class="avatar c sm" data-av="client:${x.id}">${initials(x.name)}</div><div class="grow"><b>${esc(x.name)}</b><div class="small muted">${x.kind === 'sub' ? 'есть абонемент · ' : ''}${x.last ? 'был ' + fd(x.last) : 'ещё не занимался'}${x.called ? ' · связывались ' + fd(x.called) : ''}</div></div><span class="badge ${x.kind === 'sub' ? 'bad' : ''}">${x.days !== null ? x.days + ' дн.' : 'не был'}</span></div>`).join('') + (l.n > list.length ? `<div class="small muted" style="margin-top:6px">и ещё ${l.n - list.length}</div>` : '') : empty('Все ходят 🎉'); }});
-HOME_W.push({k: 'rating', t: 'Оценки тренеров', club: true, html: () => hcard('Оценки тренеров <span class="small muted">· 90 дней</span>', '<div id="hw-rating"><div class="empty small">Загрузка…</div></div>', role() === 'admin' ? '<button class="btn sm" data-go="tools/rate">Подробно</button>' : ''),
+HOME_W.push({k: 'rating', t: 'Оценки тренеров', club: true, html: () => hcard('Оценки тренеров <span class="small muted">· 90 дней</span>', '<div id="hw-rating"><div class="empty small">Загрузка…</div></div>', hasTool('rate') ? '<button class="btn sm" data-go="tools/rate">Подробно</button>' : ''),
   fill: r => { const x = r.rating || {trainers: []};
     $('#hw-rating').innerHTML = x.total ? `<div class="row" style="margin-bottom:8px"><b style="font-size:24px">${fh(x.avg)}</b>${CL.stars(x.avg)}<span class="small muted">${x.total} оценок</span></div>
       <div class="hbars">${x.trainers.map(t => `<div class="hb"><span>${esc(t.name)}</span><div class="bar"><i style="width:${t.avg / 5 * 100}%;background:${t.avg >= 4.5 ? 'var(--ok)' : t.avg >= 3.5 ? 'var(--gold)' : 'var(--bad)'}"></i></div><span class="right"><b>${fh(t.avg)}</b> <span class="small muted">(${t.n})</span></span></div>`).join('')}</div>
       ${x.low.length ? `<div class="small" style="margin-top:8px;color:var(--bad)">Низкая оценка: ${x.low.map(f => esc(f.clientName) + ' → ' + esc(f.trainerName) + ' (' + f.score + '★' + (f.comment ? ': «' + esc(f.comment.slice(0, 60)) + '»' : '') + ')').join('; ')}</div>` : ''}` : empty('Оценок пока нет — их собирает бот после занятий'); }});
-HOME_W.push({k: 'fests', t: 'Мероприятия', club: true, html: () => hcard('Ближайшие мероприятия', '<div id="hw-fests"><div class="empty small">Загрузка…</div></div>', role() === 'admin' ? '<button class="btn sm" data-go="tools/fests">Все</button>' : ''),
+HOME_W.push({k: 'fests', t: 'Мероприятия', club: true, html: () => hcard('Ближайшие мероприятия', '<div id="hw-fests"><div class="empty small">Загрузка…</div></div>', hasTool('fests') ? '<button class="btn sm" data-go="tools/fests">Все</button>' : ''),
   fill: r => { $('#hw-fests').innerHTML = (r.fests || []).length ? r.fests.map(f => `<div class="row sub cl-fest" style="align-items:center">${festDate(f.date)}<div class="grow"><b>${esc(f.title)}</b><div class="small muted">${f.time ? esc(f.time) + ' · ' : ''}${esc(f.place || '')}</div></div><span class="badge">${f.regs}${+f.capacity ? '/' + f.capacity : ''} уч.</span></div>`).join('') : empty('Мероприятий не запланировано'); }});
-HOME_W.push({k: 'money', t: 'Финансы за период', admin: true, club: true, html: c => hcard('Финансы <span class="small muted">· ' + esc(c.label) + '</span>', '<div id="hw-money"><div class="empty small">Считаю…</div></div>', '<button class="btn sm" data-go="tools/money">Подробно</button>'),
+HOME_W.push({k: 'money', t: 'Финансы за период', admin: () => hasTool('money'), club: true, html: c => hcard('Финансы <span class="small muted">· ' + esc(c.label) + '</span>', '<div id="hw-money"><div class="empty small">Считаю…</div></div>', hasTool('money') ? '<button class="btn sm" data-go="tools/money">Подробно</button>' : ''),
   fill: r => { const m = r.money; if (!m) return; const T = m.total;
     $('#hw-money').innerHTML = `<div class="kv"><span class="k">Доход</span><span><b>${money(T.income)}</b></span><span class="k">Тренерам</span><span>${money(T.trainers)}</span><span class="k">Расходы</span><span>${money(T.expenses)}</span>
       <span class="k">Прибыль</span><span><b class="${T.profit >= 0 ? 'cl-pos' : 'cl-neg'}">${money(T.profit)}</b></span><span class="k">Ждём оплаты</span><span>${money(m.receivable + m.unpaidRent)}</span></div>`; }});
@@ -534,6 +572,6 @@ HOME_W.push({k: 'halls', t: 'Залы и пересечения', html: c => {
   const load = halls.map(h => ({h, n: items.filter(x => x.hall === h).length, min: sum(items.filter(x => x.hall === h && x.a >= 0), x => Math.max(0, x.b - x.a))}));
   return hcard('Залы', (bad.length ? bad.slice(0, 5).map(p => `<div class="cl-it bad">⚠️ ${fd(p[0].date).slice(0, 5)}: <b>${esc(p[0].time)} ${esc(p[0].title)}</b> и <b>${esc(p[1].time)} ${esc(p[1].title)}</b>${p[0].hall ? ' · ' + esc(p[0].hall) : ''}</div>`).join('') : '<div class="small" style="color:var(--ok);margin-bottom:8px">Пересечений нет ✓</div>')
     + (halls.length ? `<div class="hbars" style="margin-top:8px">${load.map(x => `<div class="hb"><span>${esc(x.h)}</span><div class="bar"><i style="width:${Math.min(100, x.min / Math.max(1, ...load.map(y => y.min)) * 100)}%"></i></div><span class="right"><b>${fh(x.min / 60)} ч</b></span></div>`).join('')}</div>` : ''),
-    role() === 'admin' ? '<button class="btn sm" data-go="tools/halls">Календарь</button>' : '');
+    hasTool('halls') ? '<button class="btn sm" data-go="tools/halls">Календарь</button>' : '');
 }});
 </script>

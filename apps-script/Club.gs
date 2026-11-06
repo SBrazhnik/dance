@@ -57,7 +57,7 @@ function tgNotify_(kind, refId, text, markup, key, sent, respect) {
   return n;
 }
 function clubMenuKb_() {
-  return { keyboard: [[{ text: '📅 Расписание' }, { text: '🗓 Мои записи' }], [{ text: '⏳ Остаток часов' }, { text: '🎉 Мероприятия' }]], resize_keyboard: true };
+  return { keyboard: [[{ text: '📅 Расписание' }, { text: '🗓 Мои записи' }], [{ text: '⏳ Остаток часов' }, { text: '🎉 Мероприятия' }], [{ text: '🔑 Войти в приложение' }]], resize_keyboard: true };
 }
 function slotTitle_(s) { return s.title || typeOf_(s.type).name; }
 function slotWhen_(s) { return TOOL_DAYS[(new Date(s.date + 'T12:00:00Z').getUTCDay() + 6) % 7] + ' ' + ruDate_(s.date).slice(0, 5) + ' ' + (s.time || ''); }
@@ -146,7 +146,7 @@ function clubBotText_(chatId, text, mine) {
   const props = PropertiesService.getScriptProperties();
   // комментарий к недавней оценке
   const pend = props.getProperty('fbc:' + chatId);
-  if (pend && text.charAt(0) !== '/' && !/^(📅|🗓|⏳|🎉)/.test(text)) {
+  if (pend && text.charAt(0) !== '/' && !/^(📅|🗓|⏳|🎉|🔑)/.test(text)) {
     props.deleteProperty('fbc:' + chatId);
     const [fid, exp] = pend.split('|');
     if (Date.now() < +exp && find_('feedback', fid)) { update_('feedback', fid, { comment: text.slice(0, 1000) }); tgSend_(chatId, 'Спасибо! Передали ваш отзыв в клуб 🙏'); return true; }
@@ -163,6 +163,7 @@ function clubBotText_(chatId, text, mine) {
   if (/^\/(my|мои)|^🗓/i.test(text)) return one(botMyMsg_);
   if (/^⏳/.test(text)) { tgSend_(chatId, mine.map(botBalance_).join('\n\n')); return true; }
   if (/^\/(events|мероприятия)|^🎉/i.test(text)) return one(botFestsMsg_);
+  if (/^\/(login|вход)|^🔑/i.test(text)) { botLogin_(chatId, mine); return true; }
   if (/^\/menu/.test(text)) { tgSend_(chatId, 'Меню внизу экрана 👇', clubMenuKb_()); return true; }
   return false;
 }
@@ -229,6 +230,43 @@ function clubCallback_(cq) {
     }
     tgAnswer_(cq, '');
   } catch (e) { tgAnswer_(cq, e.message || 'Не получилось'); }
+}
+
+// ---------------------------------------------------------------------------
+// Вход в приложение без пароля: одноразовая ссылка в Telegram
+// ---------------------------------------------------------------------------
+function appLink_() { return String(settings_().app_link || '').trim().replace(/\/+$/, '') || appUrl_(); }
+function usersOfTg_(r) {
+  const U = tbl_('users').rows.filter(u => u.active);
+  if (r.kind === 'user') return U.filter(u => u.id === r.refId);
+  if (r.kind === 'trainer') return U.filter(u => u.role === 'trainer' && u.trainerId === r.refId);
+  if (r.kind === 'client') return U.filter(u => u.role === 'client' && u.clientId === r.refId);
+  return [];
+}
+function botLogin_(chatId, mine) {
+  const seen = {};
+  const users = [];
+  mine.forEach(r => usersOfTg_(r).forEach(u => { if (!seen[u.id]) { seen[u.id] = 1; users.push(u); } }));
+  if (!users.length) return tgSend_(chatId, 'У вас пока нет входа в приложение клуба. Попросите администратора открыть доступ — потом нажмите «🔑 Войти в приложение» ещё раз.');
+  const base = appLink_();
+  if (!base) return tgSend_(chatId, 'Адрес приложения не настроен. Сообщите администратору.');
+  const cache = CacheService.getScriptCache();
+  const rows = users.slice(0, 4).map(u => {
+    const code = newId_(16) + newId_(16);
+    cache.put('lc_' + code, u.id, 900);
+    return [{ text: '🔑 ' + (users.length > 1 ? u.name + ' — ' : '') + 'Открыть приложение', url: base + (base.indexOf('?') >= 0 ? '&' : '?') + 'code=' + code }];
+  });
+  return tgSend_(chatId, 'Нажмите кнопку — приложение откроется сразу, без логина и пароля.\nСсылка одноразовая и действует 15 минут. Не пересылайте её никому.', { inline_keyboard: rows });
+}
+function loginByCode_(p) {
+  const code = String(p.code || '').replace(/[^A-Za-z0-9]/g, '');
+  const cache = CacheService.getScriptCache();
+  const uid = code.length >= 20 ? cache.get('lc_' + code) : null;
+  if (!uid) throw new Error('Ссылка для входа устарела или уже использована. Запросите новую в боте: «🔑 Войти в приложение».');
+  cache.remove('lc_' + code);
+  const u = find_('users', uid);
+  if (!u || !u.active) throw new Error('Доступ к приложению отключён');
+  return newSession_(u);
 }
 
 // ---------------------------------------------------------------------------
@@ -702,17 +740,18 @@ function clubHome_(user, p) {
   if (!w.length || w.indexOf('rating') >= 0) { const r = ratings_({ to: td }); res.rating = { avg: r.avg, total: r.total, trainers: r.trainers.map(t => ({ id: t.id, name: t.name, avg: t.avg, n: t.n })), low: r.low.slice(0, 3) }; }
   if (!w.length || w.indexOf('lost') >= 0) { const l = lost_(); res.lost = { days: l.days, withSub: l.withSub.slice(0, 8), gone: l.gone.slice(0, 8), n: l.withSub.length + l.gone.length }; }
   if (!w.length || w.indexOf('renew') >= 0) res.renew = renewals_().slice(0, 12);
-  if (user.role === 'admin' && (!w.length || w.indexOf('money') >= 0)) { const f = finance_({ from: p.from, to: p.to }); res.money = { total: f.total, receivable: f.receivable, unpaidRent: f.unpaidRent, from: f.from, to: f.to }; }
+  if ((user.role === 'admin' || (toolsAccess_()[user.role] || []).indexOf('money') >= 0) && (!w.length || w.indexOf('money') >= 0)) { const f = finance_({ from: p.from, to: p.to }); res.money = { total: f.total, receivable: f.receivable, unpaidRent: f.unpaidRent, from: f.from, to: f.to }; }
   return res;
 }
 function clubLoad_(user) {
   const C = clubSettings_();
+  C.app_link = String(settings_().app_link || '');
   return { settings: C, kinds: FEST_KINDS, cats: listOf_(C.exp_cats), url: appUrl_(),
     fests: tbl_('fests').rows.slice().sort((a, b) => b.date.localeCompare(a.date)),
     regs: tbl_('regs').rows, shares: shares_(), expenses: tbl_('expenses').rows.slice(-600).reverse(), bot: clubCanTg_() };
 }
 function clubBotSave_(user, p) {
-  ['bot_book', 'bot_rem3', 'bot_remHours', 'bot_fb', 'bot_bday', 'bday_text', 'lost_days', 'call_text', 'exp_cats', 'bot_renew', 'renew_days'].forEach(k => { if (k in p) setSetting_(k, String(p[k])); });
+  ['bot_book', 'bot_rem3', 'bot_remHours', 'bot_fb', 'bot_bday', 'bday_text', 'lost_days', 'call_text', 'exp_cats', 'bot_renew', 'renew_days', 'app_link'].forEach(k => { if (k in p) setSetting_(k, String(p[k])); });
   try { clubSetCommands_(); } catch (e) { /* без бота */ }
   return true;
 }
@@ -722,12 +761,18 @@ function clubSetCommands_() {
   tgCall_('setMyCommands', { commands: [
     { command: 'schedule', description: 'Расписание и запись на занятия' }, { command: 'my', description: 'Мои записи' },
     { command: 'balance', description: 'Остаток часов' }, { command: 'events', description: 'Мероприятия клуба' },
-    { command: 'next', description: 'Ближайшие занятия' }, { command: 'stop', description: 'Выключить уведомления' }, { command: 'on', description: 'Включить уведомления' }] });
+    { command: 'login', description: 'Войти в приложение без пароля' }, { command: 'next', description: 'Ближайшие занятия' }, { command: 'stop', description: 'Выключить уведомления' }, { command: 'on', description: 'Включить уведомления' }] });
 }
 
+const CLUB_HANDLER_TABS = {
+  clubLoad: '*', renewals: ['renew'], renewRemind: ['renew'], savePay: ['renew'], lost: ['lost'], lostCall: ['lost'], ratings: ['rate'],
+  finance: ['money'], saveExpense: ['money'], deleteExpense: ['money'], shareCreate: ['hr'], shareOff: ['hr'],
+  saveFest: ['fests'], deleteFest: ['fests'], saveReg: ['fests'], deleteReg: ['fests'], festInvite: ['fests'], festResults: ['fests'],
+  substitute: ['subst'], clubBotSave: ['bot'], clubTickNow: ['bot'],
+};
 function clubHandlers_() {
-  const A = ['admin'];
-  return {
+  const A = STAFF;
+  return gateTools_({
     clubLoad: { roles: A, fn: clubLoad_ },
     clubHome: { roles: STAFF, fn: clubHome_ },
     saveHome: { roles: STAFF, write: true, fn: saveHome_ },
@@ -755,5 +800,5 @@ function clubHandlers_() {
     avatarSet: { roles: ALL, write: true, fn: avatarSet_ },
     avatarDel: { roles: ALL, write: true, fn: avatarDel_ },
     avatarsLoad: { roles: ALL, fn: avatarsLoad_ },
-  };
+  }, CLUB_HANDLER_TABS);
 }
