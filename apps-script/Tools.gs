@@ -190,13 +190,16 @@ function saveDiary_(user, p) {
   if (video && !/^https?:\/\//i.test(video)) throw new Error('Ссылка на видео должна начинаться с https://');
   const tid = user.role === 'trainer' ? user.trainerId : (p.trainerId || '');
   const d = { clientId: cid, trainerId: tid, trainerName: tid ? nameOf_('trainers', tid) : '', date: isDate_(p.date) ? p.date : today_(),
-    text: String(req_(p.text, 'Напишите, что отработали')).slice(0, 2000), video, createdBy: user.name };
+    text: String(req_(p.text, 'Напишите, что отработали')).slice(0, 2000), video, createdBy: user.name, homework: !!p.homework };
+  let id;
   if (p.id) {
     const old = must_('diary', p.id, 'Запись');
     if (!isStaff_(user) && old.createdBy !== user.name) throw new Error('Можно править только свои записи');
-    update_('diary', p.id, d); return p.id;
-  }
-  return insert_('diary', d);
+    update_('diary', p.id, d); id = p.id;
+  } else id = insert_('diary', d);
+  const row = find_('diary', id);
+  if (row && row.homework && p.send && typeof clubHomework_ === 'function') clubHomework_(row);
+  return id;
 }
 function deleteDiary_(user, p) {
   const r = must_('diary', p.id, 'Запись');
@@ -261,8 +264,10 @@ function leagueTable_(user, p) {
 function saveAward_(user, p) {
   const cid = req_(p.clientId, 'Выберите ученика');
   must_('clients', cid, 'Ученик');
-  return insert_('awards', { date: isDate_(p.date) ? p.date : today_(), clientId: cid, clientName: nameOf_('clients', cid),
+  const id = insert_('awards', { date: isDate_(p.date) ? p.date : today_(), clientId: cid, clientName: nameOf_('clients', cid),
     title: String(req_(p.title, 'Напишите, за что баллы')).slice(0, 200), points: Number(p.points) || 0 });
+  if (typeof clubAwardNotify_ === 'function') clubAwardNotify_(cid, String(p.title), Number(p.points) || 0);
+  return id;
 }
 function saveLeague_(user, p) {
   ['league_name', 'league_from', 'league_to', 'league_pHour', 'league_pEvent', 'league_pLevel', 'tools_dances'].forEach(k => { if (k in p) setSetting_(k, p[k]); });
@@ -350,6 +355,7 @@ function botSave_(user, p) {
   }
   ['bot_hour', 'bot_remind', 'bot_low', 'bot_lowHours', 'bot_inactive', 'bot_digest', 'bot_nudge'].forEach(k => { if (k in p) setSetting_(k, p[k]); });
   installBotTriggers_();
+  if (typeof clubSetCommands_ === 'function') { try { clubSetCommands_(); } catch (e) { /* не критично */ } }
   return botStatus_(user);
 }
 function botDisconnect_(user) {
@@ -422,7 +428,7 @@ function tgAssign_(user, p) {
   const chatId = pend.chatId;
   del_('tg', pend.id);
   tgBind_(kind, refId, name, chatId);
-  tgSend_(chatId, 'Готово, ' + tgEsc_(name) + '! Менеджер подтвердил подключение к боту «' + tgEsc_(settings_().clubName || CLUB_NAME) + '».\n' + botHelp_(), TG_NO_KB);
+  tgSend_(chatId, 'Готово, ' + tgEsc_(name) + '! Менеджер подтвердил подключение к боту «' + tgEsc_(settings_().clubName || CLUB_NAME) + '».\n' + botHelp_(), botKb_());
   return true;
 }
 function tgReject_(user, p) {
@@ -438,12 +444,13 @@ function botPoll() {
   const props = PropertiesService.getScriptProperties();
   const offset = Number(props.getProperty('tgOffset') || 0);
   let ups;
-  try { ups = tgCall_('getUpdates', { offset: offset, timeout: 0, allowed_updates: ['message'] }); } catch (e) { return; }
+  try { ups = tgCall_('getUpdates', { offset: offset, timeout: 0, allowed_updates: ['message', 'callback_query'] }); } catch (e) { return; }
+  if (typeof clubTick_ === 'function') { try { clubTick_(); } catch (e) { try { logError_('бот', 'clubTick', e.message, e.stack, ''); } catch (x) { /* без журнала */ } } }
   if (!ups || !ups.length) return;
   props.setProperty('tgOffset', String(ups[ups.length - 1].update_id + 1));
   withLock_(() => {
     Object.keys(_cache).forEach(k => delete _cache[k]);
-    ups.forEach(u => { try { botHandle_(u.message); } catch (e) { try { logError_('бот', 'botPoll', e.message, e.stack, ''); } catch (x) { /* без журнала */ } } });
+    ups.forEach(u => { try { if (u.callback_query) { if (typeof clubCallback_ === 'function') clubCallback_(u.callback_query); } else botHandle_(u.message); } catch (e) { try { logError_('бот', 'botPoll', e.message, e.stack, ''); } catch (x) { /* без журнала */ } } });
   });
 }
 const TG_PHONE_KB = { keyboard: [[{ text: '📱 Поделиться номером', request_contact: true }]], resize_keyboard: true, one_time_keyboard: true };
@@ -474,7 +481,7 @@ function tgFindByNick_(nick) {
 function tgWelcome_(chatId, found, club) {
   found.forEach(f => tgBind_(f.kind, f.id, f.name, chatId));
   const names = Array.from(new Set(found.map(f => f.name))).join(', ');
-  return tgSend_(chatId, 'Готово, ' + tgEsc_(names) + '! Вы подключены к боту «' + tgEsc_(club) + '».\n' + botHelp_(), TG_NO_KB);
+  return tgSend_(chatId, 'Готово, ' + tgEsc_(names) + '! Вы подключены к боту «' + tgEsc_(club) + '».\n' + botHelp_(), botKb_());
 }
 function botHandle_(m) {
   if (!m || !m.chat) return;
@@ -505,9 +512,9 @@ function botHandle_(m) {
     const r = code ? tbl_('tg').rows.find(x => x.code === code && x.kind !== 'pending') : null;
     if (r) {
       update_('tg', r.id, { chatId, linkedAt: now_(), notify: true });
-      return tgSend_(chatId, 'Готово, ' + tgEsc_(r.name) + '! Вы подключены к боту «' + tgEsc_(club) + '».\n' + botHelp_(), TG_NO_KB);
+      return tgSend_(chatId, 'Готово, ' + tgEsc_(r.name) + '! Вы подключены к боту «' + tgEsc_(club) + '».\n' + botHelp_(), botKb_());
     }
-    if (mine.length) return tgSend_(chatId, 'Вы уже подключены: ' + tgEsc_(mine.map(x => x.name).join(', ')) + '\n' + botHelp_(), TG_NO_KB);
+    if (mine.length) return tgSend_(chatId, 'Вы уже подключены: ' + tgEsc_(mine.map(x => x.name).join(', ')) + '\n' + botHelp_(), botKb_());
     const byNick = tgFindByNick_(m.from && m.from.username);
     if (byNick.length === 1) return tgWelcome_(chatId, byNick, club);
     if (tbl_('tg').rows.some(x => x.kind === 'pending' && x.chatId === chatId)) return tgSend_(chatId, 'Ваша заявка у менеджера. Как только он подтвердит, бот напишет вам.');
@@ -517,6 +524,7 @@ function botHandle_(m) {
     if (tbl_('tg').rows.some(x => x.kind === 'pending' && x.chatId === chatId)) return tgSend_(chatId, 'Ваша заявка у менеджера. Как только он подтвердит, бот напишет вам.');
     return tgSend_(chatId, 'Вы ещё не подключены. Нажмите «📱 Поделиться номером», чтобы мы нашли вас по номеру телефона.', TG_PHONE_KB);
   }
+  if (typeof clubBotText_ === 'function' && clubBotText_(chatId, text, mine)) return true;
   if (/^\/stop/.test(text)) { mine.forEach(r => update_('tg', r.id, { notify: false })); return tgSend_(chatId, 'Уведомления выключены. Включить снова: /on'); }
   if (/^\/on/.test(text)) { mine.forEach(r => update_('tg', r.id, { notify: true })); return tgSend_(chatId, 'Уведомления включены.'); }
   if (/^\/(balance|остаток)/i.test(text)) return tgSend_(chatId, mine.map(botBalance_).join('\n\n'));
@@ -525,8 +533,9 @@ function botHandle_(m) {
   return tgSend_(chatId, botHelp_());
 }
 function botHelp_() {
-  return 'Команды:\n/balance — остаток часов\n/next — ближайшие занятия\n/today — сводка на сегодня (для сотрудников)\n/stop — выключить уведомления\n/on — включить уведомления';
+  return 'Команды:\n/schedule — расписание и запись на занятия\n/my — мои записи\n/balance — остаток часов\n/events — мероприятия клуба\n/next — ближайшие занятия\n/today — сводка на сегодня (для сотрудников)\n/stop — выключить уведомления\n/on — включить уведомления';
 }
+function botKb_() { return typeof clubMenuKb_ === 'function' ? clubMenuKb_() : TG_NO_KB; }
 function botBalance_(r) {
   if (r.kind !== 'client') return tgEsc_(r.name) + ': остаток часов есть только у учеников.';
   const used = usage_(), S = settings_(), td = today_();
@@ -538,7 +547,7 @@ function botNext_(r) {
   const td = today_();
   const slots = {}; tbl_('slots').rows.forEach(s => { slots[s.id] = s; });
   let items = [];
-  if (r.kind === 'client') items = tbl_('bookings').rows.filter(b => b.clientId === r.refId && b.status !== 'cancelled' && slots[b.slotId] && slots[b.slotId].date >= td && slots[b.slotId].status === 'open').map(b => slots[b.slotId]);
+  if (r.kind === 'client') items = tbl_('bookings').rows.filter(b => b.clientId === r.refId && b.status === 'booked' && slots[b.slotId] && slots[b.slotId].date >= td && slots[b.slotId].status === 'open').map(b => slots[b.slotId]);
   else if (r.kind === 'trainer') items = tbl_('slots').rows.filter(s => s.trainerId === r.refId && s.date >= td && s.status === 'open');
   items.sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time));
   if (!items.length) return tgEsc_(r.name) + ': ближайших записей нет.';
@@ -562,7 +571,7 @@ function botDigestText_(short) {
   const T = toolSettings_(), td = today_(), used = usage_(), S = settings_();
   const parts = [];
   const slots = tbl_('slots').rows.filter(s => s.date === td && s.status === 'open').sort((a, b) => a.time.localeCompare(b.time));
-  if (slots.length) parts.push('<b>Сегодня в расписании</b>\n' + slots.map(s => '• ' + s.time + ' ' + tgEsc_(s.trainerName) + ' — ' + tgEsc_(s.title || typeOf_(s.type).name) + ' (' + tbl_('bookings').rows.filter(b => b.slotId === s.id && b.status !== 'cancelled').length + ' зап.)').join('\n'));
+  if (slots.length) parts.push('<b>Сегодня в расписании</b>\n' + slots.map(s => '• ' + s.time + ' ' + tgEsc_(s.trainerName) + ' — ' + tgEsc_(s.title || typeOf_(s.type).name) + ' (' + tbl_('bookings').rows.filter(b => b.slotId === s.id && b.status === 'booked').length + ' зап.)').join('\n'));
   const rent = tbl_('rent').rows.filter(r => r.date === td || (r.unit === 'day' && r.date <= td && (r.endDate || r.date) >= td));
   if (rent.length) parts.push('<b>Аренда</b>\n' + rent.map(r => '• ' + r.time + ' ' + tgEsc_(r.renter) + ', ' + tgEsc_(r.hall)).join('\n'));
   if (short) return parts.join('\n\n');
@@ -596,12 +605,12 @@ function botDailyRun_() {
   if (T.bot_remind === 'true') {
     tbl_('bookings').rows.forEach(b => {
       const s = slots[b.slotId];
-      if (!s || s.date !== tm || s.status !== 'open' || b.status === 'cancelled') return;
+      if (!s || s.date !== tm || s.status !== 'open' || b.status !== 'booked') return;
       (byRef['client:' + b.clientId] || []).forEach(r => send(r, '🔔 Напоминание: завтра, ' + ruDate_(s.date) + ' в ' + s.time + ' — ' + tgEsc_(s.title || typeOf_(s.type).name) + ', тренер ' + tgEsc_(s.trainerName) + '.\n' + club, 'rem:' + b.id));
     });
     const byTr = {};
     tbl_('slots').rows.filter(s => s.date === tm && s.status === 'open').forEach(s => { (byTr[s.trainerId] = byTr[s.trainerId] || []).push(s); });
-    Object.keys(byTr).forEach(tid => (byRef['trainer:' + tid] || []).forEach(r => send(r, '🔔 Завтра у вас:\n' + byTr[tid].sort((a, b) => a.time.localeCompare(b.time)).map(s => '• ' + s.time + ' ' + tgEsc_(s.title || typeOf_(s.type).name) + ' — записано ' + tbl_('bookings').rows.filter(b => b.slotId === s.id && b.status !== 'cancelled').length).join('\n'), 'remtr:' + tid + ':' + tm)));
+    Object.keys(byTr).forEach(tid => (byRef['trainer:' + tid] || []).forEach(r => send(r, '🔔 Завтра у вас:\n' + byTr[tid].sort((a, b) => a.time.localeCompare(b.time)).map(s => '• ' + s.time + ' ' + tgEsc_(s.title || typeOf_(s.type).name) + ' — записано ' + tbl_('bookings').rows.filter(b => b.slotId === s.id && b.status === 'booked').length).join('\n'), 'remtr:' + tid + ':' + tm)));
   }
   if (T.bot_low === 'true') {
     const lim = +T.bot_lowHours || 2;
@@ -612,7 +621,8 @@ function botDailyRun_() {
       const key = (v.remaining > 0 ? 'low:' : 'end:') + s.id;
       const text = v.remaining > 0 ? '⏳ В абонементе «' + tgEsc_(s.title || s.hours + ' ч') + '» осталось ' + num_(v.remaining) + ' ч. Продлить можно у менеджера клуба.'
         : '⌛ Часы в абонементе «' + tgEsc_(s.title || s.hours + ' ч') + '» закончились. Чтобы продолжить занятия, продлите абонемент у менеджера клуба.';
-      (byRef['client:' + s.clientId] || []).forEach(r => send(r, text + '\n' + club, key));
+      const pay = typeof payText_ === 'function' ? payText_({ price: +s.price || 0 }) : '';
+      (byRef['client:' + s.clientId] || []).forEach(r => send(r, text + pay + '\n' + club, key));
     });
   }
   if (T.bot_nudge === 'true') {
@@ -623,6 +633,7 @@ function botDailyRun_() {
     const staff = tbl_('users').rows.filter(u => u.active && STAFF.indexOf(u.role) >= 0);
     staff.forEach(u => (byRef['user:' + u.id] || []).forEach(r => send(r, '☀️ <b>Сводка на ' + ruDate_(td) + '</b>\n\n' + (text || 'Всё спокойно: заканчивающихся абонементов и пропавших учеников нет.'), 'dig:' + u.id + ':' + td)));
   }
+  if (typeof clubDaily_ === 'function') { try { n += clubDaily_(sent); } catch (e) { try { logError_('бот', 'clubDaily', e.message, e.stack, ''); } catch (x) { /* без журнала */ } } }
   botSentSave_(sent);
   return { sent: n };
 }

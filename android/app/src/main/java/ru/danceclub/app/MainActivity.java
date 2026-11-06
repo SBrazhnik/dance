@@ -18,6 +18,7 @@ import android.print.PrintDocumentAdapter;
 import android.print.PrintManager;
 import android.util.Base64;
 import android.webkit.CookieManager;
+import android.webkit.ValueCallback;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceError;
@@ -41,6 +42,8 @@ import java.io.FileOutputStream;
  * Адрес берётся из сборки (BuildConfig.APP_URL) или вводится при первом запуске.
  */
 public class MainActivity extends Activity {
+    private static final int REQ_FILE = 41;
+    private ValueCallback<Uri[]> fileCb;
     private static final int NAVY = Color.parseColor("#253559");
     private WebView web;
     private View splash;
@@ -162,6 +165,28 @@ public class MainActivity extends Activity {
         });
 
         web.setWebChromeClient(new WebChromeClient() {
+            @Override
+            public boolean onShowFileChooser(WebView view, ValueCallback<Uri[]> cb, FileChooserParams params) {
+                // выбор файла: фото профиля, скан договора
+                if (fileCb != null) fileCb.onReceiveValue(null);
+                fileCb = cb;
+                try {
+                    startActivityForResult(params.createIntent(), REQ_FILE);
+                } catch (ActivityNotFoundException e) {
+                    try {
+                        Intent i = new Intent(Intent.ACTION_GET_CONTENT);
+                        i.addCategory(Intent.CATEGORY_OPENABLE);
+                        i.setType("*/*");
+                        startActivityForResult(Intent.createChooser(i, "Выберите файл"), REQ_FILE);
+                    } catch (ActivityNotFoundException e2) {
+                        fileCb = null;
+                        Toast.makeText(MainActivity.this, "Нет приложения для выбора файлов", Toast.LENGTH_LONG).show();
+                        return false;
+                    }
+                }
+                return true;
+            }
+
             @Override
             public boolean onCreateWindow(WebView view, boolean dialog, boolean userGesture, Message resultMsg) {
                 // Ссылки target=_blank (PDF актов, Google Документы) открываем во внешнем браузере
@@ -309,6 +334,16 @@ public class MainActivity extends Activity {
         super.onPause();
         pausedAt = System.currentTimeMillis();
         CookieManager.getInstance().flush();
+    }
+
+    @Override
+    protected void onActivityResult(int req, int res, Intent data) {
+        if (req == REQ_FILE) {
+            if (fileCb != null) fileCb.onReceiveValue(WebChromeClient.FileChooserParams.parseResult(res, data));
+            fileCb = null;
+            return;
+        }
+        super.onActivityResult(req, res, data);
     }
 
     @Override

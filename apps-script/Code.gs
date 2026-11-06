@@ -7,7 +7,7 @@
  */
 
 const CLUB_NAME = 'Клуб корпоративных бальных танцев';
-const APP_VER = '2026-11-03.7'; // меняется при каждом обновлении — открытые страницы предложат перезагрузку
+const APP_VER = '2026-11-06.1'; // меняется при каждом обновлении — открытые страницы предложат перезагрузку
 const STAFF = ['admin', 'manager'];
 const ALL = ['admin', 'manager', 'trainer', 'client'];
 const SESSION_DAYS = 30;
@@ -68,7 +68,7 @@ const TABLES = {
   slots: ['Расписание', [
     ['id', 'ID'], ['date', 'Дата', 'd'], ['time', 'Время', 't'], ['hours', 'Часов', 'n'], ['trainerId', 'ID тренера'],
     ['trainerName', 'Тренер'], ['type', 'Тип'], ['title', 'Название'], ['capacity', 'Мест', 'n'], ['status', 'Статус'],
-    ['resultId', 'ID результата'], ['notes', 'Заметки'], ['createdBy', 'Кто создал'], ['createdAt', 'Создано']]],
+    ['resultId', 'ID результата'], ['notes', 'Заметки'], ['createdBy', 'Кто создал'], ['createdAt', 'Создано'], ['hall', 'Зал']]],
   bookings: ['Записи', [
     ['id', 'ID'], ['slotId', 'ID слота'], ['clientId', 'ID ученика'], ['clientName', 'Ученик'], ['status', 'Статус'], ['createdAt', 'Создано']]],
   rent: ['Аренда', [
@@ -96,7 +96,8 @@ const TABLES = {
     ['trainerName', 'Кто отметил'], ['date', 'Дата', 'd'], ['note', 'Заметка'], ['createdAt', 'Создано']]],
   diary: ['Дневник занятий', [
     ['id', 'ID'], ['clientId', 'ID ученика'], ['trainerId', 'ID тренера'], ['trainerName', 'Тренер'], ['date', 'Дата', 'd'],
-    ['text', 'Что отработали'], ['video', 'Видео'], ['createdBy', 'Автор'], ['createdAt', 'Создано']]],
+    ['text', 'Что отработали'], ['video', 'Видео'], ['createdBy', 'Автор'], ['createdAt', 'Создано'],
+    ['homework', 'Домашнее задание', 'b'], ['sentAt', 'Отправлено ученику']]],
   awards: ['Баллы лиги', [
     ['id', 'ID'], ['date', 'Дата', 'd'], ['clientId', 'ID ученика'], ['clientName', 'Ученик'], ['title', 'За что'],
     ['points', 'Баллы', 'n'], ['createdAt', 'Создано']]],
@@ -106,6 +107,22 @@ const TABLES = {
   tg: ['Telegram', [
     ['id', 'ID'], ['kind', 'Тип'], ['refId', 'ID карточки'], ['name', 'Имя'], ['chatId', 'Чат'], ['code', 'Код подключения'],
     ['notify', 'Уведомления', 'b'], ['linkedAt', 'Подключён'], ['lastSent', 'Последнее сообщение'], ['createdAt', 'Создано']]],
+  // --- модуль «Клуб+» (Club.gs) ---
+  feedback: ['Оценки занятий', [
+    ['id', 'ID'], ['date', 'Дата', 'd'], ['clientId', 'ID ученика'], ['clientName', 'Ученик'], ['trainerId', 'ID тренера'], ['trainerName', 'Тренер'],
+    ['lessonId', 'ID занятия'], ['score', 'Оценка', 'n'], ['comment', 'Комментарий'], ['createdAt', 'Создано']]],
+  expenses: ['Расходы', [
+    ['id', 'ID'], ['date', 'Дата', 'd'], ['category', 'Статья'], ['amount', 'Сумма', 'n'], ['note', 'Комментарий'], ['createdBy', 'Кто внёс'], ['createdAt', 'Создано']]],
+  shares: ['Ссылки для HR', [
+    ['id', 'ID'], ['token', 'Ключ'], ['company', 'Компания'], ['active', 'Действует', 'b'], ['createdBy', 'Кто создал'], ['createdAt', 'Создана'],
+    ['lastOpen', 'Последний просмотр'], ['opens', 'Просмотров', 'n']]],
+  fests: ['Мероприятия клуба', [
+    ['id', 'ID'], ['title', 'Название'], ['kind', 'Вид'], ['date', 'Дата', 'd'], ['time', 'Время', 't'], ['place', 'Место'], ['about', 'Описание'],
+    ['capacity', 'Мест', 'n'], ['open', 'Регистрация открыта', 'b'], ['plan', 'Репетиции (JSON)'], ['status', 'Статус'], ['results', 'Итоги'], ['createdAt', 'Создано']]],
+  regs: ['Участники мероприятий', [
+    ['id', 'ID'], ['festId', 'ID мероприятия'], ['clientId', 'ID ученика'], ['clientName', 'Ученик'], ['partnerName', 'Партнёр'], ['status', 'Статус'],
+    ['note', 'Заметка'], ['result', 'Результат'], ['points', 'Баллы', 'n'], ['createdAt', 'Создано']]],
+  avatars: ['Фото', [['id', 'ID'], ['kind', 'Тип'], ['refId', 'ID карточки'], ['data', 'Изображение'], ['updatedAt', 'Обновлено']]],
   errors: ['Ошибки', [['id', 'ID'], ['createdAt', 'Время'], ['userName', 'Пользователь'], ['where', 'Где'], ['message', 'Ошибка'], ['stack', 'Подробности'], ['ua', 'Устройство']]],
 };
 
@@ -153,8 +170,12 @@ const DEFAULT_PROGRAMS = ['Стандарт', 'Латина', '10 танцев',
 // ---------------------------------------------------------------------------
 // Точки входа
 // ---------------------------------------------------------------------------
-function doGet() {
+function doGet(e) {
   ensureSchema_();
+  if (e && e.parameter && e.parameter.hr && typeof clubHrPage_ === 'function') {
+    return HtmlService.createHtmlOutput(clubHrPage_(e.parameter)).setTitle(CLUB_NAME + ' — отчёт для HR')
+      .addMetaTag('viewport', 'width=device-width, initial-scale=1').setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+  }
   return HtmlService.createTemplateFromFile('Index').evaluate()
     .setTitle(CLUB_NAME)
     .addMetaTag('viewport', 'width=device-width, initial-scale=1, maximum-scale=1')
@@ -316,18 +337,18 @@ function api(token, action, payload) {
 function api_(token, action, payload) {
   try {
     payload = payload || {};
-    prefetch_(Object.keys(TABLES).filter(k => (k !== 'messages' || /Message/.test(action)) && (k !== 'errors' || /Error/.test(action))));
+    prefetch_(Object.keys(TABLES).filter(k => (k !== 'messages' || /Message/.test(action)) && (k !== 'errors' || /Error/.test(action)) && (k !== 'avatars' || /vatar/.test(action))));
     if (action === 'login') return { ok: true, data: login_(payload) };
     if (action === 'ping') return { ok: true, data: { club: CLUB_NAME } };
     const user = auth_(token);
     if (!user) return { ok: false, error: 'AUTH', message: 'Сессия истекла — войдите снова' };
-    const h = HANDLERS[action] || (typeof toolHandlers_ === 'function' ? toolHandlers_()[action] : null);
+    const h = HANDLERS[action] || (typeof toolHandlers_ === 'function' ? toolHandlers_()[action] : null) || (typeof clubHandlers_ === 'function' ? clubHandlers_()[action] : null);
     if (!h) throw new Error('Неизвестное действие: ' + action);
     if (h.roles.indexOf(user.role) < 0) throw new Error('Недостаточно прав');
     const data = h.write ? withLock_(() => {
       // внутри блокировки перечитываем версии листов: кто-то мог сохранить данные, пока мы ждали
       Object.keys(_cache).forEach(k => delete _cache[k]);
-      prefetch_(Object.keys(TABLES).filter(k => (k !== 'messages' || /Message/.test(action)) && (k !== 'errors' || /Error/.test(action))));
+      prefetch_(Object.keys(TABLES).filter(k => (k !== 'messages' || /Message/.test(action)) && (k !== 'errors' || /Error/.test(action)) && (k !== 'avatars' || /vatar/.test(action))));
       return h.fn(user, payload);
     }) : h.fn(user, payload);
     if (h.write && payload.__snap) {
@@ -419,7 +440,7 @@ function tz_() { return ss_().getSpreadsheetTimeZone() || Session.getScriptTimeZ
 
 function ensureSchema_() {
   const props = PropertiesService.getScriptProperties();
-  const ver = 'schema-8';
+  const ver = 'schema-9';
   if (props.getProperty('schema') === ver) return;
   const ss = ss_();
   Object.keys(TABLES).forEach(key => {
@@ -870,6 +891,7 @@ function load_(user) {
     if (k !== 'Первичный пароль admin') res.settings[k] = S[k];
   });
   if (user.role === 'admin') res.settings.spreadsheetUrl = ss_().getUrl();
+  res.homeLayout = S['home:' + user.id] || '';
   res.dict = tbl_('dict').rows;
 
   const trainers = tbl_('trainers').rows;
@@ -1497,7 +1519,7 @@ function saveSlot_(user, p) {
   const d = {
     date: req_(isDate_(p.date) ? p.date : '', 'Укажите дату'), time: req_(p.time, 'Укажите время'), hours: hoursOk_(p.hours),
     trainerId, trainerName: t.name, type, title: p.title || typeOf_(type).name,
-    capacity: isInd ? 1 : Math.max(1, Number(p.capacity) || 10), notes: p.notes || ''
+    capacity: isInd ? 1 : Math.max(1, Number(p.capacity) || 10), notes: p.notes || '', hall: p.hall || ''
   };
   const repeat = Math.min(Math.max(Number(p.repeatWeeks) || 0, 0), 12);
   if (p.id) {
@@ -1521,8 +1543,10 @@ function cancelSlot_(user, p) {
   const s = slotAccess_(user, p.id);
   const bs = tbl_('bookings').rows.filter(b => b.slotId === s.id);
   if (!bs.length) { del_('slots', s.id); return 'deleted'; }
+  const live = bs.filter(b => b.status === 'booked' || b.status === 'wait').map(b => ({ clientId: b.clientId, status: b.status }));
   update_('slots', s.id, { status: 'cancelled' });
-  bs.forEach(b => { if (b.status === 'booked') update_('bookings', b.id, { status: 'cancelled' }); });
+  bs.forEach(b => { if (b.status === 'booked' || b.status === 'wait') update_('bookings', b.id, { status: 'cancelled' }); });
+  if (typeof clubSlotCancelled_ === 'function') clubSlotCancelled_(s, live);
   return 'cancelled';
 }
 
@@ -1541,7 +1565,7 @@ function completeSlot_(user, p) {
   }
   update_('slots', s.id, { status: 'done', resultId });
   tbl_('bookings').rows.filter(b => b.slotId === s.id && b.status !== 'cancelled')
-    .forEach(b => update_('bookings', b.id, { status: cids.indexOf(b.clientId) >= 0 ? 'attended' : 'missed' }));
+    .forEach(b => update_('bookings', b.id, { status: cids.indexOf(b.clientId) >= 0 ? 'attended' : b.status === 'wait' ? 'cancelled' : 'missed' }));
   return resultId;
 }
 
@@ -1554,6 +1578,8 @@ function book_(user, p) {
   const bs = tbl_('bookings').rows.filter(b => b.slotId === s.id && b.status === 'booked');
   if (bs.some(b => b.clientId === cid)) throw new Error('Вы уже записаны');
   if (bs.length >= (s.capacity || 1)) throw new Error('Свободных мест нет');
+  const w = tbl_('bookings').rows.find(b => b.slotId === s.id && b.clientId === cid && b.status === 'wait');
+  if (w) { update_('bookings', w.id, { status: 'booked' }); return w.id; }
   return insert_('bookings', { slotId: s.id, clientId: cid, clientName: c.name, status: 'booked' });
 }
 
@@ -1563,7 +1589,9 @@ function cancelBooking_(user, p) {
   if (user.role === 'client' && b.clientId !== user.clientId) throw new Error('Это не ваша запись');
   if (user.role === 'trainer' && s.trainerId !== user.trainerId) throw new Error('Это не ваш слот');
   if (user.role === 'client' && s.date < today_()) throw new Error('Слот уже прошёл');
+  const was = b.status;
   update_('bookings', b.id, { status: 'cancelled' });
+  if (was === 'booked' && typeof clubSeatFreed_ === 'function') clubSeatFreed_(s);
   return true;
 }
 

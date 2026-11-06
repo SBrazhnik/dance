@@ -1,0 +1,539 @@
+<style>
+.cl-grid{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));align-items:start}
+.cl-stars{color:#e0a100;letter-spacing:1px;white-space:nowrap}
+.cl-dist{display:grid;grid-template-columns:28px 1fr 34px;gap:4px 8px;align-items:center;font-size:12px;margin-top:8px}
+.cl-dist .bar{height:7px}
+.cl-cm{border-left:3px solid var(--line);padding:4px 0 4px 10px;margin:8px 0;font-size:13px}
+.cl-week{display:grid;grid-template-columns:110px repeat(7,minmax(120px,1fr));border:1px solid var(--line);border-radius:12px;overflow:hidden;background:var(--card);min-width:960px}
+.cl-week>div{border-right:1px solid var(--line);border-bottom:1px solid var(--line);padding:6px;min-height:54px}
+.cl-week .h{background:var(--soft);font-weight:600;font-size:13px;min-height:auto}
+.cl-week .today{background:var(--gold2)}
+.cl-it{font-size:12px;border-radius:7px;padding:4px 6px;margin-bottom:4px;background:var(--soft);border-left:3px solid var(--navy3);line-height:1.25}
+.cl-it.rent{border-left-color:var(--gold);background:#fbf3df}
+.cl-it.bad{border-left-color:var(--bad);background:var(--badbg, #fde8e8)}
+.cl-it b{font-weight:650}
+.cl-plan{display:grid;grid-template-columns:150px 110px 1fr 36px;gap:6px;margin-bottom:6px}
+.cl-fest{display:flex;gap:14px;align-items:flex-start}
+.cl-date{width:58px;flex:none;text-align:center;border-radius:12px;background:var(--navy);color:#fff;padding:6px 0;line-height:1.1}
+.cl-date b{display:block;font-size:22px}.cl-date span{font-size:11px;text-transform:uppercase;opacity:.85}
+.cl-pos{color:var(--ok)}.cl-neg{color:var(--bad)}
+.cl-yt{display:block;margin-top:6px;max-width:260px;border-radius:10px;overflow:hidden;position:relative}
+.cl-yt img{width:100%;display:block}
+.cl-yt:after{content:'▶';position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:46px;height:46px;border-radius:50%;background:rgba(0,0,0,.6);color:#fff;display:flex;align-items:center;justify-content:center;font-size:18px}
+@media (max-width:600px){.cl-plan{grid-template-columns:1fr 1fr}.cl-plan input[name=pt]{grid-column:1/-1}}
+</style>
+<script>
+I.users = '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8"/>';
+
+const CL = {
+  async load(force) {
+    if (S.C && !force) return S.C;
+    S.C = await call('clubLoad', {}, true);
+    return S.C;
+  },
+  halls() { return String((S.D.settings || {}).halls || '').split(',').map(x => x.trim()).filter(Boolean); },
+  stars(v) { const n = Math.round(+v || 0); return `<span class="cl-stars">${'★'.repeat(n)}${'☆'.repeat(Math.max(0, 5 - n))}</span>`; },
+  first(n) { const p = String(n || '').trim().split(/\s+/); return p[1] || p[0] || ''; },
+  copy(text, el) {
+    return navigator.clipboard.writeText(text).then(() => toast('Скопировано')).catch(() => {
+      if (el) { const s = getSelection(), r = document.createRange(); r.selectNodeContents(el); s.removeAllRanges(); s.addRange(r); }
+      toast('Выделено — скопируйте вручную');
+    });
+  },
+  url(path) { return 'https:' + '/' + '/' + path; },
+  yt(u) { const m = String(u || '').match(/(?:youtube\.com\/(?:watch\?v=|shorts\/)|youtu\.be\/)([\w-]{6,})/); return m ? m[1] : ''; },
+};
+async function clRefresh() { await CL.load(true); await TL.load(true); if (S.route[0] === 'tools' && $('#tlb')) TLV[S.route[1] || TL.tabs()[0][0]](); }
+
+(function () {
+  const base = TL.tabs;
+  TL.tabs = () => {
+    const t = base();
+    if (role() !== 'admin') return t;
+    const i = t.findIndex(x => x[0] === 'bot') + 1;
+    t.splice(i, 0, ['renew', 'Продления'], ['lost', 'Удержание'], ['rate', 'Оценки'], ['fests', 'Мероприятия'], ['halls', 'Залы'], ['subst', 'Замена тренера'], ['money', 'Финансы']);
+    return t;
+  };
+})();
+
+function payQrText(sum, purpose, payer) {
+  const C = S.C.settings, clean = v => String(v || '').replace(/\|/g, ' ').trim();
+  if (!C.pay_acc || !C.pay_bic || !C.pay_name) return '';
+  const f = ['ST00012', 'Name=' + clean(C.pay_name), 'PersonalAcc=' + clean(C.pay_acc), 'BankName=' + clean(C.pay_bank), 'BIC=' + clean(C.pay_bic), 'CorrespAcc=' + clean(C.pay_corr || '0')];
+  if (C.pay_inn) f.push('PayeeINN=' + clean(C.pay_inn));
+  if (C.pay_kpp) f.push('KPP=' + clean(C.pay_kpp));
+  if (+sum > 0) f.push('Sum=' + Math.round(+sum * 100));
+  if (purpose) f.push('Purpose=' + clean(purpose).slice(0, 210));
+  if (payer) f.push('LastName=' + clean(payer).split(/\s+/)[0]);
+  return f.join('|');
+}
+async function clQr(text, cell) {
+  await tlQrLib();
+  const q = qrcode(0, 'M'); q.addData(unescape(encodeURIComponent(text))); q.make();
+  const n = q.getModuleCount(), pad = 4, size = (n + pad * 2) * cell;
+  const c = document.createElement('canvas'); c.width = c.height = size;
+  const g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, size, size); g.fillStyle = '#000';
+  for (let r = 0; r < n; r++) for (let k = 0; k < n; k++) if (q.isDark(r, k)) g.fillRect((k + pad) * cell, (r + pad) * cell, cell, cell);
+  c.style.width = '100%'; c.style.height = 'auto'; c.style.imageRendering = 'pixelated';
+  return c;
+}
+function payModal(o) {
+  const C = S.C.settings;
+  const bg = modal('Оплата: ' + esc(o.name), `<div class="fg">
+      ${fld('Сумма, ₽', inp('sum', o.price || '', 'type="number" min="0" id="pqs"'))}
+      ${fld('Назначение', inp('purpose', 'Оплата абонемента' + (o.title ? ' «' + o.title + '»' : '') + ', ' + o.name, 'id="pqp"'), 'full')}</div>
+    <div class="tl-qr" style="margin-top:12px"><div class="tl-qrbox" id="pqr">${empty('QR…')}</div>
+      <div class="grow small">${C.pay_acc ? `Ученик наводит камеру банковского приложения на QR — сумма и реквизиты подставятся сами.<br><br>${esc(C.pay_name)}<br>р/с ${esc(C.pay_acc)}<br>${esc(C.pay_bank)}, БИК ${esc(C.pay_bic)}` : '<span style="color:var(--bad)">Реквизиты для QR не заполнены — откройте «Реквизиты для оплаты» на вкладке «Продления».</span>'}
+      ${C.pay_link ? `<br><br>Ссылка СБП: <span class="tl-link" style="display:inline-block;padding:2px 6px">${esc(C.pay_link)}</span>` : ''}</div></div>`,
+  [{t: 'Закрыть'}, {t: ic('dl') + 'Скачать QR', cls: 'pri', fn: async () => {
+    const t = payQrText($('#pqs', bg).value, $('#pqp', bg).value, o.name); if (!t) throw new Error('Заполните реквизиты');
+    const c = await clQr(t, 10); c.toBlob(b => saveBlob('Оплата — ' + o.name + '.png', b), 'image/png'); return false; }}], {wide: true});
+  const draw = () => {
+    const t = payQrText($('#pqs', bg).value, $('#pqp', bg).value, o.name);
+    if (!t) return;
+    clQr(t, 6).then(c => { const b = $('#pqr', bg); if (b) { b.innerHTML = ''; b.appendChild(c); } }).catch(e => { $('#pqr', bg).innerHTML = esc(e.message); });
+  };
+  bg.addEventListener('input', () => { clearTimeout(bg._t); bg._t = setTimeout(draw, 300); });
+  draw();
+}
+function payForm() {
+  const C = S.C.settings;
+  modal('Реквизиты для оплаты', `<p class="small muted" style="margin-top:0">По ним строится QR-код для оплаты из банковского приложения (стандарт ГОСТ 56042, понимают все банки РФ). Ссылку СБП (например, qr.nspk.ru/…) можно получить в своём банке — тогда бот будет присылать её ученикам.</p><div class="fg">
+    ${fld('Получатель (как в банке)', inp('pay_name', C.pay_name), 'full')}
+    ${fld('Расчётный счёт', inp('pay_acc', C.pay_acc, 'inputmode="numeric"'))}${fld('БИК', inp('pay_bic', C.pay_bic, 'inputmode="numeric"'))}
+    ${fld('Банк', inp('pay_bank', C.pay_bank))}${fld('Корр. счёт', inp('pay_corr', C.pay_corr, 'inputmode="numeric"'))}
+    ${fld('ИНН', inp('pay_inn', C.pay_inn, 'inputmode="numeric"'))}${fld('КПП', inp('pay_kpp', C.pay_kpp, 'inputmode="numeric"'))}
+    ${fld('Ссылка для оплаты по СБП (необязательно)', inp('pay_link', C.pay_link, 'placeholder="' + CL.url('qr.nspk.ru/…') + '"'), 'full')}
+    ${fld('Напоминать о конце срока абонемента за, дней', inp('renew_days', C.renew_days, 'type="number" min="1" max="30"'))}
+    <div style="align-self:end">${chk('bot_renew', 'Бот сам напоминает о конце срока', C.bot_renew === 'true')}</div></div>`,
+  [{t: 'Отмена'}, {t: 'Сохранить', cls: 'pri', fn: async m => { const v = vals(m); v.bot_renew = v.bot_renew ? 'true' : 'false'; await call('savePay', v); toast('Сохранено'); await clRefresh(); }}], {wide: true});
+}
+
+const RENEW_R = {ended: ['Часы закончились', 'bad'], expired: ['Срок истёк', 'bad'], low: ['Мало часов', 'warn'], date: ['Скоро конец срока', 'warn']};
+TLV.renew = () => {
+  const my = S.pageSeq;
+  $('#tlb').innerHTML = empty('Загрузка…');
+  Promise.all([CL.load(), call('renewals', {}, true)]).then(([C, list]) => {
+    if (S.pageSeq !== my || !$('#tlb')) return;
+    const sumNeed = sum(list, r => r.price);
+    $('#tlb').innerHTML = `<div class="row" style="margin-bottom:10px"><p class="small muted grow" style="margin:0">Ученики, у которых заканчиваются часы или срок абонемента, а нового абонемента ещё нет. Напомните через бота, покажите QR для оплаты или сразу оформите продление.</p>
+        <button class="btn" id="rnp">${ic('cog')}Реквизиты для оплаты</button></div>
+      <div class="kpis"><div class="kpi"><b>${list.length}</b><span>кому продлевать</span></div><div class="kpi"><b>${list.filter(r => r.reason === 'ended' || r.reason === 'expired').length}</b><span>уже без часов или срока</span></div>
+        <div class="kpi"><b>${money(sumNeed)}</b><span>потенциальная выручка продлений</span></div><div class="kpi"><b>${list.filter(r => r.tg).length}</b><span>можно напомнить в Telegram</span></div></div>
+      <div class="tw sect"><table class="t"><thead><tr><th>Ученик</th><th>Абонемент</th><th class="n">Осталось</th><th>До</th><th>Почему</th><th>Напоминали</th><th></th></tr></thead><tbody>
+      ${list.map(r => `<tr><td><div class="row" style="gap:8px;flex-wrap:nowrap"><div class="avatar c sm" data-av="client:${r.clientId}">${initials(r.name)}</div><div><a class="click" data-c="${r.clientId}"><b>${esc(r.name)}</b></a><div class="small muted">${esc(r.company || '')}${r.phone ? ' · <a href="tel:' + esc(r.phone) + '">' + esc(r.phone) + '</a>' : ''}</div></div></div></td>
+        <td>${esc(r.title)}${r.price ? `<div class="small muted">${money(r.price)}</div>` : ''}</td><td class="n">${fh(r.remaining)} ч</td><td class="nowrap">${fd(r.endDate) || '—'}</td>
+        <td><span class="badge ${RENEW_R[r.reason][1]}">${RENEW_R[r.reason][0]}</span></td><td class="small nowrap">${r.lastRemind ? fd(r.lastRemind) : '—'}</td>
+        <td class="nowrap"><button class="btn sm" data-rr="${r.subId}" ${r.tg && C.bot ? '' : 'disabled title="Ученик не подключил бота"'}>${ic('send')}Напомнить</button>
+          <button class="btn sm" data-rq="${r.subId}">QR</button><button class="btn sm pri" data-rs="${r.subId}">${ic('plus')}Продлить</button></td></tr>`).join('') || `<tr><td colspan="7">${empty('Все абонементы в порядке 🎉')}</td></tr>`}
+      </tbody></table></div>`;
+    $('#rnp').onclick = payForm;
+    $$('#tlb [data-c]').forEach(a => a.onclick = () => { S.prev = ['tools', 'renew']; go('client', a.dataset.c); });
+    $$('[data-rq]').forEach(b => b.onclick = () => payModal(list.find(r => r.subId === b.dataset.rq)));
+    $$('[data-rs]').forEach(b => b.onclick = () => { const r = list.find(x => x.subId === b.dataset.rs); const s = S.m.subs[r.subId] || {}; subForm({clientId: r.clientId, title: r.title, hours: r.hours, price: r.price, trainerId: s.trainerId || ''}); });
+    $$('[data-rr]').forEach(b => b.onclick = () => {
+      const r = list.find(x => x.subId === b.dataset.rr);
+      const def = 'Здравствуйте, ' + CL.first(r.name) + '! ' + (r.remaining > 0 ? 'В абонементе «' + r.title + '» осталось ' + fh(r.remaining) + ' ч' + (r.endDate ? ', срок до ' + fd(r.endDate) : '') + '.' : 'Часы в абонементе «' + r.title + '» закончились.') + ' Продлим, чтобы не прерывать занятия?';
+      modal('Напомнить: ' + esc(r.name), `<div class="fg">${fld('Сообщение', `<textarea class="inp" name="text" rows="5">${esc(def)}</textarea>`, 'full')}
+        <div class="full small muted">К сообщению добавятся ${C.settings.pay_link ? 'ссылка СБП' : C.settings.pay_acc ? 'реквизиты для оплаты' : 'название клуба (заполните реквизиты, чтобы добавлять способ оплаты)'}.</div></div>`,
+        [{t: 'Отмена'}, {t: ic('send') + 'Отправить', cls: 'pri', fn: async m => { await call('renewRemind', {subId: r.subId, text: vals(m).text}); toast('Напоминание отправлено'); TLV.renew(); }}], {wide: true});
+    });
+  }).catch(fail);
+};
+
+TLV.lost = () => {
+  const my = S.pageSeq;
+  const ui = S.ui.cllost || (S.ui.cllost = {days: ''});
+  $('#tlb').innerHTML = empty('Ищу…');
+  Promise.all([CL.load(), call('lost', {days: ui.days}, true)]).then(([C, r]) => {
+    if (S.pageSeq !== my || !$('#tlb')) return;
+    ui.days = r.days;
+    const row = x => `<tr><td><div class="row" style="gap:8px;flex-wrap:nowrap"><div class="avatar c sm" data-av="client:${x.id}">${initials(x.name)}</div><div><a class="click" data-c="${x.id}"><b>${esc(x.name)}</b></a><div class="small muted">${esc(x.company || '')}</div></div></div></td>
+      <td class="nowrap">${x.last ? fd(x.last) : 'не занимался'}${x.days !== null ? `<div class="small muted">${x.days} дн. назад</div>` : ''}</td><td class="small">${esc(x.trainer || '—')}</td>
+      <td class="n">${x.kind === 'sub' ? fh(x.remaining) + ' ч' : '—'}</td><td class="small nowrap">${x.called ? '✓ ' + fd(x.called) : '—'}</td>
+      <td class="nowrap">${x.phone ? `<a class="btn sm" href="tel:${esc(x.phone)}">📞</a> ` : ''}<button class="btn sm pri" data-lc="${x.id}" ${x.tg && C.bot ? '' : 'disabled title="Не подключил бота"'}>${ic('send')}Позвать</button> <button class="btn sm" data-lm="${x.id}" title="Отметить, что связались">✓</button></td></tr>`;
+    const tbl = (list, msg) => `<div class="tw"><table class="t"><thead><tr><th>Ученик</th><th>Последнее занятие</th><th>Тренер</th><th class="n">Остаток</th><th>Связывались</th><th></th></tr></thead><tbody>${list.map(row).join('') || `<tr><td colspan="6">${empty(msg)}</td></tr>`}</tbody></table></div>`;
+    $('#tlb').innerHTML = `<div class="row" style="margin-bottom:8px"><p class="small muted grow" style="margin:0">Кто перестал ходить. Позвоните или позовите через бота — короткое внимание часто возвращает ученика. Отметка «✓» показывает, что с человеком уже связались.</p>
+        <label class="small">Не были дольше <input class="inp" id="lsd" type="number" min="7" max="120" value="${r.days}" style="width:70px;display:inline-block"> дн.</label></div>
+      <div class="kpis"><div class="kpi"><b style="color:${r.withSub.length ? 'var(--bad)' : 'var(--ok)'}">${r.withSub.length}</b><span>есть абонемент, но не ходят</span></div>
+        <div class="kpi"><b>${r.gone.length}</b><span>занимались, но абонемента нет</span></div></div>
+      <h2 class="sect">С абонементом, но не приходят</h2>${tbl(r.withSub, 'Все с абонементом ходят 🎉')}
+      <h2 class="sect">Занимались раньше, абонемента нет</h2>${tbl(r.gone, 'Таких нет')}`;
+    $('#lsd').onchange = e => { ui.days = e.target.value; TLV.lost(); };
+    $$('#tlb [data-c]').forEach(a => a.onclick = () => { S.prev = ['tools', 'lost']; go('client', a.dataset.c); });
+    $$('[data-lm]').forEach(b => b.onclick = async () => { try { await call('lostCall', {clientId: b.dataset.lm, markOnly: true}); toast('Отмечено'); TLV.lost(); } catch (e) { fail(e); } });
+    $$('[data-lc]').forEach(b => b.onclick = () => {
+      const x = r.withSub.concat(r.gone).find(y => y.id === b.dataset.lc);
+      const tpl = C.settings.call_text;
+      modal('Позвать: ' + esc(x.name), `<div class="fg">${fld('Сообщение', `<textarea class="inp" name="text" rows="5">${esc(tpl.replace(/\{имя\}/g, CL.first(x.name)))}</textarea>`, 'full')}
+        <div class="full">${chk('save', 'Запомнить как шаблон (имя подставится само)', false)}</div><div class="full small muted">Под сообщением будет кнопка «Посмотреть расписание» — ученик сможет сразу записаться.</div></div>`,
+        [{t: 'Отмена'}, {t: ic('send') + 'Отправить', cls: 'pri', fn: async m => {
+          const v = vals(m); const p = {clientId: x.id, text: v.text};
+          if (v.save) p.textTpl = v.text.split(CL.first(x.name)).join('{имя}');
+          await call('lostCall', p); toast('Отправлено'); await CL.load(true); TLV.lost();
+        }}], {wide: true});
+    });
+  }).catch(fail);
+};
+
+TLV.rate = () => {
+  const my = S.pageSeq;
+  const pp = periodPicker('clrate', () => TLV.rate());
+  $('#tlb').innerHTML = `${pp.html}<div id="clr" class="sect">${empty('Загрузка…')}</div>`;
+  pp.wire($('#tlb'));
+  call('ratings', {from: pp.p.from, to: pp.p.to}, true).then(r => {
+    if (S.pageSeq !== my || !$('#clr')) return;
+    const bot = (S.T && S.T.bot) || {};
+    $('#clr').innerHTML = `${!r.total ? `<div class="card">${empty(bot.connected ? 'Оценок за период пока нет. Бот сам спрашивает учеников после занятия — включите «Просить оценить занятие» на вкладке «Telegram-бот».' : 'Оценки собирает Telegram-бот после занятия. Подключите бота на вкладке «Telegram-бот».')}</div>` : `
+      <div class="kpis"><div class="kpi"><b>${fh(r.avg)} ${CL.stars(r.avg)}</b><span>средняя оценка занятий</span></div><div class="kpi"><b>${r.total}</b><span>оценок за период</span></div>
+        <div class="kpi"><b style="color:${r.low.length ? 'var(--bad)' : 'var(--ok)'}">${r.low.length}</b><span>оценок 3 и ниже</span></div></div>
+      <div class="cl-grid sect">${r.trainers.map(t => `<div class="card"><div class="row"><div class="avatar" data-av="trainer:${t.id}">${initials(t.name)}</div><div class="grow"><b>${esc(t.name)}</b><div class="small muted">${t.n} оценок</div></div><div class="right"><b style="font-size:22px">${fh(t.avg)}</b><div>${CL.stars(t.avg)}</div></div></div>
+        <div class="cl-dist">${[5, 4, 3, 2, 1].map(k => `<span>${k}★</span><div class="bar"><i style="width:${t.n ? t.dist[k - 1] / t.n * 100 : 0}%;background:${k >= 4 ? 'var(--ok)' : k === 3 ? 'var(--gold)' : 'var(--bad)'}"></i></div><span class="right">${t.dist[k - 1]}</span>`).join('')}</div>
+        ${t.comments.map(c => `<div class="cl-cm">${CL.stars(c.score)} <span class="muted">${fd(c.date)} · ${esc(c.client)}</span><div>${esc(c.text)}</div></div>`).join('')}</div>`).join('')}</div>
+      ${r.low.length ? `<h2 class="sect">Низкие оценки — стоит разобраться</h2><div class="tw"><table class="t"><thead><tr><th>Дата</th><th>Ученик</th><th>Тренер</th><th>Оценка</th><th>Комментарий</th></tr></thead><tbody>
+        ${r.low.map(f => `<tr><td class="nowrap">${fd(f.date)}</td><td><a class="click" data-c="${f.clientId}">${esc(f.clientName)}</a></td><td>${esc(f.trainerName)}</td><td>${CL.stars(f.score)}</td><td>${esc(f.comment || '—')}</td></tr>`).join('')}</tbody></table></div>` : ''}`}`;
+    $$('#clr [data-c]').forEach(a => a.onclick = () => { S.prev = ['tools', 'rate']; go('client', a.dataset.c); });
+  }).catch(fail);
+};
+
+function hmMin(t) { const m = String(t || '').match(/^(\d{1,2}):(\d{2})/); return m ? +m[1] * 60 + +m[2] : -1; }
+const WHOLE = h => /весь|все |целиком|клуб/i.test(String(h || ''));
+function hallItems(from, to, skip) {
+  const out = [];
+  (S.D.slots || []).forEach(s => {
+    if (s.status === 'cancelled' || s.date < from || s.date > to || (skip && skip.kind === 'slot' && skip.id === s.id)) return;
+    const a = hmMin(s.time);
+    out.push({kind: 'slot', id: s.id, date: s.date, a, b: a >= 0 ? a + Math.round((+s.hours || 1) * 60) : -1, hall: s.hall || '', title: s.title, who: tName(s.trainerId), time: s.time});
+  });
+  (S.D.rent || []).forEach(r => {
+    if (skip && skip.kind === 'rent' && skip.id === r.id) return;
+    const end = rentEnd(r);
+    if (r.date > to || end < from) return;
+    for (let d = r.date < from ? from : r.date; d <= end && d <= to; d = addDays(d, 1)) {
+      const a = hmMin(r.time), whole = r.unit === 'day' && (a < 0 || !(+r.hours));
+      out.push({kind: 'rent', id: r.id, date: d, a: whole ? 0 : a, b: whole ? 1440 : a >= 0 ? a + Math.round((+r.hours || 1) * 60) : -1, hall: r.hall || '', title: 'Аренда: ' + r.renter, who: r.renter, time: whole ? 'весь день' : r.time});
+    }
+  });
+  return out;
+}
+function hallClash(x, y) {
+  if (x.date !== y.date || x.a < 0 || y.a < 0 || x.b <= y.a || y.b <= x.a) return false;
+  if (WHOLE(x.hall) || WHOLE(y.hall)) return true;
+  if (!x.hall || !y.hall) return false;
+  return x.hall === y.hall;
+}
+function hallConflicts(o) {
+  const from = o.date, to = o.kind === 'rent' && o.unit === 'day' ? (o.endDate || o.date) : o.date;
+  if (!from) return [];
+  const all = hallItems(from, to, {kind: o.kind, id: o.id});
+  const mine = [];
+  for (let d = from; d <= to; d = addDays(d, 1)) {
+    const a = hmMin(o.time), whole = o.kind === 'rent' && o.unit === 'day' && (a < 0 || !(+o.hours));
+    mine.push({kind: o.kind, date: d, a: whole ? 0 : a, b: whole ? 1440 : a >= 0 ? a + Math.round((+o.hours || 1) * 60) : -1, hall: o.hall || ''});
+  }
+  const res = [];
+  mine.forEach(m => all.forEach(x => { if (hallClash(m, x)) res.push(fd(x.date).slice(0, 5) + ' ' + (x.time || '') + ' ' + x.title + (x.hall ? ' (' + x.hall + ')' : '')); }));
+  return [...new Set(res)].slice(0, 6);
+}
+TLV.halls = () => {
+  const ui = S.ui.clh || (S.ui.clh = {from: addDays(today(), -((new Date(today() + 'T12:00:00Z').getUTCDay() + 6) % 7))});
+  const to = addDays(ui.from, 6);
+  const days = Array.from({length: 7}, (_, i) => addDays(ui.from, i));
+  const items = hallItems(ui.from, to);
+  const halls = CL.halls();
+  const rows = halls.concat(items.some(x => !x.hall || !halls.includes(x.hall)) ? [''] : []);
+  const bad = new Set();
+  items.forEach((x, i) => items.forEach((y, k) => { if (k > i && hallClash(x, y)) { bad.add(x); bad.add(y); } }));
+  const inRow = (h, x) => h === '' ? (!x.hall || !halls.includes(x.hall)) : (x.hall === h || (WHOLE(x.hall) && !halls.includes(x.hall)));
+  const cell = (h, d) => items.filter(x => x.date === d && inRow(h, x)).sort((a, b) => a.a - b.a)
+    .map(x => `<div class="cl-it ${x.kind === 'rent' ? 'rent' : ''} ${bad.has(x) ? 'bad' : ''}" title="${esc(x.title)}"><b>${esc(x.time || '')}</b> ${esc(x.title)}<div class="muted">${esc(x.kind === 'slot' ? x.who : (x.hall || ''))}</div></div>`).join('');
+  $('#tlb').innerHTML = `<div class="row" style="margin-bottom:10px"><button class="btn sm" id="hwp">${ic('back')}</button><b>${fd(ui.from)} — ${fd(to)}</b><button class="btn sm" id="hwn" style="transform:scaleX(-1)">${ic('back')}</button><button class="btn sm" id="hwt">Эта неделя</button>
+      <span class="spacer"></span><span class="small muted"><span class="cl-it" style="display:inline-block;margin:0">занятие</span> <span class="cl-it rent" style="display:inline-block;margin:0">аренда</span> <span class="cl-it bad" style="display:inline-block;margin:0">пересечение</span></span></div>
+    ${bad.size ? `<div class="card tight" style="border-color:var(--bad);margin-bottom:10px">⚠️ Есть пересечения по залу и времени (записей: ${bad.size}) — проверьте красные карточки.</div>` : ''}
+    ${halls.length ? '' : `<div class="card tight" style="margin-bottom:10px">Залы не указаны в настройках. Добавьте их в «Настройки → Клуб», чтобы видеть занятость по каждому залу.</div>`}
+    <div class="tw"><div class="cl-week"><div class="h">Зал</div>${days.map(d => `<div class="h ${d === today() ? 'today' : ''}">${wd(d)}, ${fd(d).slice(0, 5)}</div>`).join('')}
+      ${rows.map(h => `<div class="h">${esc(h || 'Без зала')}</div>${days.map(d => `<div class="${d === today() ? 'today' : ''}">${cell(h, d)}</div>`).join('')}`).join('')}</div></div>
+    <p class="small muted">Зал занятия выбирается в форме слота («Расписание → Слот для записи»), зал аренды — в форме аренды. При сохранении приложение предупредит о пересечении. Аренда «Весь клуб» занимает все залы.</p>`;
+  $('#hwp').onclick = () => { ui.from = addDays(ui.from, -7); TLV.halls(); };
+  $('#hwn').onclick = () => { ui.from = addDays(ui.from, 7); TLV.halls(); };
+  $('#hwt').onclick = () => { S.ui.clh = null; TLV.halls(); };
+};
+
+function expenseForm(o) {
+  o = o || {};
+  const cats = S.C.cats || [];
+  modal(o.id ? 'Расход' : 'Новый расход', `<div class="fg">
+    ${fld('Дата', inp('date', o.date || today(), 'type="date"'))}${fld('Сумма, ₽', inp('amount', o.amount || '', 'type="number" min="0" step="0.01"'))}
+    ${fld('Статья', inp('category', o.category || cats[0] || '', 'list="expc"') + `<datalist id="expc">${cats.map(c => `<option value="${esc(c)}">`).join('')}</datalist>`, 'full')}
+    ${fld('Комментарий', inp('note', o.note || ''), 'full')}</div>`,
+  [o.id ? {t: ic('trash') + 'Удалить', cls: 'danger', left: 1, fn: async () => { if (!(await askYes('Удалить расход?'))) return false; await call('deleteExpense', {id: o.id}); toast('Удалено'); await CL.load(true); TLV.money(); }} : null,
+   {t: 'Отмена'}, {t: 'Сохранить', cls: 'pri', fn: async m => { const v = vals(m); v.id = o.id; await call('saveExpense', v); toast('Сохранено'); await CL.load(true); TLV.money(); }}].filter(Boolean));
+}
+TLV.money = () => {
+  const my = S.pageSeq;
+  const pp = periodPicker('clmoney', () => TLV.money());
+  $('#tlb').innerHTML = `<div class="row" style="margin-bottom:8px">${pp.html}<span class="spacer"></span><button class="btn pri" id="mxa">${ic('plus')}Расход</button><button class="btn" id="mxc">${ic('cog')}Статьи</button><button class="btn" id="mxp">${ic('print')}Печать</button></div><div id="clm">${empty('Считаю…')}</div>`;
+  pp.wire($('#tlb'));
+  Promise.all([CL.load(), call('finance', {from: pp.p.from, to: pp.p.to}, true)]).then(([C, f]) => {
+    if (S.pageSeq !== my || !$('#clm')) return;
+    const T = f.total, pn = v => `<span class="${v >= 0 ? 'cl-pos' : 'cl-neg'}">${money(v)}</span>`;
+    const exp = (C.expenses || []).filter(e => e.date >= f.from && e.date <= f.to);
+    const mname = k => MONTHS[+k.slice(5, 7) - 1] + ' ' + k.slice(0, 4);
+    const mx = Math.max(1, ...f.months.map(m => Math.max(m.income, m.trainers + m.expenses)));
+    $('#clm').innerHTML = `<div class="kpis"><div class="kpi"><b>${money(T.income)}</b><span>доход (абонементы ${money(T.subs)} + аренда ${money(T.rent)})</span></div>
+        <div class="kpi"><b>${money(T.trainers)}</b><span>оплата тренерам по ставкам</span></div><div class="kpi"><b>${money(T.expenses)}</b><span>прочие расходы</span></div>
+        <div class="kpi"><b class="${T.profit >= 0 ? 'cl-pos' : 'cl-neg'}">${money(T.profit)}</b><span>прибыль</span></div><div class="kpi"><b>${money(f.receivable + f.unpaidRent)}</b><span>ждём оплаты (абонементы ${money(f.receivable)}, аренда ${money(f.unpaidRent)})</span></div></div>
+      <p class="small muted">Доход — оплаченные абонементы (по дате начала) и оплаченная аренда. Оплата тренерам — по ставкам за занятия по абонементам и групповые; ${f.ownHours ? fh(f.ownHours) + ' ч' : 'индивидуальные'} без абонемента ученики оплачивают тренерам сами, они не входят.</p>
+      <div class="cl-grid sect"><div class="card"><h2 style="margin-top:0">По месяцам</h2>${f.months.length ? `<div class="hbars">${f.months.map(m => `<div class="hb"><span>${esc(mname(m.m))}</span><div><div class="bar" title="Доход"><i style="width:${m.income / mx * 100}%;background:var(--ok)"></i></div><div class="bar" style="margin-top:3px" title="Расходы"><i style="width:${(m.trainers + m.expenses) / mx * 100}%;background:var(--bad)"></i></div></div><span class="right"><b>${pn(m.profit)}</b></span></div>`).join('')}</div>
+          <div class="tw" style="margin-top:12px"><table class="t"><thead><tr><th>Месяц</th><th class="n">Абонементы</th><th class="n">Аренда</th><th class="n">Тренерам</th><th class="n">Расходы</th><th class="n">Прибыль</th></tr></thead><tbody>
+          ${f.months.map(m => `<tr><td>${esc(mname(m.m))}</td><td class="n">${money(m.subs)}</td><td class="n">${money(m.rent)}</td><td class="n">${money(m.trainers)}</td><td class="n">${money(m.expenses)}</td><td class="n"><b>${pn(m.profit)}</b></td></tr>`).join('')}</tbody></table></div>` : empty('Нет данных за период')}</div>
+        <div class="card"><h2 style="margin-top:0">Расходы по статьям</h2>${f.cats.length ? `<div class="hbars">${f.cats.map(c => `<div class="hb"><span>${esc(c.name)}</span><div class="bar"><i style="width:${c.amount / f.cats[0].amount * 100}%;background:var(--gold)"></i></div><span class="right"><b>${money(c.amount)}</b></span></div>`).join('')}</div>` : empty('Расходов за период нет — добавьте кнопкой «Расход»')}</div></div>
+      <h2 class="sect">По компаниям</h2><div class="tw"><table class="t"><thead><tr><th>Компания</th><th class="n">Учеников</th><th class="n">Оплачено</th><th class="n">Тренерам за их занятия</th><th class="n">Маржа</th></tr></thead><tbody>
+        ${f.companies.map(c => `<tr><td><b>${esc(c.name)}</b></td><td class="n">${c.people}</td><td class="n">${money(c.income)}</td><td class="n">${money(c.cost)}</td><td class="n"><b>${pn(c.margin)}</b></td></tr>`).join('') || `<tr><td colspan="5">${empty('Нет данных')}</td></tr>`}</tbody></table></div>
+      <h2 class="sect">Расходы за период</h2><div class="tw"><table class="t"><thead><tr><th>Дата</th><th>Статья</th><th>Комментарий</th><th class="n">Сумма</th><th>Кто внёс</th></tr></thead><tbody>
+        ${exp.map(e => `<tr class="click" data-ex="${e.id}"><td class="nowrap">${fd(e.date)}</td><td>${esc(e.category)}</td><td>${esc(e.note)}</td><td class="n">${money(e.amount)}</td><td class="small muted">${esc(e.createdBy)}</td></tr>`).join('') || `<tr><td colspan="5">${empty('Расходов нет')}</td></tr>`}</tbody></table></div>`;
+    $$('[data-ex]').forEach(r => r.onclick = () => expenseForm(exp.find(e => e.id === r.dataset.ex)));
+    $('#mxp').onclick = () => printEl('Доходы и расходы', $('#clm'), fd(f.from) + ' — ' + fd(f.to));
+  }).catch(fail);
+  $('#mxa').onclick = () => CL.load().then(() => expenseForm()).catch(fail);
+  $('#mxc').onclick = () => CL.load().then(C => modal('Статьи расходов', fld('Через запятую', txt('exp_cats', C.cats.join(', ')), 'full'),
+    [{t: 'Отмена'}, {t: 'Сохранить', cls: 'pri', fn: async m => { await call('clubBotSave', {exp_cats: vals(m).exp_cats}); toast('Сохранено'); await CL.load(true); }}])).catch(fail);
+};
+
+TLV.subst = () => {
+  const ui = S.ui.clsub || (S.ui.clsub = {tr: '', from: today(), to: addDays(today(), 7)});
+  const slots = (S.D.slots || []).filter(s => s.status === 'open' && s.trainerId === ui.tr && s.date >= ui.from && s.date <= ui.to).sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time));
+  const cnt = id => S.D.bookings.filter(b => b.slotId === id && b.status === 'booked').length;
+  $('#tlb').innerHTML = `<p class="small muted" style="margin-top:0">Тренер заболел или в отпуске? Выберите его и период — появятся его занятия. Назначьте замену или отмените занятия: записанные ученики получат сообщение в Telegram.</p>
+    <div class="tl-pick"><div>${fld('Кого заменить', sel('str', trOpts(false, '— выберите тренера —'), ui.tr, 'id="str"'))}</div>
+      <div style="min-width:150px;flex:0">${fld('С', `<input type="date" class="inp" id="sf" value="${ui.from}">`)}</div><div style="min-width:150px;flex:0">${fld('По', `<input type="date" class="inp" id="st" value="${ui.to}">`)}</div></div>
+    ${!ui.tr ? `<div class="card">${empty('Выберите тренера')}</div>` : !slots.length ? `<div class="card">${empty('В этот период у тренера нет открытых занятий в расписании')}</div>` : `
+    <div class="card"><div class="ms"><div class="ms-l">${slots.map(s => `<label><input type="checkbox" name="sl" value="${s.id}" checked> <b>${wd(s.date)}, ${fd(s.date)} ${esc(s.time)}</b> — ${esc(s.title)} <span class="small muted">· записано ${cnt(s.id)}</span></label>`).join('')}</div></div>
+      <div class="fg" style="margin-top:12px">${fld('Что сделать', sel('mode', [['replace', 'Назначить замену'], ['cancel', 'Отменить занятия']], 'replace', 'id="smode"'))}
+        <div id="stto">${fld('Кто заменит', sel('toTrainerId', trOpts(false, '— выберите —').filter(x => x[0] !== ui.tr), '', 'id="sto"'))}</div>
+        ${fld('Причина (увидят ученики)', inp('reason', '', 'id="srs" placeholder="Например: болезнь тренера"'), 'full')}
+        <div class="full">${chk('notify', 'Сообщить записанным ученикам и новому тренеру в Telegram', true)}</div></div>
+      <div class="row" style="margin-top:12px"><span class="spacer"></span><button class="btn pri" id="sgo">Применить</button></div></div>`}`;
+  $('#str').onchange = e => { ui.tr = e.target.value; TLV.subst(); };
+  $('#sf').onchange = e => { ui.from = e.target.value; TLV.subst(); };
+  $('#st').onchange = e => { ui.to = e.target.value; TLV.subst(); };
+  if (!$('#sgo')) return;
+  $('#smode').onchange = e => { $('#stto').style.display = e.target.value === 'cancel' ? 'none' : ''; };
+  $('#sgo').onclick = async () => {
+    const ids = $$('[name=sl]').filter(x => x.checked).map(x => x.value);
+    const mode = $('#smode').value;
+    if (!ids.length) return toast('Отметьте занятия', true);
+    if (mode === 'replace' && !$('#sto').value) return toast('Выберите, кто заменит', true);
+    if (!(await askYes(mode === 'cancel' ? `Отменить ${ids.length} занятий?` : `Передать ${ids.length} занятий тренеру ${tName($('#sto').value)}?`, mode === 'cancel' ? 'Отменить занятия' : 'Назначить'))) return;
+    try {
+      const n = await call('substitute', {slotIds: ids, mode, toTrainerId: $('#sto') ? $('#sto').value : '', reason: $('#srs').value, notify: $('[name=notify]').checked});
+      toast(mode === 'cancel' ? 'Отменено занятий: ' + n : 'Замена назначена: ' + n); await reload();
+    } catch (e) { fail(e); }
+  };
+};
+
+const festKind = k => (S.C.kinds || {})[k] || k;
+function festForm(o) {
+  o = o || {};
+  const plan = (() => { try { return JSON.parse(o.plan || '[]') || []; } catch (e) { return []; } })();
+  const planRow = p => `<div class="cl-plan"><input class="inp" type="date" name="pd" value="${esc(p.date || '')}"><input class="inp" type="time" name="ptm" value="${esc(p.time || '')}"><input class="inp" name="pt" value="${esc(p.title || '')}" placeholder="Что: прогон, костюмы…"><button type="button" class="ibtn" data-pdel>${ic('trash', 16)}</button></div>`;
+  const bg = modal(o.id ? 'Мероприятие' : 'Новое мероприятие', `<div class="fg">
+    ${fld('Название', inp('title', o.title || '', 'placeholder="Новогодний бал, Кубок клуба…"'), 'full')}
+    ${fld('Вид', sel('kind', Object.entries(S.C.kinds), o.kind || 'party'))}${fld('Мест (0 — без ограничения)', inp('capacity', o.capacity || 0, 'type="number" min="0"'))}
+    ${fld('Дата', inp('date', o.date || addDays(today(), 14), 'type="date"'))}${fld('Время', inp('time', o.time || '19:00', 'type="time"'))}
+    ${fld('Место', inp('place', o.place || ''), 'full')}
+    ${fld('Описание (увидят ученики в боте)', `<textarea class="inp" name="about" rows="3">${esc(o.about || '')}</textarea>`, 'full')}
+    <div class="full">${chk('open', 'Регистрация открыта (ученики могут записаться через бота)', o.id ? o.open : true)}</div>
+    <div class="full sect-t">Репетиции и подготовка</div>
+    <div class="full" id="fplan">${plan.map(planRow).join('')}</div>
+    <div class="full"><button type="button" class="btn sm" id="fpadd">${ic('plus')}Репетиция</button> <span class="small muted">Бот напомнит участникам накануне.</span></div></div>`,
+  [o.id ? {t: ic('trash') + 'Удалить', cls: 'danger', left: 1, fn: async () => { if (!(await askYes('Удалить мероприятие вместе со списком участников?'))) return false; await call('deleteFest', {id: o.id}); toast('Удалено'); S.ui.clf = null; await clRefresh(); }} : null,
+   {t: 'Отмена'}, {t: 'Сохранить', cls: 'pri', fn: async m => {
+    const v = vals(m); v.id = o.id;
+    v.plan = $$('.cl-plan', m).map(r => ({date: $('[name=pd]', r).value, time: $('[name=ptm]', r).value, title: $('[name=pt]', r).value})).filter(x => x.date);
+    ['pd', 'ptm', 'pt'].forEach(k => delete v[k]);
+    const id = await call('saveFest', v); toast('Сохранено'); S.ui.clf = id; await clRefresh();
+  }}].filter(Boolean), {wide: true});
+  $('#fpadd', bg).onclick = () => { $('#fplan', bg).insertAdjacentHTML('beforeend', planRow({})); };
+  bg.addEventListener('click', e => { const d = e.target.closest('[data-pdel]'); if (d) d.closest('.cl-plan').remove(); });
+}
+function festDate(d) { return `<div class="cl-date"><b>${+d.slice(8, 10)}</b><span>${MONTHS[+d.slice(5, 7) - 1].slice(0, 3)}</span></div>`; }
+TLV.fests = () => {
+  const my = S.pageSeq;
+  $('#tlb').innerHTML = empty('Загрузка…');
+  CL.load().then(C => {
+    if (S.pageSeq !== my || !$('#tlb')) return;
+    const f = S.ui.clf && C.fests.find(x => x.id === S.ui.clf);
+    if (f) return festView(f);
+    const regs = id => C.regs.filter(g => g.festId === id && g.status !== 'cancelled').length;
+    const up = C.fests.filter(x => x.status === 'active' && x.date >= today()).sort((a, b) => a.date.localeCompare(b.date));
+    const past = C.fests.filter(x => !(x.status === 'active' && x.date >= today()));
+    const card = x => `<div class="card tight click cl-fest" data-f="${x.id}">${festDate(x.date)}<div class="grow"><b>${esc(x.title)}</b><div class="small muted">${esc(festKind(x.kind))}${x.time ? ' · ' + esc(x.time) : ''}${x.place ? ' · ' + esc(x.place) : ''}</div>
+      <div class="small" style="margin-top:4px">${ic('users', 13)} ${regs(x.id)}${+x.capacity ? ' из ' + x.capacity : ''} участников ${x.status === 'done' ? '<span class="badge ok">итоги подведены</span>' : x.open ? '<span class="badge gold">регистрация открыта</span>' : ''}</div></div></div>`;
+    $('#tlb').innerHTML = `<div class="row" style="margin-bottom:10px"><p class="small muted grow" style="margin:0">Корпоративные вечера, турниры, выступления. Ученики регистрируются через бота (кнопка «🎉 Участвую»), бот напоминает о репетициях, а итоги попадают в лигу и паспорт танцора.</p>
+      <button class="btn pri" id="fnew">${ic('plus')}Мероприятие</button></div>
+      <h2>Ближайшие</h2><div class="stack">${up.map(card).join('') || `<div class="card">${empty('Пока ничего не запланировано')}</div>`}</div>
+      ${past.length ? `<h2 class="sect">Прошедшие</h2><div class="stack">${past.slice(0, 20).map(card).join('')}</div>` : ''}`;
+    $('#fnew').onclick = () => festForm();
+    $$('[data-f]').forEach(x => x.onclick = () => { S.ui.clf = x.dataset.f; TLV.fests(); });
+  }).catch(fail);
+};
+function festView(f) {
+  const C = S.C;
+  const regs = C.regs.filter(g => g.festId === f.id && g.status !== 'cancelled').sort((a, b) => a.clientName.localeCompare(b.clientName));
+  const plan = (() => { try { return JSON.parse(f.plan || '[]') || []; } catch (e) { return []; } })();
+  $('#tlb').innerHTML = `<div class="head" style="margin-bottom:6px"><button class="btn sm" id="fbk">${ic('back')}</button><h2 class="grow" style="margin:0">${esc(f.title)}</h2>
+      <button class="btn" id="fed">${ic('edit')}Изменить</button><button class="btn" id="fprn">${ic('print')}Список</button></div>
+    <div class="cl-grid"><div class="card cl-fest">${festDate(f.date)}<div class="grow"><b>${esc(festKind(f.kind))}</b><div class="small">${fd(f.date)}${f.time ? ' в ' + esc(f.time) : ''}${f.place ? ' · ' + esc(f.place) : ''}</div>
+        ${f.about ? `<div class="small muted" style="margin-top:6px;white-space:pre-wrap">${esc(f.about)}</div>` : ''}
+        <div class="small" style="margin-top:8px">${f.status === 'done' ? '<span class="badge ok">Итоги подведены</span>' : f.open ? '<span class="badge gold">Регистрация открыта</span>' : '<span class="badge">Регистрация закрыта</span>'}</div>
+        ${f.results ? `<div class="small" style="margin-top:8px"><b>Итоги:</b> ${esc(f.results)}</div>` : ''}</div></div>
+      <div class="card"><h2 style="margin-top:0">Репетиции</h2>${plan.length ? plan.map(p => `<div class="row sub"><b class="nowrap">${fd(p.date).slice(0, 5)} ${esc(p.time)}</b><span class="grow">${esc(p.title || 'Репетиция')}</span>${p.date < today() ? '<span class="small muted">прошла</span>' : ''}</div>`).join('') : empty('Репетиции не запланированы')}</div></div>
+    <div class="row sect"><h2 class="grow" style="margin:0">Участники · ${regs.length}${+f.capacity ? ' из ' + f.capacity : ''}</h2>
+      ${f.status !== 'done' ? `<button class="btn" id="finv" ${C.bot ? '' : 'disabled title="Подключите бота"'}>${ic('send')}Пригласить через бота</button><button class="btn" id="fadd">${ic('plus')}Участник</button>` : ''}
+      <button class="btn pri" id="fres" ${regs.length ? '' : 'disabled'}>${ic('check')}Итоги</button></div>
+    <div class="tw" style="margin-top:10px" id="fregs"><table class="t"><thead><tr><th>Участник</th><th>Партнёр</th><th>Заметка</th><th>Результат</th><th class="n">Баллы</th><th></th></tr></thead><tbody>
+      ${regs.map(g => `<tr><td><div class="row" style="gap:8px;flex-wrap:nowrap"><div class="avatar c sm" data-av="client:${g.clientId}">${initials(g.clientName)}</div><b>${esc(g.clientName)}</b></div></td><td>${esc(g.partnerName || '—')}</td><td class="small">${esc(g.note || '')}</td><td>${esc(g.result || '')}</td><td class="n">${g.points ? fh(g.points) : ''}</td>
+        <td class="nowrap noprint"><button class="btn sm" data-ge="${g.id}">${ic('edit')}</button> <button class="btn sm" data-gd="${g.id}">${ic('trash')}</button></td></tr>`).join('') || `<tr><td colspan="6">${empty('Пока никто не зарегистрировался')}</td></tr>`}</tbody></table></div>`;
+  $('#fbk').onclick = () => { S.ui.clf = null; TLV.fests(); };
+  $('#fed').onclick = () => festForm(f);
+  $('#fprn').onclick = () => printEl(f.title + ' — участники', $('#fregs'), fd(f.date) + (f.place ? ' · ' + f.place : ''));
+  const regForm = g => modal(g ? 'Участник' : 'Добавить участника', `<div class="fg">
+      ${g ? fld('Ученик', `<div style="padding-top:8px"><b>${esc(g.clientName)}</b></div>`, 'full') : fld('Ученик', sel('clientId', clOpts(null, '— выберите —').filter(x => !regs.some(r => r.clientId === x[0])), ''), 'full')}
+      ${fld('Партнёр / партнёрша', inp('partnerName', g ? g.partnerName : '', 'list="fpn"') + `<datalist id="fpn">${TL.clients().map(c => `<option value="${esc(c.name)}">`).join('')}</datalist>`, 'full')}
+      ${fld('Заметка', inp('note', g ? g.note : '', 'placeholder="Номер, программа, костюм…"'), 'full')}</div>`,
+    [{t: 'Отмена'}, {t: 'Сохранить', cls: 'pri', fn: async m => { const v = vals(m); v.festId = f.id; if (g) v.id = g.id; await call('saveReg', v); toast('Сохранено'); await CL.load(true); TLV.fests(); }}]);
+  if ($('#fadd')) $('#fadd').onclick = () => regForm();
+  $$('[data-ge]').forEach(b => b.onclick = () => regForm(regs.find(g => g.id === b.dataset.ge)));
+  $$('[data-gd]').forEach(b => b.onclick = async () => { if (!(await askYes('Убрать участника из списка?'))) return; try { await call('deleteReg', {id: b.dataset.gd}); await CL.load(true); TLV.fests(); } catch (e) { fail(e); } });
+  if ($('#finv')) $('#finv').onclick = () => {
+    const comps = (S.T && S.T.companies) || [];
+    const bg = modal('Пригласить через бота', `<p class="small muted" style="margin-top:0">Ученики получат описание мероприятия и кнопку «🎉 Участвую». Регистрация откроется автоматически.</p><div class="fg">
+      ${fld('Кому', sel('company', [['', 'всем ученикам']].concat(comps.map(c => [c.name, 'компания: ' + c.name])), ''), 'full')}
+      ${fld('Дополнительный текст (необязательно)', `<textarea class="inp" name="text" rows="3" placeholder="Дресс-код, что взять с собой…"></textarea>`, 'full')}
+      <div class="full card tight" style="background:var(--soft);border-color:transparent" id="ficnt">Считаю…</div></div>`,
+    [{t: 'Отмена'}, {t: ic('send') + 'Пригласить', cls: 'pri', fn: async m => { const r = await call('festInvite', Object.assign(vals(m), {festId: f.id})); toast('Приглашений отправлено: ' + r.sent + ' из ' + r.total); await CL.load(true); TLV.fests(); }}], {wide: true});
+    const cnt = () => call('festInvite', {festId: f.id, company: $('[name=company]', bg).value, dry: true}, true).then(r => { const b = $('#ficnt', bg); if (b) b.innerHTML = r.total ? `Получат: <b>${r.total}</b> учеников, подключивших бота` : '<span style="color:var(--bad)">Никто из выбранных не подключил бота</span>'; }).catch(fail);
+    $('[name=company]', bg).onchange = cnt; cnt();
+  };
+  $('#fres').onclick = () => modal('Итоги: ' + esc(f.title), `<div class="fg"><div class="full tw"><table class="t"><thead><tr><th>Участник</th><th>Результат</th><th class="n">Баллы</th></tr></thead><tbody>
+      ${regs.map(g => `<tr data-rg="${g.id}"><td>${esc(g.clientName)}${g.partnerName ? `<div class="small muted">с ${esc(g.partnerName)}</div>` : ''}</td><td><input class="inp" data-res value="${esc(g.result || '')}" placeholder="1 место, финал, участие…"></td><td style="width:90px"><input class="inp" data-pts type="number" value="${g.points || ''}" placeholder="0"></td></tr>`).join('')}</tbody></table></div>
+      ${fld('Общий итог (необязательно)', `<textarea class="inp" name="summary" rows="2">${esc(f.results || '')}</textarea>`, 'full')}
+      <div class="full">${chk('toLeague', 'Начислить баллы в корпоративную лигу', true)}</div><div class="full">${chk('toPassport', 'Записать результат в паспорт танцора (дневник)', true)}</div>
+      <div class="full">${chk('notify', 'Поздравить участников в Telegram', true)}</div></div>`,
+    [{t: 'Отмена'}, {t: 'Сохранить итоги', cls: 'pri', fn: async m => {
+      const v = vals(m);
+      const rows = $$('[data-rg]', m).map(r => ({regId: r.dataset.rg, result: $('[data-res]', r).value, points: $('[data-pts]', r).value}));
+      const n = await call('festResults', {festId: f.id, rows, summary: v.summary, toLeague: !!v.toLeague, toPassport: !!v.toPassport, notify: !!v.notify});
+      toast('Итоги сохранены: ' + n); await CL.load(true); await TL.load(true); TLV.fests();
+    }}], {wide: true});
+}
+
+(function () {
+  const baseBot = TLV.bot;
+  TLV.bot = () => {
+    baseBot();
+    const my = S.pageSeq;
+    CL.load().then(C => {
+      if (S.pageSeq !== my || !$('#tlb') || $('#clbs')) return;
+      const s = C.settings;
+      const box = document.createElement('div'); box.className = 'card sect'; box.id = 'clbs';
+      box.innerHTML = `<h2 style="margin-top:0">Запись, напоминания и поздравления</h2><div class="cl-grid"><div class="stack">
+        ${chk('bot_book', 'Запись на занятия через бота: «📅 Расписание», лист ожидания, отмена', s.bot_book === 'true')}
+        <div class="row" style="gap:8px">${chk('bot_rem3', 'Напоминать «Вы придёте?» за', s.bot_rem3 === 'true')}<input class="inp" name="bot_remHours" type="number" min="1" max="12" value="${esc(s.bot_remHours)}" style="width:64px"> ч до занятия</div>
+        ${chk('bot_fb', 'Просить оценить занятие (1–5 звёзд и комментарий)', s.bot_fb === 'true')}
+        ${chk('bot_bday', 'Поздравлять учеников и тренеров с днём рождения', s.bot_bday === 'true')}
+        <div class="row" style="gap:8px"><span class="small">«Перестал ходить» — дольше</span><input class="inp" name="lost_days" type="number" min="7" max="120" value="${esc(s.lost_days)}" style="width:70px"><span class="small">дней</span></div></div>
+        <div class="stack">${fld('Текст поздравления ({имя} подставится само)', `<textarea class="inp" name="bday_text" rows="3">${esc(s.bday_text)}</textarea>`)}
+        ${fld('Сообщение «Мы скучаем» по умолчанию', `<textarea class="inp" name="call_text" rows="3">${esc(s.call_text)}</textarea>`)}</div></div>
+        <div class="row" style="margin-top:10px"><button class="btn pri" id="clbsave">Сохранить</button>${C.bot ? `<button class="btn" id="cltick">${ic('send')}Проверить напоминания сейчас</button>` : ''}
+          <span class="small muted grow">Напоминания «Вы придёте?» и просьбы об оценке бот проверяет каждые 10 минут.</span></div>`;
+      const anchor = $$('#tlb > .grid')[0];
+      if (anchor && anchor.nextSibling) anchor.parentNode.insertBefore(box, anchor.nextSibling); else $('#tlb').appendChild(box);
+      $('#clbsave').onclick = async () => {
+        const v = vals(box); ['bot_book', 'bot_rem3', 'bot_fb', 'bot_bday'].forEach(k => { v[k] = v[k] ? 'true' : 'false'; });
+        try { await call('clubBotSave', v); toast('Сохранено'); await CL.load(true); } catch (e) { fail(e); }
+      };
+      if ($('#cltick')) $('#cltick').onclick = async () => { try { const r = await call('clubTickNow', {}); toast('Отправлено сообщений: ' + r.sent); } catch (e) { fail(e); } };
+    }).catch(fail);
+  };
+
+  const baseHr = TLV.hr;
+  TLV.hr = () => {
+    baseHr();
+    const ui = S.ui.tlhr || {};
+    if (!ui.c) return;
+    const my = S.pageSeq;
+    CL.load().then(C => {
+      if (S.pageSeq !== my || !$('#tlb') || $('#clsh')) return;
+      const list = C.shares.filter(x => x.company === ui.c && x.active);
+      const box = document.createElement('div'); box.className = 'card tight'; box.id = 'clsh'; box.style.marginBottom = '12px';
+      box.innerHTML = `<div class="row"><div class="grow"><b>Ссылка для HR «${esc(ui.c)}»</b><div class="small muted">HR открывает её сам в любое время — без логина и пароля, только просмотр отчёта по своим сотрудникам.</div></div>
+        <button class="btn pri" id="shn">${ic('plus')}${list.length ? 'Ещё ссылка' : 'Создать ссылку'}</button></div>
+        ${list.map(x => `<div class="row" style="margin-top:8px;gap:8px"><div class="tl-link grow" style="min-width:0" data-shl="${x.id}">${esc(x.url)}</div>
+          <span class="small muted nowrap">просмотров: ${x.opens || 0}${x.lastOpen ? ', посл. ' + fd(String(x.lastOpen).slice(0, 10)) : ''}</span>
+          <button class="btn sm" data-shc="${x.id}">Копировать</button><button class="btn sm danger" data-sho="${x.id}">Отключить</button></div>`).join('')}`;
+      const pick = $('#tlb .tl-pick');
+      pick.parentNode.insertBefore(box, pick.nextSibling);
+      $('#shn').onclick = async () => { try { const r = await call('shareCreate', {company: ui.c}); await CL.load(true); CL.copy(r.url); TLV.hr(); } catch (e) { fail(e); } };
+      $$('[data-shc]').forEach(b => b.onclick = () => { const x = list.find(y => y.id === b.dataset.shc); CL.copy(x.url, $('[data-shl="' + x.id + '"]')); });
+      $$('[data-sho]').forEach(b => b.onclick = async () => { if (!(await askYes('Отключить ссылку? HR больше не сможет открыть отчёт по ней.'))) return; try { await call('shareOff', {id: b.dataset.sho}); await CL.load(true); TLV.hr(); } catch (e) { fail(e); } });
+    }).catch(fail);
+  };
+
+  const basePh = passportHtml;
+  passportHtml = (clientId, opts) => basePh(clientId, opts).replace(/<a href="([^"]+)" target="_blank" rel="noopener" class="small">▶ Видео с занятия<\/a>/g, (m, u) => {
+    const id = CL.yt(u.replace(/&amp;/g, '&'));
+    return id ? `<a href="${u}" target="_blank" rel="noopener" class="cl-yt"><img loading="lazy" src="${CL.url('img.youtube.com/vi/' + id + '/mqdefault.jpg')}" alt="Видео"></a>` : m;
+  });
+  const basePass = TLV.passport;
+  TLV.passport = () => {
+    basePass();
+    $$('[data-di]').forEach(el => { const d = (S.T.diary || []).find(x => x.id === el.dataset.di); if (d && d.homework) $('.small.muted', el).insertAdjacentHTML('beforeend', ` · <span class="badge gold">домашнее задание${d.sentAt ? ' · отправлено' : ''}</span>`); });
+  };
+})();
+
+diaryForm = function (clientId, o) {
+  o = o || {};
+  const bg = modal(o.id ? 'Запись в дневнике' : 'Новая запись в дневнике', `<div class="fg">
+    ${fld('Дата', inp('date', o.date || today(), 'type="date"'))}
+    ${fld('Что отработали, над чем работать', txt('text', o.text), 'full')}
+    ${fld('Ссылка на видео (YouTube, Google Диск, VK…)', inp('video', o.video || '', 'placeholder="' + CL.url('youtu.be/…') + '"'), 'full')}
+    <div class="full">${chk('homework', 'Это домашнее задание', o.homework)}</div>
+    <div class="full" id="dsend">${chk('send', 'Отправить ученику в Telegram' + (o.sentAt ? ' ещё раз' : ''), !o.sentAt)}</div>
+  </div>`, [o.id ? {t: ic('trash') + 'Удалить', cls: 'danger', left: 1, fn: async () => { await call('deleteDiary', {id: o.id}); toast('Удалено'); await tlRefresh(); }} : null,
+    {t: 'Отмена'}, {t: 'Сохранить', cls: 'pri', fn: async m => {
+      const v = vals(m); v.clientId = clientId; v.id = o.id; v.homework = !!v.homework; v.send = !!(v.homework && v.send);
+      await call('saveDiary', v); toast(v.send ? 'Задание сохранено и отправлено' : 'Запись сохранена'); await tlRefresh();
+    }}].filter(Boolean));
+  const upd = () => { $('#dsend', bg).style.display = $('[name=homework]', bg).checked ? '' : 'none'; };
+  $('[name=homework]', bg).onchange = upd; upd();
+};
+
+HOME_W.push({k: 'renew', t: 'Продления абонементов', club: true, html: () => hcard('Кому продлевать', '<div id="hw-renew"><div class="empty small">Загрузка…</div></div>', role() === 'admin' ? '<button class="btn sm" data-go="tools/renew">Все</button>' : ''),
+  fill: r => { $('#hw-renew').innerHTML = (r.renew || []).length ? r.renew.slice(0, 8).map(x => `<div class="row sub click" data-c="${x.clientId}"><div class="avatar c sm" data-av="client:${x.clientId}">${initials(x.name)}</div><div class="grow"><b>${esc(x.name)}</b><div class="small muted">${esc(x.title)}${x.endDate ? ' · до ' + fd(x.endDate) : ''}${x.price ? ' · ' + money(x.price) : ''}</div></div><span class="badge ${RENEW_R[x.reason][1]}">${x.remaining > 0 ? fh(x.remaining) + ' ч' : RENEW_R[x.reason][0]}</span></div>`).join('') : empty('Продлевать пока некому'); }});
+HOME_W.push({k: 'lost', t: 'Перестали ходить', club: true, html: () => hcard('Перестали ходить', '<div id="hw-lost"><div class="empty small">Загрузка…</div></div>', role() === 'admin' ? '<button class="btn sm" data-go="tools/lost">Все</button>' : ''),
+  fill: r => { const l = r.lost || {withSub: [], gone: []}; const list = l.withSub.concat(l.gone).slice(0, 8);
+    $('#hw-lost').innerHTML = list.length ? list.map(x => `<div class="row sub click" data-c="${x.id}"><div class="avatar c sm" data-av="client:${x.id}">${initials(x.name)}</div><div class="grow"><b>${esc(x.name)}</b><div class="small muted">${x.kind === 'sub' ? 'есть абонемент · ' : ''}${x.last ? 'был ' + fd(x.last) : 'ещё не занимался'}${x.called ? ' · связывались ' + fd(x.called) : ''}</div></div><span class="badge ${x.kind === 'sub' ? 'bad' : ''}">${x.days !== null ? x.days + ' дн.' : 'не был'}</span></div>`).join('') + (l.n > list.length ? `<div class="small muted" style="margin-top:6px">и ещё ${l.n - list.length}</div>` : '') : empty('Все ходят 🎉'); }});
+HOME_W.push({k: 'rating', t: 'Оценки тренеров', club: true, html: () => hcard('Оценки тренеров <span class="small muted">· 90 дней</span>', '<div id="hw-rating"><div class="empty small">Загрузка…</div></div>', role() === 'admin' ? '<button class="btn sm" data-go="tools/rate">Подробно</button>' : ''),
+  fill: r => { const x = r.rating || {trainers: []};
+    $('#hw-rating').innerHTML = x.total ? `<div class="row" style="margin-bottom:8px"><b style="font-size:24px">${fh(x.avg)}</b>${CL.stars(x.avg)}<span class="small muted">${x.total} оценок</span></div>
+      <div class="hbars">${x.trainers.map(t => `<div class="hb"><span>${esc(t.name)}</span><div class="bar"><i style="width:${t.avg / 5 * 100}%;background:${t.avg >= 4.5 ? 'var(--ok)' : t.avg >= 3.5 ? 'var(--gold)' : 'var(--bad)'}"></i></div><span class="right"><b>${fh(t.avg)}</b> <span class="small muted">(${t.n})</span></span></div>`).join('')}</div>
+      ${x.low.length ? `<div class="small" style="margin-top:8px;color:var(--bad)">Низкая оценка: ${x.low.map(f => esc(f.clientName) + ' → ' + esc(f.trainerName) + ' (' + f.score + '★' + (f.comment ? ': «' + esc(f.comment.slice(0, 60)) + '»' : '') + ')').join('; ')}</div>` : ''}` : empty('Оценок пока нет — их собирает бот после занятий'); }});
+HOME_W.push({k: 'fests', t: 'Мероприятия', club: true, html: () => hcard('Ближайшие мероприятия', '<div id="hw-fests"><div class="empty small">Загрузка…</div></div>', role() === 'admin' ? '<button class="btn sm" data-go="tools/fests">Все</button>' : ''),
+  fill: r => { $('#hw-fests').innerHTML = (r.fests || []).length ? r.fests.map(f => `<div class="row sub cl-fest" style="align-items:center">${festDate(f.date)}<div class="grow"><b>${esc(f.title)}</b><div class="small muted">${f.time ? esc(f.time) + ' · ' : ''}${esc(f.place || '')}</div></div><span class="badge">${f.regs}${+f.capacity ? '/' + f.capacity : ''} уч.</span></div>`).join('') : empty('Мероприятий не запланировано'); }});
+HOME_W.push({k: 'money', t: 'Финансы за период', admin: true, club: true, html: c => hcard('Финансы <span class="small muted">· ' + esc(c.label) + '</span>', '<div id="hw-money"><div class="empty small">Считаю…</div></div>', '<button class="btn sm" data-go="tools/money">Подробно</button>'),
+  fill: r => { const m = r.money; if (!m) return; const T = m.total;
+    $('#hw-money').innerHTML = `<div class="kv"><span class="k">Доход</span><span><b>${money(T.income)}</b></span><span class="k">Тренерам</span><span>${money(T.trainers)}</span><span class="k">Расходы</span><span>${money(T.expenses)}</span>
+      <span class="k">Прибыль</span><span><b class="${T.profit >= 0 ? 'cl-pos' : 'cl-neg'}">${money(T.profit)}</b></span><span class="k">Ждём оплаты</span><span>${money(m.receivable + m.unpaidRent)}</span></div>`; }});
+HOME_W.push({k: 'halls', t: 'Залы и пересечения', html: c => {
+  const items = hallItems(c.from, c.to);
+  const bad = [];
+  items.forEach((x, i) => items.forEach((y, k) => { if (k > i && hallClash(x, y)) bad.push([x, y]); }));
+  const halls = CL.halls();
+  const load = halls.map(h => ({h, n: items.filter(x => x.hall === h).length, min: sum(items.filter(x => x.hall === h && x.a >= 0), x => Math.max(0, x.b - x.a))}));
+  return hcard('Залы', (bad.length ? bad.slice(0, 5).map(p => `<div class="cl-it bad">⚠️ ${fd(p[0].date).slice(0, 5)}: <b>${esc(p[0].time)} ${esc(p[0].title)}</b> и <b>${esc(p[1].time)} ${esc(p[1].title)}</b>${p[0].hall ? ' · ' + esc(p[0].hall) : ''}</div>`).join('') : '<div class="small" style="color:var(--ok);margin-bottom:8px">Пересечений нет ✓</div>')
+    + (halls.length ? `<div class="hbars" style="margin-top:8px">${load.map(x => `<div class="hb"><span>${esc(x.h)}</span><div class="bar"><i style="width:${Math.min(100, x.min / Math.max(1, ...load.map(y => y.min)) * 100)}%"></i></div><span class="right"><b>${fh(x.min / 60)} ч</b></span></div>`).join('')}</div>` : ''),
+    role() === 'admin' ? '<button class="btn sm" data-go="tools/halls">Календарь</button>' : '');
+}});
+</script>
