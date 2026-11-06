@@ -170,8 +170,18 @@ public class MainActivity extends Activity {
                 // выбор файла: фото профиля, скан договора
                 if (fileCb != null) fileCb.onReceiveValue(null);
                 fileCb = cb;
+                Intent pick = params.createIntent();
+                String[] acc = params.getAcceptTypes();
+                boolean img = acc != null && acc.length > 0;
+                if (acc != null) for (String t : acc) if (t == null || !t.startsWith("image/")) img = false;
+                if (img) {
+                    // фото: сразу галерея или камера, а не «все файлы»
+                    pick = new Intent(Intent.ACTION_GET_CONTENT);
+                    pick.addCategory(Intent.CATEGORY_OPENABLE);
+                    pick.setType("image/*");
+                }
                 try {
-                    startActivityForResult(params.createIntent(), REQ_FILE);
+                    startActivityForResult(pick, REQ_FILE);
                 } catch (ActivityNotFoundException e) {
                     try {
                         Intent i = new Intent(Intent.ACTION_GET_CONTENT);
