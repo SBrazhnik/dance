@@ -527,7 +527,7 @@ function saveExpense_(user, p) {
 // ---------------------------------------------------------------------------
 // Ссылка для HR компании — страница только для просмотра, без входа
 // ---------------------------------------------------------------------------
-function shareUrl_(token) { return appUrl_() + '?hr=' + token; }
+function shareUrl_(token) { const b = appLink_(); return b + (b.indexOf('?') >= 0 ? '&' : '?') + 'hr=' + token; }
 function shareCreate_(user, p) {
   const company = String(req_(p.company, 'Выберите компанию')).trim();
   const token = newId_(12) + newId_(12);
