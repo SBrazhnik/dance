@@ -57,7 +57,7 @@ function tgNotify_(kind, refId, text, markup, key, sent, respect) {
   return n;
 }
 function clubMenuKb_() {
-  return { keyboard: [[{ text: '📅 Расписание' }, { text: '🗓 Мои записи' }], [{ text: '⏳ Остаток часов' }, { text: '🎉 Мероприятия' }], [{ text: '🔑 Войти в приложение' }]], resize_keyboard: true };
+  return { keyboard: [[{ text: '📅 Расписание' }, { text: '🗓 Мои записи' }], [{ text: '⏳ Остаток часов' }, { text: '🎉 Мероприятия' }], [{ text: '🔑 Войти в приложение' }, { text: '📲 Приложение для Android' }]], resize_keyboard: true };
 }
 function slotTitle_(s) { return s.title || typeOf_(s.type).name; }
 function slotWhen_(s) { return TOOL_DAYS[(new Date(s.date + 'T12:00:00Z').getUTCDay() + 6) % 7] + ' ' + ruDate_(s.date).slice(0, 5) + ' ' + (s.time || ''); }
@@ -146,7 +146,7 @@ function clubBotText_(chatId, text, mine) {
   const props = PropertiesService.getScriptProperties();
   // комментарий к недавней оценке
   const pend = props.getProperty('fbc:' + chatId);
-  if (pend && text.charAt(0) !== '/' && !/^(📅|🗓|⏳|🎉|🔑)/.test(text)) {
+  if (pend && text.charAt(0) !== '/' && !/^(📅|🗓|⏳|🎉|🔑|📲)/.test(text)) {
     props.deleteProperty('fbc:' + chatId);
     const [fid, exp] = pend.split('|');
     if (Date.now() < +exp && find_('feedback', fid)) { update_('feedback', fid, { comment: text.slice(0, 1000) }); tgSend_(chatId, 'Спасибо! Передали ваш отзыв в клуб 🙏'); return true; }
@@ -164,6 +164,7 @@ function clubBotText_(chatId, text, mine) {
   if (/^⏳/.test(text)) { tgSend_(chatId, mine.map(botBalance_).join('\n\n')); return true; }
   if (/^\/(events|мероприятия)|^🎉/i.test(text)) return one(botFestsMsg_);
   if (/^\/(login|вход)|^🔑/i.test(text)) { botLogin_(chatId, mine); return true; }
+  if (/^\/(apk|android|app)|^📲/i.test(text)) { botApk_(chatId); return true; }
   if (/^\/menu/.test(text)) { tgSend_(chatId, 'Меню внизу экрана 👇', clubMenuKb_()); return true; }
   return false;
 }
@@ -257,6 +258,13 @@ function botLogin_(chatId, mine) {
     return [{ text: '🔑 ' + (users.length > 1 ? u.name + ' — ' : '') + 'Открыть приложение', url: base + (base.indexOf('?') >= 0 ? '&' : '?') + 'code=' + code }];
   });
   return tgSend_(chatId, 'Нажмите кнопку — приложение откроется сразу, без логина и пароля.\nСсылка одноразовая и действует 15 минут. Не пересылайте её никому.', { inline_keyboard: rows });
+}
+const APK_URL = 'https://github.com/SBrazhnik/dance/releases/latest/download/DanceClub.apk';
+function botApk_(chatId) {
+  const site = String(settings_().app_link || '').trim();
+  return tgSend_(chatId, '📲 <b>Приложение клуба для Android</b>\n1. Нажмите кнопку ниже — скачается файл DanceClub.apk.\n2. Откройте его и нажмите «Установить». Если телефон спросит — разрешите установку из этого источника.\n3. Войдите: логин и пароль или кнопка «🔑 Войти в приложение» здесь в боте.' +
+    (site ? '\n\nНа iPhone приложение не ставится — откройте ' + tgEsc_(site) + ' в Safari и выберите «Поделиться → На экран „Домой“».' : ''),
+    { inline_keyboard: [[{ text: '⬇️ Скачать приложение (APK)', url: String(settings_().apk_link || '').trim() || APK_URL }]] });
 }
 function loginByCode_(p) {
   const code = String(p.code || '').replace(/[^A-Za-z0-9]/g, '');
@@ -761,7 +769,7 @@ function clubSetCommands_() {
   tgCall_('setMyCommands', { commands: [
     { command: 'schedule', description: 'Расписание и запись на занятия' }, { command: 'my', description: 'Мои записи' },
     { command: 'balance', description: 'Остаток часов' }, { command: 'events', description: 'Мероприятия клуба' },
-    { command: 'login', description: 'Войти в приложение без пароля' }, { command: 'next', description: 'Ближайшие занятия' }, { command: 'stop', description: 'Выключить уведомления' }, { command: 'on', description: 'Включить уведомления' }] });
+    { command: 'login', description: 'Войти в приложение без пароля' }, { command: 'apk', description: 'Скачать приложение для Android' }, { command: 'next', description: 'Ближайшие занятия' }, { command: 'stop', description: 'Выключить уведомления' }, { command: 'on', description: 'Включить уведомления' }] });
 }
 
 const CLUB_HANDLER_TABS = {

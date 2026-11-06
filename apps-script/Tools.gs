@@ -533,7 +533,7 @@ function botHandle_(m) {
   return tgSend_(chatId, botHelp_());
 }
 function botHelp_() {
-  return 'Команды:\n/schedule — расписание и запись на занятия\n/my — мои записи\n/balance — остаток часов\n/events — мероприятия клуба\n/next — ближайшие занятия\n/today — сводка на сегодня (для сотрудников)\n/stop — выключить уведомления\n/on — включить уведомления';
+  return 'Команды:\n/schedule — расписание и запись на занятия\n/my — мои записи\n/balance — остаток часов\n/events — мероприятия клуба\n/login — войти в приложение без пароля\n/apk — скачать приложение для Android\n/next — ближайшие занятия\n/today — сводка на сегодня (для сотрудников)\n/stop — выключить уведомления\n/on — включить уведомления';
 }
 function botKb_() { return typeof clubMenuKb_ === 'function' ? clubMenuKb_() : TG_NO_KB; }
 function botBalance_(r) {
