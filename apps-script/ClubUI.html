@@ -30,7 +30,19 @@ a.btn{text-decoration:none}
 .md-view img{max-width:100%;max-height:70vh;display:block;margin:0 auto;border-radius:10px}
 .md-view iframe{width:100%;aspect-ratio:16/9;border:0;border-radius:10px}
 .md-q{font-size:12px;margin-top:6px}
-.hl-grid{display:grid;gap:12px;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));margin-bottom:12px}
+.hl-grid{display:grid;gap:14px;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));margin-bottom:12px}
+.hl-grid.big .hl-ph{height:190px}
+.hl-card.off{opacity:.6}
+.hl-d{margin-top:4px;color:var(--muted);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.hl-ch{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.hl-cnt{position:absolute;right:10px;bottom:10px;background:rgba(0,0,0,.55);color:#fff;font-size:12px;border-radius:8px;padding:3px 8px;display:flex;gap:4px;align-items:center}
+.hl-page{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);gap:16px;align-items:start}
+.hl-thumbs{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.hl-th{width:76px;height:56px;border-radius:9px;background:var(--soft) center/cover no-repeat;cursor:pointer;border:2px solid transparent;display:flex;align-items:center;justify-content:center;color:var(--muted)}
+.hl-th.on{border-color:#7C5CE6}
+.hl-th.add{border:1px dashed var(--line)}
+.hl-desc{white-space:pre-wrap;line-height:1.55}
+@media (max-width:900px){.hl-page{grid-template-columns:1fr}}
 .hl-card{position:relative;background:var(--card);border:1px solid var(--line);border-radius:var(--r);overflow:hidden;cursor:pointer;transition:border-color .15s}
 .hl-card:hover{border-color:var(--navy3)}
 .hl-ph{height:150px;background:var(--soft) center/cover no-repeat;position:relative;display:flex;align-items:center;justify-content:center;color:var(--muted)}
@@ -292,7 +304,9 @@ function hallConflicts(o) {
   mine.forEach(m => all.forEach(x => { if (hallClash(m, x)) res.push(fd(x.date).slice(0, 5) + ' ' + (x.time || '') + ' ' + x.title + (x.hall ? ' (' + x.hall + ')' : '')); }));
   return [...new Set(res)].slice(0, 6);
 }
-// ---------- карточки залов: фото, площадь, адрес ----------
+// ---------- раздел «Залы»: карточки, фото, описание, оснащение ----------
+I.door = '<path d="M4 21h16M6 21V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v17"/><path d="M14 12h.01"/>';
+const HALL_FEATURES = ['Зеркала', 'Балетный станок', 'Паркет', 'Профессиональное покрытие', 'Звук', 'Кондиционер', 'Раздевалка', 'Душ', 'Свет для съёмки', 'Wi-Fi'];
 const HL = {
   async load(force) {
     if (S.HI && !force) return S.HI;
@@ -301,20 +315,22 @@ const HL = {
   },
   info(name) { return (S.HI || []).find(h => h.name === name) || null; },
   label(name) { const h = HL.info(name); return name + (h && h.area ? ' · ' + h.area + ' м²' : ''); },
-  /** Фото зала: из памяти устройства, иначе с сервера; уменьшенную копию делаем сами и отдаём серверу для остальных. */
-  async pic(h) {
-    if (!h || !h.photo) return '';
-    const key = 'hall:' + h.id + ':' + h.ver;
+  canEdit() { return ['admin', 'manager'].includes(role()); },
+  /** Фото зала № n: из памяти устройства, иначе с сервера; уменьшенную копию делает браузер и отдаёт серверу для остальных. */
+  async pic(h, n) {
+    n = n || 0;
+    if (!h || !(h.pics > n)) return '';
+    const key = 'hall:' + h.id + ':' + n + ':' + h.ver;
     S.hpc = S.hpc || {};
     if (S.hpc[key]) return S.hpc[key];
     let url = await fontGet(key);
     if (!url) {
-      const r = await call('hallPhoto', {id: h.id}, true);
+      const r = await call('hallPhoto', {id: h.id, n}, true);
       if (!r || !r.data) return '';
       url = 'data:' + r.mime + ';base64,' + r.data;
       if (!r.thumb) {
         url = await HL.shrink(url, 1100);
-        if (role() !== 'client') call('hallThumb', {id: h.id, data: url}, true).catch(() => {});
+        if (role() !== 'client') call('hallThumb', {id: h.id, n, data: url}, true).catch(() => {});
       }
       fontPut(key, url);
     }
@@ -327,7 +343,7 @@ const HL = {
         const k = Math.min(1, w / im.naturalWidth);
         const c = document.createElement('canvas'); c.width = Math.round(im.naturalWidth * k); c.height = Math.round(im.naturalHeight * k);
         c.getContext('2d').drawImage(im, 0, 0, c.width, c.height);
-        res(c.toDataURL('image/jpeg', 0.78));
+        res(c.toDataURL('image/jpeg', 0.8));
       };
       im.onerror = () => res(src);
       im.src = src;
@@ -336,87 +352,134 @@ const HL = {
   fill(root) {
     $$('[data-hp]', root).forEach(el => {
       const h = (S.HI || []).find(x => x.id === el.dataset.hp);
-      HL.pic(h).then(u => { if (u) el.style.backgroundImage = 'url("' + u + '")'; }).catch(() => {});
+      HL.pic(h, +el.dataset.hn || 0).then(u => { if (u) el.style.backgroundImage = 'url("' + u + '")'; }).catch(() => {});
     });
   },
-  cards(list, admin) {
-    return `<div class="hl-grid">${list.map(h => `<div class="hl-card" data-hv="${h.id}">
-      <div class="hl-ph" data-hp="${h.id}">${h.photo ? '' : `<span class="hl-no">${ic('cam', 30)}</span>`}${h.area ? `<span class="hl-area">${h.area} м²</span>` : ''}</div>
-      <div class="hl-b"><b>${esc(h.name)}</b>${h.full && h.full !== h.name ? `<div class="small muted">${esc(h.full)}</div>` : ''}${h.address ? `<div class="small muted">${esc(h.address)}</div>` : ''}</div>
-      ${admin ? `<button class="ibtn hl-ed" data-he="${h.id}" title="Изменить" aria-label="Изменить">${ic('edit', 17)}</button>` : ''}</div>`).join('')}</div>`;
+  chips(h) {
+    return [h.area ? h.area + ' м²' : '', h.capacity ? 'до ' + h.capacity + ' пар' : '', h.floor ? h.floor + ' этаж' : '', h.price ? money(h.price) + ' / час' : '']
+      .filter(Boolean).map(x => `<span class="badge">${esc(x)}</span>`).join(' ');
   },
 };
-async function hallsSection(box) {
-  const admin = role() === 'admin';
-  let list = [];
-  try { list = await HL.load(); } catch (e) { box.innerHTML = `<div class="small" style="color:var(--bad)">${esc(e.message)}</div>`; return; }
-  const appH = CL.halls();
-  const missing = appH.filter(n => !list.some(h => h.name === n) && !WHOLE(n));
-  box.innerHTML = `<div class="row" style="margin-bottom:10px"><h2 class="grow" style="margin:0">Залы клуба</h2>
-      ${admin ? `<button class="btn sm" id="hlimp">${ic('dl')}Загрузить с сайта ano.dance</button><button class="btn sm" id="hladd">${ic('plus')}Зал</button>` : ''}</div>
-    ${list.length ? HL.cards(list, admin) : `<div class="card tight" style="margin-bottom:12px">${admin ? 'Карточек залов пока нет. Нажмите «Загрузить с сайта ano.dance» — фото, площадь и адрес подтянутся сами.' : 'Карточки залов ещё не заполнены.'}</div>`}
-    ${admin && list.length && missing.length ? `<p class="small muted" style="margin-top:-6px">Без карточки: ${missing.map(esc).join(', ')} — добавьте кнопкой «＋ Зал».</p>` : ''}`;
-  HL.fill(box);
-  $$('[data-hv]', box).forEach(el => el.onclick = e => { if (e.target.closest('[data-he]')) return; hallView(list.find(h => h.id === el.dataset.hv)); });
-  $$('[data-he]', box).forEach(b => b.onclick = e => { e.stopPropagation(); hallForm(list.find(h => h.id === b.dataset.he)); });
+VIEWS.halls = id => {
+  if (id) return hallPage(id);
+  const my = S.pageSeq;
+  const ed = HL.canEdit(), admin = role() === 'admin';
+  $('#main').innerHTML = `<div class="head"><div style="flex:1;min-width:180px"><h1>Залы</h1><p class="script hide-light">✦ где мы танцуем</p></div>
+    ${admin ? `<button class="btn" id="hlimp">${ic('dl')}<span class="hide-sm">Загрузить с сайта ano.dance</span></button>` : ''}
+    ${ed ? `<button class="btn pri" id="hladd">${ic('plus')}Зал</button>` : ''}</div>
+    <div id="hlbody"><div class="empty">Загрузка…</div></div>`;
+  HL.load().then(list => {
+    if (S.pageSeq !== my) return;
+    const shown = list.filter(h => h.active || ed);
+    const appH = CL.halls(), missing = appH.filter(n => !list.some(h => h.name === n) && !WHOLE(n));
+    $('#hlbody').innerHTML = (shown.length ? `<div class="hl-grid big">${shown.map(h => `<div class="hl-card ${h.active ? '' : 'off'}" data-hv="${h.id}">
+        <div class="hl-ph" data-hp="${h.id}">${h.pics ? '' : `<span class="hl-no">${ic('door', 34)}</span>`}${h.area ? `<span class="hl-area">${h.area} м²</span>` : ''}${h.pics > 1 ? `<span class="hl-cnt">${ic('cam', 13)} ${h.pics}</span>` : ''}</div>
+        <div class="hl-b"><div class="row" style="gap:8px">${h.color ? `<span class="dot" style="background:${esc(h.color)}"></span>` : ''}<b class="grow">${esc(h.name)}</b>${h.active ? '' : '<span class="badge">не работает</span>'}</div>
+          ${h.descr ? `<div class="small hl-d">${esc(h.descr)}</div>` : h.full && h.full !== h.name ? `<div class="small muted">${esc(h.full)}</div>` : ''}
+          <div class="hl-ch">${HL.chips(h)}</div></div></div>`).join('')}</div>`
+      : `<div class="card">${empty(admin ? 'Залов пока нет. Нажмите «Загрузить с сайта ano.dance» — фото, площадь и адрес подтянутся сами, или добавьте зал вручную.' : 'Залы ещё не заполнены.')}</div>`)
+      + (ed && missing.length ? `<p class="small muted">Есть в расписании, но без карточки: ${missing.map(esc).join(', ')} — нажмите «＋ Зал», чтобы добавить описание и фото.</p>` : '');
+    HL.fill($('#hlbody'));
+    $$('[data-hv]').forEach(el => el.onclick = () => go('halls', el.dataset.hv));
+  }).catch(e => { if ($('#hlbody')) $('#hlbody').innerHTML = `<div class="empty" style="color:var(--bad)">${esc(e.message)}</div>`; });
   if ($('#hlimp')) $('#hlimp').onclick = async () => {
-    try {
-      const r = await call('hallsImport', {});
-      S.HI = r.halls; toast('Готово: новых ' + r.added + ', обновлено ' + r.updated + ', фото ' + r.photos);
-      hallsSection(box);
-    } catch (er) { fail(er); }
+    try { const r = await call('hallsImport', {}); S.HI = r.halls; toast('Готово: новых ' + r.added + ', обновлено ' + r.updated + ', фото ' + r.photos); VIEWS.halls(); } catch (er) { fail(er); }
   };
-  if ($('#hladd')) $('#hladd').onclick = () => hallForm({name: missing[0] || ''});
-}
-function hallView(h) {
-  if (!h) return;
-  const bg = modal(esc(h.name), `<div class="hl-big" data-hp="${h.id}">${h.photo ? '' : `<span class="hl-no">${ic('cam', 40)}</span>`}</div>
-    <div class="kv" style="margin-top:12px">${h.area ? `<span class="k">Площадь</span><span><b>${h.area} м²</b></span>` : ''}
-      ${h.full && h.full !== h.name ? `<span class="k">На сайте</span><span>${esc(h.full)}</span>` : ''}
-      ${h.address ? `<span class="k">Адрес</span><span>${esc(h.address)}</span>` : ''}</div>
-    ${role() !== 'client' && h.photo ? `<p class="small" style="margin-bottom:0"><a href="#" id="hlorig">Открыть фото в полном размере на Google Диске</a></p>` : ''}`,
-    [role() === 'admin' ? {t: ic('edit') + 'Изменить', left: 1, fn: () => { hallForm(h); }} : null, {t: 'Закрыть'}].filter(Boolean), {wide: true});
-  HL.fill(bg);
-  if ($('#hlorig')) $('#hlorig').onclick = async e => {
-    e.preventDefault();
-    try { const r = await call('hallPhoto', {id: h.id}); if (r.driveUrl) window.open(r.driveUrl, '_blank'); } catch (er) { fail(er); }
-  };
+  if ($('#hladd')) $('#hladd').onclick = () => hallForm({active: true});
+};
+function hallPage(id) {
+  const my = S.pageSeq;
+  $('#main').innerHTML = `<div class="empty">Загрузка…</div>`;
+  HL.load().then(list => {
+    if (S.pageSeq !== my) return;
+    const h = list.find(x => x.id === id);
+    if (!h) { $('#main').innerHTML = `<div class="head"><button class="btn" id="hlb">${ic('back')}Все залы</button></div>${empty('Зал не найден')}`; $('#hlb').onclick = () => go('halls'); return; }
+    const ed = HL.canEdit();
+    const cur = S.ui.hlpic && S.ui.hlpic.id === id ? Math.min(S.ui.hlpic.n, Math.max(0, h.pics - 1)) : 0;
+    const wk = addDays(today(), 6), items = hallItems(today(), wk).filter(x => x.hall === h.name || WHOLE(x.hall)).sort((a, b) => (a.date + a.a) < (b.date + b.a) ? -1 : 1);
+    $('#main').innerHTML = `<div class="head"><button class="btn" id="hlb">${ic('back')}<span class="hide-sm">Все залы</span></button>
+        <h1 class="grow" style="min-width:0">${esc(h.name)}</h1>${ed ? `<button class="btn pri" id="hle">${ic('edit')}Изменить</button>` : ''}</div>
+      <div class="hl-page">
+        <div><div class="hl-big" data-hp="${h.id}" data-hn="${cur}" id="hlmain">${h.pics ? '' : `<span class="hl-no">${ic('door', 44)}</span>`}</div>
+          <div class="hl-thumbs">${Array.from({length: h.pics}, (_, n) => `<div class="hl-th ${n === cur ? 'on' : ''}" data-hp="${h.id}" data-hn="${n}" data-pick="${n}"></div>`).join('')}
+            ${ed ? `<label class="hl-th add" title="Добавить фото">${ic('plus', 22)}<input type="file" id="hlnew" accept="image/jpeg,image/png,image/webp" multiple hidden></label>` : ''}</div>
+          ${ed && h.pics ? `<div class="row small" style="margin-top:8px">${cur > 0 ? `<a href="#" id="hlmk">Сделать главным</a>` : '<span class="muted">Главное фото</span>'}<a href="#" id="hlfull">Оригинал на Диске</a><span class="spacer"></span><a href="#" id="hldel" style="color:var(--bad)">Удалить фото</a></div>` : ''}
+        </div>
+        <div class="stack">
+          <div class="card"><div class="hl-ch" style="margin:0 0 10px">${HL.chips(h) || '<span class="muted small">Площадь и вместимость не указаны</span>'}</div>
+            ${h.descr ? `<div class="hl-desc">${esc(h.descr)}</div>` : `<div class="muted small">${ed ? 'Описания пока нет — нажмите «Изменить».' : 'Описания пока нет.'}</div>`}
+            ${h.features ? `<div class="sect-t" style="margin-top:14px">Оснащение</div><div class="chips" style="margin-top:6px">${h.features.split(',').map(x => x.trim()).filter(Boolean).map(x => `<span class="chip">${esc(x)}</span>`).join('')}</div>` : ''}
+            <div class="kv" style="margin-top:14px">${h.address ? `<span class="k">Адрес</span><span>${esc(h.address)}</span>` : ''}${h.full && h.full !== h.name ? `<span class="k">На сайте</span><span>${esc(h.full)}</span>` : ''}${h.active ? '' : '<span class="k">Статус</span><span>сейчас не работает</span>'}</div></div>
+          <div class="card"><h3 style="margin-bottom:8px">Занятость на 7 дней</h3>
+            ${items.length ? items.slice(0, 30).map(x => `<div class="slot" style="padding:6px 0;border-top:1px solid var(--line)"><span class="tm" style="min-width:92px">${wd(x.date)}, ${fd(x.date).slice(0, 5)}<br><span class="small muted">${esc(x.time || 'весь день')}</span></span><div class="grow"><b>${esc(x.title)}</b><div class="small muted">${esc(x.kind === 'slot' ? x.who : x.hall)}</div></div></div>`).join('') : empty('На ближайшую неделю свободно')}
+            ${hasTool('halls') ? `<button class="btn sm" style="margin-top:10px" id="hlcal">${ic('cal')}Календарь всех залов</button>` : ''}</div>
+        </div></div>`;
+    HL.fill($('#main'));
+    $('#hlb').onclick = () => go('halls');
+    if ($('#hle')) $('#hle').onclick = () => hallForm(h);
+    if ($('#hlcal')) $('#hlcal').onclick = () => go('tools', 'halls');
+    $$('[data-pick]').forEach(el => el.onclick = () => { S.ui.hlpic = {id, n: +el.dataset.pick}; hallPage(id); });
+    const act = (a, p, msg) => async e => { e.preventDefault(); try { await call(a, Object.assign({id, n: cur}, p || {})); await HL.load(true); S.ui.hlpic = {id, n: 0}; toast(msg); hallPage(id); } catch (er) { fail(er); } };
+    if ($('#hlmk')) $('#hlmk').onclick = act('hallPhotoMain', null, 'Главное фото изменено');
+    if ($('#hldel')) $('#hldel').onclick = async e => { e.preventDefault(); if (await askYes('Удалить это фото зала?', 'Удалить')) act('hallPhotoDel', null, 'Фото удалено')(e); };
+    if ($('#hlfull')) $('#hlfull').onclick = async e => { e.preventDefault(); try { const r = await call('hallPhoto', {id, n: cur}); if (r.driveUrl) window.open(r.driveUrl, '_blank'); } catch (er) { fail(er); } };
+    if ($('#hlnew')) $('#hlnew').onchange = async e => {
+      const files = [...e.target.files]; if (!files.length) return;
+      try {
+        for (const f of files) {
+          const src = await new Promise((res, rej) => { const rd = new FileReader(); rd.onload = () => res(rd.result); rd.onerror = rej; rd.readAsDataURL(f); });
+          await call('hallPhotoAdd', {id, photo: await HL.shrink(src, 2400), thumb: await HL.shrink(src, 1100)});
+        }
+        await HL.load(true); toast(files.length > 1 ? 'Фото добавлены' : 'Фото добавлено'); hallPage(id);
+      } catch (er) { fail(er); }
+    };
+  }).catch(e => { $('#main').innerHTML = `<div class="empty" style="color:var(--bad)">${esc(e.message)}</div>`; });
 }
 function hallForm(h) {
   h = h || {};
   const appH = CL.halls();
   let photo = null, thumb = null;
+  const feats = String(h.features || '').split(',').map(x => x.trim()).filter(Boolean);
+  const allF = HALL_FEATURES.concat(feats.filter(x => !HALL_FEATURES.includes(x)));
   const bg = modal(h.id ? 'Зал' : 'Новый зал', `<div class="fg">
-    ${fld('Название в приложении', inp('name', h.name || '', 'list="hlnames" placeholder="Например: Большой зал"') + `<datalist id="hlnames">${appH.map(n => `<option value="${esc(n)}">`).join('')}</datalist>`, 'full')}
-    ${fld('Название на сайте', inp('full', h.full || ''), 'full')}
+    ${fld('Название', inp('name', h.name || '', 'list="hlnames" placeholder="Например: Большой зал"') + `<datalist id="hlnames">${appH.map(n => `<option value="${esc(n)}">`).join('')}</datalist>`, 'full')}
+    ${fld('Описание', `<textarea class="inp" name="descr" rows="4" placeholder="Чем хорош зал, для каких занятий подходит, как пройти">${esc(h.descr || '')}</textarea>`, 'full')}
     ${fld('Площадь, м²', inp('area', h.area || '', 'type="number" min="0" step="1"'))}
+    ${fld('Вместимость, пар', inp('capacity', h.capacity || '', 'type="number" min="0" step="1"'))}
+    ${fld('Этаж', inp('floor', h.floor || '', 'placeholder="1"'))}
+    ${fld('Аренда, ₽ в час', inp('price', h.price || '', 'type="number" min="0" step="50"'))}
     ${fld('Адрес', inp('address', h.address || ''), 'full')}
-    <div class="full"><label class="f">Фото</label><div class="hl-big" id="hlpv" ${h.id ? `data-hp="${h.id}"` : ''}></div>
-      <label class="btn sm" style="margin-top:8px">${ic('cam')}Выбрать фото<input type="file" id="hlfile" accept="image/jpeg,image/png,image/webp" hidden></label></div>
-    <label class="chk full"><input type="checkbox" name="addToList" ${h.id ? '' : 'checked'}> Добавить в список залов приложения (формы слотов и аренды), если его там нет</label>
+    <div class="full"><label class="f">Оснащение</label><div class="chips">${allF.map(x => { const on = feats.includes(x); return `<label class="chip ${on ? 'on' : ''}"><input type="checkbox" data-multi="1" name="features" value="${esc(x)}" ${on ? 'checked' : ''} hidden>${esc(x)}</label>`; }).join('')}</div>
+      ${inp('featx', '', 'placeholder="Своё через запятую, например: рояль, гримёрка" style="margin-top:8px"')}</div>
+    ${fld('Цвет в календаре', `<input type="color" class="swatch" name="color" value="${esc(h.color || '#7C5CE6')}">`)}
+    ${fld('Порядок в списке', inp('sort', h.sort || '', 'type="number" min="0" step="1" placeholder="1, 2, 3…"'))}
+    ${fld('Название на сайте ano.dance', inp('full', h.full || ''), 'full')}
+    ${h.id ? '' : `<div class="full"><label class="f">Главное фото</label><div class="hl-big" id="hlpv" style="height:200px"></div>
+      <label class="btn sm" style="margin-top:8px">${ic('cam')}Выбрать фото<input type="file" id="hlfile" accept="image/jpeg,image/png,image/webp" hidden></label></div>`}
+    <label class="chk full"><input type="checkbox" name="active" ${h.active === false ? '' : 'checked'}> Зал работает (выключите, если временно закрыт — он скроется из списка у тренеров)</label>
+    ${h.id ? '<p class="small muted full" style="margin:0">Если переименовать зал, новое название подставится и в расписание, и в аренду.</p>' : ''}
   </div>`,
-  [h.id ? {t: ic('trash') + 'Удалить карточку', cls: 'danger', left: 1, fn: async () => {
-      if (!(await askYes('Удалить карточку зала «' + h.name + '»? Сам зал останется в списке залов, записи не пострадают.', 'Удалить'))) return false;
-      await call('hallDel', {id: h.id}); await HL.load(true); toast('Удалено'); refreshHalls();
+  [h.id && role() === 'admin' ? {t: ic('trash') + 'Удалить', cls: 'danger', left: 1, fn: async () => {
+      if (!(await askYes('Удалить карточку зала «' + h.name + '» вместе с фото? Записи в расписании и аренде останутся.', 'Удалить'))) return false;
+      await call('hallDel', {id: h.id}); await HL.load(true); toast('Удалено'); go('halls');
     }} : null,
    {t: 'Отмена'},
    {t: 'Сохранить', cls: 'pri', fn: async m => {
       const v = vals(m); v.id = h.id;
+      v.features = (v.features || []).concat(String(v.featx || '').split(',').map(x => x.trim()).filter(Boolean)); delete v.featx;
       if (photo) { v.photo = photo; v.thumb = thumb; }
-      await call('hallSave', v); await HL.load(true); toast('Сохранено'); refreshHalls();
+      const r = await call('hallSave', v); await HL.load(true); toast('Сохранено');
+      if (S.snap) { S.D = S.snap; S.snap = null; index(); }
+      go('halls', r.id);
     }}].filter(Boolean), {wide: true});
-  HL.fill(bg);
-  $('#hlfile', bg).onchange = e => {
+  $$('.chip input', bg).forEach(x => x.onchange = () => x.parentNode.classList.toggle('on', x.checked));
+  if ($('#hlfile', bg)) $('#hlfile', bg).onchange = e => {
     const f = e.target.files[0]; if (!f) return;
     const rd = new FileReader();
-    rd.onload = async () => {
-      photo = await HL.shrink(rd.result, 2400); thumb = await HL.shrink(rd.result, 1100);
-      $('#hlpv', bg).style.backgroundImage = 'url("' + thumb + '")';
-    };
+    rd.onload = async () => { photo = await HL.shrink(rd.result, 2400); thumb = await HL.shrink(rd.result, 1100); $('#hlpv', bg).style.backgroundImage = 'url("' + thumb + '")'; };
     rd.readAsDataURL(f);
   };
 }
-function refreshHalls() { if (S.route[0] === 'tools' && $('#hlsec')) hallsSection($('#hlsec')); }
 TLV.halls = () => {
   const ui = S.ui.clh || (S.ui.clh = {from: addDays(today(), -((new Date(today() + 'T12:00:00Z').getUTCDay() + 6) % 7))});
   const to = addDays(ui.from, 6);
@@ -429,7 +492,7 @@ TLV.halls = () => {
   const inRow = (h, x) => h === '' ? (!x.hall || !halls.includes(x.hall)) : (x.hall === h || (WHOLE(x.hall) && !halls.includes(x.hall)));
   const cell = (h, d) => items.filter(x => x.date === d && inRow(h, x)).sort((a, b) => a.a - b.a)
     .map(x => `<div class="cl-it ${x.kind === 'rent' ? 'rent' : ''} ${bad.has(x) ? 'bad' : ''}" title="${esc(x.title)}"><b>${esc(x.time || '')}</b> ${esc(x.title)}<div class="muted">${esc(x.kind === 'slot' ? x.who : (x.hall || ''))}</div></div>`).join('');
-  $('#tlb').innerHTML = `<div id="hlsec" style="margin-bottom:18px"><div class="small muted">Загрузка залов…</div></div><h2 style="margin:0 0 10px">Занятость на неделе</h2><div class="row" style="margin-bottom:10px"><button class="btn sm" id="hwp">${ic('back')}</button><b>${fd(ui.from)} — ${fd(to)}</b><button class="btn sm" id="hwn" style="transform:scaleX(-1)">${ic('back')}</button><button class="btn sm" id="hwt">Эта неделя</button>
+  $('#tlb').innerHTML = `<p class="small muted" style="margin-top:0">Фото, описания и оснащение залов — в разделе меню <a href="#" id="hlgo">«Залы»</a>.</p><div class="row" style="margin-bottom:10px"><button class="btn sm" id="hwp">${ic('back')}</button><b>${fd(ui.from)} — ${fd(to)}</b><button class="btn sm" id="hwn" style="transform:scaleX(-1)">${ic('back')}</button><button class="btn sm" id="hwt">Эта неделя</button>
       <span class="spacer"></span><span class="small muted"><span class="cl-it" style="display:inline-block;margin:0">занятие</span> <span class="cl-it rent" style="display:inline-block;margin:0">аренда</span> <span class="cl-it bad" style="display:inline-block;margin:0">пересечение</span></span></div>
     ${bad.size ? `<div class="card tight" style="border-color:var(--bad);margin-bottom:10px">⚠️ Есть пересечения по залу и времени (записей: ${bad.size}) — проверьте красные карточки.</div>` : ''}
     ${halls.length ? '' : `<div class="card tight" style="margin-bottom:10px">Залы не указаны в настройках. Добавьте их в «Настройки → Клуб», чтобы видеть занятость по каждому залу.</div>`}
@@ -439,7 +502,7 @@ TLV.halls = () => {
   $('#hwp').onclick = () => { ui.from = addDays(ui.from, -7); TLV.halls(); };
   $('#hwn').onclick = () => { ui.from = addDays(ui.from, 7); TLV.halls(); };
   $('#hwt').onclick = () => { S.ui.clh = null; TLV.halls(); };
-  hallsSection($('#hlsec'));
+  $('#hlgo').onclick = e => { e.preventDefault(); go('halls'); };
 };
 
 function expenseForm(o) {

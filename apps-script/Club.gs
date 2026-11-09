@@ -708,7 +708,9 @@ const MEDIA_SHEETS = {
     ['clientIds', 'ID учеников'], ['names', 'Кто на фото / видео'], ['fileId', 'Файл на Диске'], ['url', 'Ссылка'], ['mime', 'Формат'],
     ['size', 'Размер, байт'], ['preview', 'Миниатюра'], ['author', 'Кто добавил'], ['createdAt', 'Добавлено']]],
   halls: ['Залы', [['id', 'ID'], ['name', 'Зал в приложении'], ['full', 'Название на сайте'], ['address', 'Адрес'], ['area', 'Площадь, м²'],
-    ['fileId', 'Фото на Диске'], ['thumbId', 'Уменьшенное фото'], ['src', 'ID на сайте'], ['updatedAt', 'Обновлено']]],
+    ['fileId', 'Фото на Диске'], ['thumbId', 'Уменьшенное фото'], ['src', 'ID на сайте'], ['updatedAt', 'Обновлено'],
+    ['descr', 'Описание'], ['capacity', 'Вместимость, пар'], ['floor', 'Этаж'], ['price', 'Аренда, ₽/час'], ['features', 'Оснащение'],
+    ['color', 'Цвет'], ['sort', 'Порядок'], ['active', 'Работает'], ['more', 'Ещё фото']]],
 };
 const MEDIA_MAX = 25 * 1024 * 1024;
 // ---------------------------------------------------------------------------
@@ -980,31 +982,48 @@ function mediaGet_(user, p) {
 // Фото лежат в папке «Медиа/Залы», список — на листе «Залы» таблицы «Медиа».
 // ---------------------------------------------------------------------------
 const HALLS_API = 'https://ano.dance/booking/api/halls';
+function hallMore_(h) { try { return JSON.parse(h.more || '[]') || []; } catch (e) { return []; } }
 function hallView_(h) {
-  return { id: h.id, name: h.name, full: h.full, address: h.address, area: Number(h.area) || 0, photo: !!(h.thumbId || h.fileId), ver: h.updatedAt };
+  return { id: h.id, name: h.name, full: h.full, address: h.address, area: Number(h.area) || 0, photo: !!(h.thumbId || h.fileId), ver: h.updatedAt,
+    descr: h.descr || '', capacity: Number(h.capacity) || 0, floor: h.floor || '', price: Number(h.price) || 0, features: h.features || '',
+    color: h.color || '', sort: Number(h.sort) || 0, active: h.active !== 'нет', pics: (h.fileId ? 1 : 0) + hallMore_(h).length };
 }
-function hallsList_() { return mrows_('halls').map(hallView_); }
+function hallsList_() {
+  return mrows_('halls').map(hallView_).sort((a, b) => (a.sort || 999) - (b.sort || 999) || a.name.localeCompare(b.name));
+}
+function hallHeader_() {
+  const cols = MEDIA_SHEETS.halls[1];
+  mediaSs_().getSheetByName(MEDIA_SHEETS.halls[0]).getRange(1, 1, 1, cols.length).setValues([cols.map(c => c[1])]).setFontWeight('bold');
+}
+function hallFind_(id) { const h = mrows_('halls').find(x => x.id === id); if (!h) throw new Error('Зал не найден'); return h; }
+/** Фото № n (0 — главное). Отдаёт уменьшенную копию, если она есть. */
 function hallPhoto_(user, p) {
-  const h = mrows_('halls').find(x => x.id === p.id);
-  if (!h) throw new Error('Зал не найден');
-  const id = (!p.full && h.thumbId) || h.fileId;
-  if (!id) return { none: 1 };
+  const h = hallFind_(p.id);
+  const n = Number(p.n) || 0;
+  const ph = n === 0 ? { f: h.fileId, t: h.thumbId } : hallMore_(h)[n - 1];
+  if (!ph || !ph.f) return { none: 1 };
+  const id = (!p.full && ph.t) || ph.f;
   const f = DriveApp.getFileById(id);
-  return { thumb: id === h.thumbId, mime: f.getMimeType(), data: Utilities.base64Encode(f.getBlob().getBytes()), driveUrl: h.fileId ? DriveApp.getFileById(h.fileId).getUrl() : '' };
+  return { thumb: id === ph.t, mime: f.getMimeType(), data: Utilities.base64Encode(f.getBlob().getBytes()), driveUrl: DriveApp.getFileById(ph.f).getUrl() };
 }
-function hallThumbStore_(h, data) {
-  const m = String(data || '').match(/^data:image\/(jpeg|webp);base64,(.+)$/);
-  if (!m || m[2].length > 400000) throw new Error('Неверное фото');
-  const f = mediaSub_('Залы').createFile(Utilities.newBlob(Utilities.base64Decode(m[2]), 'image/' + m[1], safeName_((h.name || h.full) + ' — уменьшенное') + '.' + (m[1] === 'jpeg' ? 'jpg' : 'webp')));
-  if (h.thumbId) trashFile_(h.thumbId);
-  h.thumbId = f.getId();
+function hallStoreImg_(data, name, maxLen) {
+  const m = String(data || '').match(/^data:image\/(jpeg|png|webp);base64,(.+)$/);
+  if (!m || m[2].length > maxLen) throw new Error('Неверное фото');
+  return mediaSub_('Залы').createFile(Utilities.newBlob(Utilities.base64Decode(m[2]), 'image/' + m[1], safeName_(name) + '.' + (m[1] === 'jpeg' ? 'jpg' : m[1]))).getId();
 }
 /** Уменьшенную копию фото делает браузер первого, кто открыл зал, — дальше все получают лёгкий файл. */
 function hallThumb_(user, p) {
-  const h = mrows_('halls').find(x => x.id === p.id);
-  if (!h) throw new Error('Зал не найден');
-  if (h.thumbId) return true;
-  hallThumbStore_(h, p.data);
+  const h = hallFind_(p.id);
+  const n = Number(p.n) || 0;
+  if (n === 0) {
+    if (h.thumbId || !h.fileId) return true;
+    h.thumbId = hallStoreImg_(p.data, (h.name || h.full) + ' — уменьшенное', 600000);
+  } else {
+    const more = hallMore_(h); const ph = more[n - 1];
+    if (!ph || ph.t) return true;
+    ph.t = hallStoreImg_(p.data, h.name + ' ' + n + ' — уменьшенное', 600000);
+    h.more = JSON.stringify(more);
+  }
   mwrite_('halls', h, h._r);
   return true;
 }
@@ -1012,36 +1031,83 @@ function hallSave_(user, p) {
   const all = mrows_('halls');
   let h = p.id ? all.find(x => x.id === p.id) : null;
   if (p.id && !h) throw new Error('Зал не найден');
-  const name = String(p.name || '').trim().slice(0, 100);
+  const name = String(p.name || '').trim().replace(/,/g, ' ').slice(0, 100);
   if (!name) throw new Error('Укажите название зала');
-  if (all.some(x => x.name === name && (!h || x.id !== h.id))) throw new Error('Карточка этого зала уже есть');
-  h = h || { id: newId_(10), fileId: '', thumbId: '', src: '', full: '' };
-  h.name = name; h.address = String(p.address || '').slice(0, 200); h.area = Number(p.area) > 0 ? Math.round(Number(p.area)) : '';
+  if (all.some(x => x.name === name && (!h || x.id !== h.id))) throw new Error('Зал с таким названием уже есть');
+  const oldName = h ? h.name : '';
+  h = h || { id: newId_(10), fileId: '', thumbId: '', src: '', full: '', more: '[]' };
+  h.name = name;
+  const num = v => Number(v) > 0 ? Math.round(Number(v) * 100) / 100 : '';
+  ['address', 'floor', 'color'].forEach(k => { if (p[k] !== undefined) h[k] = String(p[k] || '').slice(0, 200); });
   if (p.full !== undefined) h.full = String(p.full || '').slice(0, 150);
+  if (p.descr !== undefined) h.descr = String(p.descr || '').slice(0, 4000);
+  if (p.features !== undefined) h.features = [].concat(p.features || []).join(',').split(',').map(x => x.trim()).filter(Boolean).slice(0, 30).join(', ');
+  ['area', 'capacity', 'price', 'sort'].forEach(k => { if (p[k] !== undefined) h[k] = num(p[k]); });
+  if (p.active !== undefined) h.active = p.active ? '' : 'нет';
   if (p.photo) {
-    const m = String(p.photo).match(/^data:image\/(jpeg|png|webp);base64,(.+)$/);
-    if (!m) throw new Error('Это не изображение');
-    const bytes = Utilities.base64Decode(m[2]);
-    if (bytes.length > 15 * 1024 * 1024) throw new Error('Фото больше 15 МБ');
-    const f = mediaSub_('Залы').createFile(Utilities.newBlob(bytes, 'image/' + m[1], safeName_(name) + '.' + (m[1] === 'jpeg' ? 'jpg' : m[1])));
+    const fid = hallStoreImg_(p.photo, name, 20 * 1024 * 1024);
     if (h.fileId) trashFile_(h.fileId);
     if (h.thumbId) trashFile_(h.thumbId);
-    h.fileId = f.getId(); h.thumbId = '';
-    if (p.thumb) hallThumbStore_(h, p.thumb);
+    h.fileId = fid; h.thumbId = p.thumb ? hallStoreImg_(p.thumb, name + ' — уменьшенное', 600000) : '';
   }
   h.updatedAt = now_();
+  hallHeader_();
   mwrite_('halls', h, h._r || null);
-  // новый зал сразу появляется в списке залов приложения (формы слотов и аренды)
-  if (p.addToList) {
-    const list = String(settings_().halls || '').split(',').map(x => x.trim()).filter(Boolean);
-    if (list.indexOf(name) < 0) { list.push(name); setSetting_('halls', list.join(', ')); }
+  // список залов приложения (формы слотов и аренды) и переименование в записях
+  const list = String(settings_().halls || '').split(',').map(x => x.trim()).filter(Boolean);
+  let changed = false;
+  if (oldName && oldName !== name) {
+    const i = list.indexOf(oldName);
+    if (i >= 0) { list[i] = name; changed = true; }
+    if (p.renameRecords !== false) {
+      ['slots', 'rent'].forEach(t => tbl_(t).rows.filter(r => r.hall === oldName).forEach(r => update_(t, r.id, { hall: name })));
+    }
   }
+  if (list.indexOf(name) < 0) { list.push(name); changed = true; }
+  if (changed) setSetting_('halls', list.join(', '));
+  return hallView_(h);
+}
+function hallPhotoAdd_(user, p) {
+  const h = hallFind_(p.id);
+  const f = hallStoreImg_(p.photo, h.name, 20 * 1024 * 1024);
+  const t = p.thumb ? hallStoreImg_(p.thumb, h.name + ' — уменьшенное', 600000) : '';
+  if (!h.fileId) { h.fileId = f; h.thumbId = t; }
+  else { const more = hallMore_(h); if (more.length >= 20) throw new Error('Не больше 20 фото у зала'); more.push({ f, t }); h.more = JSON.stringify(more); }
+  h.updatedAt = now_();
+  mwrite_('halls', h, h._r);
+  return hallView_(h);
+}
+function hallPhotoDel_(user, p) {
+  const h = hallFind_(p.id);
+  const n = Number(p.n) || 0, more = hallMore_(h);
+  if (n === 0) {
+    trashFile_(h.fileId); trashFile_(h.thumbId);
+    const nx = more.shift();
+    h.fileId = nx ? nx.f : ''; h.thumbId = nx ? nx.t : '';
+  } else {
+    const ph = more.splice(n - 1, 1)[0];
+    if (ph) { trashFile_(ph.f); trashFile_(ph.t); }
+  }
+  h.more = JSON.stringify(more); h.updatedAt = now_();
+  mwrite_('halls', h, h._r);
+  return hallView_(h);
+}
+function hallPhotoMain_(user, p) {
+  const h = hallFind_(p.id);
+  const n = Number(p.n) || 0, more = hallMore_(h);
+  if (n < 1 || !more[n - 1]) return hallView_(h);
+  const ph = more[n - 1];
+  more[n - 1] = { f: h.fileId, t: h.thumbId };
+  h.fileId = ph.f; h.thumbId = ph.t;
+  h.more = JSON.stringify(more.filter(x => x.f)); h.updatedAt = now_();
+  mwrite_('halls', h, h._r);
   return hallView_(h);
 }
 function hallDel_(user, p) {
   const h = mrows_('halls').find(x => x.id === p.id);
   if (!h) return true;
   trashFile_(h.fileId); trashFile_(h.thumbId);
+  hallMore_(h).forEach(x => { trashFile_(x.f); trashFile_(x.t); });
   mdelete_('halls', h);
   return true;
 }
@@ -1076,6 +1142,7 @@ function hallsImport_() {
     h.updatedAt = now_();
     mwrite_('halls', h, h._r || null);
   });
+  hallHeader_();
   return { added, updated, photos, halls: hallsList_() };
 }
 
@@ -1179,7 +1246,10 @@ function clubHandlers_() {
     hallsList: { roles: ALL, fn: hallsList_ },
     hallPhoto: { roles: ALL, fn: hallPhoto_ },
     hallThumb: { roles: ['admin', 'manager', 'trainer'], write: true, fn: hallThumb_ },
-    hallSave: { roles: ['admin'], write: true, fn: hallSave_ },
+    hallSave: { roles: ['admin', 'manager'], write: true, fn: hallSave_ },
+    hallPhotoAdd: { roles: ['admin', 'manager'], write: true, fn: hallPhotoAdd_ },
+    hallPhotoDel: { roles: ['admin', 'manager'], write: true, fn: hallPhotoDel_ },
+    hallPhotoMain: { roles: ['admin', 'manager'], write: true, fn: hallPhotoMain_ },
     hallDel: { roles: ['admin'], write: true, fn: hallDel_ },
     hallsImport: { roles: ['admin'], write: true, fn: hallsImport_ },
   }, CLUB_HANDLER_TABS);
