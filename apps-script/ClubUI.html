@@ -621,7 +621,7 @@ TLV.fests = () => {
       <h2>Ближайшие</h2><div class="stack">${up.map(card).join('') || `<div class="card">${empty('Пока ничего не запланировано')}</div>`}</div>
       ${past.length ? `<h2 class="sect">Прошедшие</h2><div class="stack">${past.slice(0, 20).map(card).join('')}</div>` : ''}`;
     $('#fnew').onclick = () => festForm();
-    $$('[data-f]').forEach(x => x.onclick = () => { S.ui.clf = x.dataset.f; TLV.fests(); });
+    $$('[data-f]').forEach(x => x.onclick = () => { if (typeof markScroll === 'function') markScroll(); S.ui.clf = x.dataset.f; TLV.fests(); window.scrollTo(0, 0); });
   }).catch(fail);
 };
 function festView(f) {
@@ -641,7 +641,7 @@ function festView(f) {
     <div class="tw" style="margin-top:10px" id="fregs"><table class="t"><thead><tr><th>Участник</th><th>Партнёр</th><th>Заметка</th><th>Результат</th><th class="n">Баллы</th><th></th></tr></thead><tbody>
       ${regs.map(g => `<tr><td><div class="row" style="gap:8px;flex-wrap:nowrap"><div class="avatar c sm" data-av="client:${g.clientId}">${initials(g.clientName)}</div><b>${esc(g.clientName)}</b></div></td><td>${esc(g.partnerName || '—')}</td><td class="small">${esc(g.note || '')}</td><td>${esc(g.result || '')}</td><td class="n">${g.points ? fh(g.points) : ''}</td>
         <td class="nowrap noprint"><button class="btn sm" data-ge="${g.id}">${ic('edit')}</button> <button class="btn sm" data-gd="${g.id}">${ic('trash')}</button></td></tr>`).join('') || `<tr><td colspan="6">${empty('Пока никто не зарегистрировался')}</td></tr>`}</tbody></table></div>`;
-  $('#fbk').onclick = () => { S.ui.clf = null; TLV.fests(); };
+  $('#fbk').onclick = () => backStep('fest', () => { S.ui.clf = null; TLV.fests(); });
   if (typeof pushBack === 'function') pushBack(() => { S.ui.clf = null; TLV.fests(); }, 'fest');
   $('#fed').onclick = () => festForm(f);
   $('#fprn').onclick = () => printEl(f.title + ' — участники', $('#fregs'), fd(f.date) + (f.place ? ' · ' + f.place : ''));
