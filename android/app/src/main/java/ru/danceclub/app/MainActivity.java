@@ -68,7 +68,18 @@ public class MainActivity extends Activity {
         /** Скачать новую сборку и открыть установщик Android. */
         @JavascriptInterface
         public void installUpdate(final String url) {
-            runOnUiThread(() -> startUpdate(url));
+            runOnUiThread(() -> { if (updateReady(url)) installApk(); else startUpdate(url); });
+        }
+
+        /** Тихо скачать новую сборку заранее, чтобы установка открылась сразу. */
+        @JavascriptInterface
+        public void prefetchUpdate(final String url) {
+            runOnUiThread(() -> prefetch(url));
+        }
+
+        @JavascriptInterface
+        public boolean updateReady(final String url) {
+            return MainActivity.this.updateReady(url);
         }
 
         @JavascriptInterface
@@ -110,7 +121,7 @@ public class MainActivity extends Activity {
     }
 
     private void startUpdate(final String url) {
-        if (updBusy) return;
+        if (updBusy || prefetching) { if (prefetching) Toast.makeText(this, "Обновление уже скачивается…", Toast.LENGTH_SHORT).show(); return; }
         if (!trustedApkUrl(url)) { Toast.makeText(this, "Неизвестный адрес обновления", Toast.LENGTH_LONG).show(); return; }
         updBusy = true;
         LinearLayout box = new LinearLayout(this);
@@ -128,7 +139,32 @@ public class MainActivity extends Activity {
         updDlg.show();
         jsUpd("download");
         new Thread(() -> {
-            String err = null;
+            String err = download(url, pct -> runOnUiThread(() -> { updBar.setIndeterminate(false); updBar.setProgress(pct); updTxt.setText("Скачиваем новую версию… " + pct + "%"); }));
+            final String fe = err;
+            runOnUiThread(() -> {
+                updBusy = false;
+                if (updDlg != null) updDlg.dismiss();
+                if (fe != null) {
+                    jsUpd("error");
+                    new AlertDialog.Builder(this).setTitle("Не удалось скачать обновление")
+                            .setMessage(fe + "\n\nПроверьте интернет и попробуйте ещё раз.")
+                            .setPositiveButton("Повторить", (d, w) -> startUpdate(url))
+                            .setNegativeButton("Закрыть", null).show();
+                } else installApk();
+            });
+        }).start();
+    }
+
+    interface Prog { void on(int pct); }
+
+    private boolean updateReady(String url) {
+        File f = new File(new File(getCacheDir(), "shared"), UPD_FILE);
+        return url != null && url.equals(prefs.getString("updUrl", "")) && f.exists() && f.length() > 100000;
+    }
+
+    /** Скачивает APK в cache/shared. Возвращает null или текст ошибки. Вызывать не в главном потоке. */
+    private String download(String url, Prog prog) {
+            prefs.edit().remove("updUrl").apply();
             File f = new File(new File(getCacheDir(), "shared"), UPD_FILE);
             try {
                 File dir = f.getParentFile();
@@ -164,7 +200,7 @@ public class MainActivity extends Activity {
                             final int pct = (int) (done * 100 / total);
                             if (pct != last) {
                                 last = pct;
-                                runOnUiThread(() -> { updBar.setIndeterminate(false); updBar.setProgress(pct); updTxt.setText("Скачиваем новую версию… " + pct + "%"); });
+                                if (prog != null) prog.on(pct);
                             }
                         }
                     }
@@ -172,20 +208,21 @@ public class MainActivity extends Activity {
                 c.disconnect();
                 if (done < 100000) throw new Exception("файл повреждён");
             } catch (Exception e) {
-                err = e.getMessage() == null ? e.toString() : e.getMessage();
+                return e.getMessage() == null ? e.toString() : e.getMessage();
             }
-            final String fe = err;
-            runOnUiThread(() -> {
-                updBusy = false;
-                if (updDlg != null) updDlg.dismiss();
-                if (fe != null) {
-                    jsUpd("error");
-                    new AlertDialog.Builder(this).setTitle("Не удалось скачать обновление")
-                            .setMessage(fe + "\n\nПроверьте интернет и попробуйте ещё раз.")
-                            .setPositiveButton("Повторить", (d, w) -> startUpdate(url))
-                            .setNegativeButton("Закрыть", null).show();
-                } else installApk();
-            });
+            prefs.edit().putString("updUrl", url).apply();
+            return null;
+    }
+
+    private boolean prefetching = false;
+
+    private void prefetch(final String url) {
+        if (prefetching || updBusy || !trustedApkUrl(url)) return;
+        if (updateReady(url)) { jsUpd("ready"); return; }
+        prefetching = true;
+        new Thread(() -> {
+            String err = download(url, null);
+            runOnUiThread(() -> { prefetching = false; if (err == null) jsUpd("ready"); });
         }).start();
     }
 
