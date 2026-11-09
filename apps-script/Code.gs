@@ -7,7 +7,7 @@
  */
 
 const CLUB_NAME = 'Клуб корпоративных бальных танцев';
-const APP_VER = '2026-11-09.12'; // меняется при каждом обновлении — открытые страницы предложат перезагрузку
+const APP_VER = '2026-11-09.13'; // меняется при каждом обновлении — открытые страницы предложат перезагрузку
 const STAFF = ['admin', 'manager'];
 const ALL = ['admin', 'manager', 'trainer', 'client'];
 const SESSION_DAYS = 30;
@@ -574,6 +574,7 @@ function invalidate_(key) {
 }
 /** Держит кэш листов «тёплым» (вызывается фоновой задачей бота раз в минуту): пользователи не ждут чтения таблицы. */
 function warmCache_() {
+  apkLatest_();
   prefetch_(Object.keys(TABLES).filter(k => k !== 'errors' && k !== 'messages'));
 }
 /** Ручная правка таблицы администратором — сбрасываем кэш изменённого листа. */
@@ -582,6 +583,23 @@ function onEdit(e) {
     const name = e && e.range ? e.range.getSheet().getName() : '';
     Object.keys(TABLES).forEach(k => { if (!name || TABLES[k][0] === name) CacheService.getScriptCache().remove('v_' + k); });
   } catch (err) { /* нет доступа */ }
+}
+/** Последняя сборка приложения для Android (релиз build-N на GitHub). Кэш 30 минут — проверка почти ничего не стоит. */
+const APK_REPO = 'SBrazhnik/dance';
+function apkLatest_() {
+  const c = cache_(), k = 'apk_latest';
+  const hit = c.get(k);
+  if (hit) return hit === '0' ? null : JSON.parse(hit);
+  let res = null;
+  try {
+    const r = UrlFetchApp.fetch('https://github.com/' + APK_REPO + '/releases/latest', { followRedirects: false, muteHttpExceptions: true });
+    const h = r.getHeaders() || {};
+    const loc = String(h.Location || h.location || '');
+    const m = loc.match(/\/tag\/build-(\d+)/);
+    if (m) res = { v: +m[1], url: 'https://github.com/' + APK_REPO + '/releases/download/build-' + m[1] + '/DanceClub.apk' };
+  } catch (e) { /* GitHub недоступен — проверим позже */ }
+  c.put(k, res ? JSON.stringify(res) : '0', res ? 1800 : 600);
+  return res;
 }
 /** Если меняли структуру таблицы (удаляли строки, сортировали) — запустите, чтобы приложение перечитало всё. */
 function clearCache() { Object.keys(TABLES).forEach(k => CacheService.getScriptCache().remove('v_' + k)); }
@@ -912,7 +930,7 @@ function load_(user) {
   const from = addDays_(today, -62);
   const staff = STAFF.indexOf(user.role) >= 0;
   const used = usage_();
-  const res = { user: pubUser_(user), today, club: CLUB_NAME, settings: {}, ver: APP_VER, url: appUrl_() };
+  const res = { user: pubUser_(user), today, club: CLUB_NAME, settings: {}, ver: APP_VER, url: appUrl_(), apk: apkLatest_() };
   (staff && user.role === 'admin' ? Object.keys(S) : PUBLIC_SETTINGS).forEach(k => {
     if (k !== 'Первичный пароль admin') res.settings[k] = S[k];
   });
