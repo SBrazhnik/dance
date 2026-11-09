@@ -22,4 +22,4 @@ adb logcat -d | grep -iE "AndroidRuntime|FATAL|chromium.*(error|ERR)|danceclub" 
 adb shell dumpsys package ru.danceclub.app | grep -E "versionName|versionCode|permission" > out/version.txt
 ls -la out
 exit 0
-# 1794225075
+# 1794226478
