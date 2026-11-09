@@ -36,9 +36,6 @@ import android.widget.Toast;
 
 import java.io.File;
 import java.io.FileOutputStream;
-import java.io.InputStream;
-import java.net.HttpURLConnection;
-import java.net.URL;
 
 /**
  * Оболочка для веб-приложения клуба (Google Apps Script).
@@ -65,23 +62,6 @@ public class MainActivity extends Activity {
         @JavascriptInterface
         public int versionCode() { return BuildConfig.VERSION_CODE; }
 
-        /** Скачать новую сборку и открыть установщик Android. */
-        @JavascriptInterface
-        public void installUpdate(final String url) {
-            runOnUiThread(() -> { if (updateReady(url)) installApk(); else startUpdate(url); });
-        }
-
-        /** Тихо скачать новую сборку заранее, чтобы установка открылась сразу. */
-        @JavascriptInterface
-        public void prefetchUpdate(final String url) {
-            runOnUiThread(() -> prefetch(url));
-        }
-
-        @JavascriptInterface
-        public boolean updateReady(final String url) {
-            return MainActivity.this.updateReady(url);
-        }
-
         @JavascriptInterface
         public void openFile(final String name, final String mime, final String base64) {
             runOnUiThread(() -> doOpenFile(name, mime, base64));
@@ -102,158 +82,6 @@ public class MainActivity extends Activity {
         });
         printView = pw;
         pw.loadDataWithBaseURL("https://script.google.com/", html, "text/html", "utf-8", null);
-    }
-
-    // ---------- обновление приложения ----------
-    private static final String UPD_FILE = "DanceClub-update.apk";
-    private boolean updBusy = false, updWaitPerm = false;
-    private AlertDialog updDlg;
-    private ProgressBar updBar;
-    private TextView updTxt;
-
-    private static boolean trustedApkUrl(String u) {
-        return u != null && (u.startsWith("https://github.com/SBrazhnik/dance/releases/")
-                || u.startsWith("https://corpdance.ru/"));
-    }
-
-    private void jsUpd(String state) {
-        if (web != null) web.evaluateJavascript("window.apkUpdState&&apkUpdState('" + state + "')", null);
-    }
-
-    private void startUpdate(final String url) {
-        if (updBusy || prefetching) { if (prefetching) Toast.makeText(this, "Обновление уже скачивается…", Toast.LENGTH_SHORT).show(); return; }
-        if (!trustedApkUrl(url)) { Toast.makeText(this, "Неизвестный адрес обновления", Toast.LENGTH_LONG).show(); return; }
-        updBusy = true;
-        LinearLayout box = new LinearLayout(this);
-        box.setOrientation(LinearLayout.VERTICAL);
-        int pad = (int) (22 * getResources().getDisplayMetrics().density);
-        box.setPadding(pad, pad / 2, pad, 0);
-        updTxt = new TextView(this);
-        updTxt.setText("Скачиваем новую версию…");
-        box.addView(updTxt);
-        updBar = new ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal);
-        updBar.setIndeterminate(true);
-        updBar.setMax(100);
-        box.addView(updBar, new LinearLayout.LayoutParams(-1, -2));
-        updDlg = new AlertDialog.Builder(this).setTitle("Обновление приложения").setView(box).setCancelable(false).create();
-        updDlg.show();
-        jsUpd("download");
-        new Thread(() -> {
-            String err = download(url, pct -> runOnUiThread(() -> { updBar.setIndeterminate(false); updBar.setProgress(pct); updTxt.setText("Скачиваем новую версию… " + pct + "%"); }));
-            final String fe = err;
-            runOnUiThread(() -> {
-                updBusy = false;
-                if (updDlg != null) updDlg.dismiss();
-                if (fe != null) {
-                    jsUpd("error");
-                    new AlertDialog.Builder(this).setTitle("Не удалось скачать обновление")
-                            .setMessage(fe + "\n\nПроверьте интернет и попробуйте ещё раз.")
-                            .setPositiveButton("Повторить", (d, w) -> startUpdate(url))
-                            .setNegativeButton("Закрыть", null).show();
-                } else installApk();
-            });
-        }).start();
-    }
-
-    interface Prog { void on(int pct); }
-
-    private boolean updateReady(String url) {
-        File f = new File(new File(getCacheDir(), "shared"), UPD_FILE);
-        return url != null && url.equals(prefs.getString("updUrl", "")) && f.exists() && f.length() > 100000;
-    }
-
-    /** Скачивает APK в cache/shared. Возвращает null или текст ошибки. Вызывать не в главном потоке. */
-    private String download(String url, Prog prog) {
-            prefs.edit().remove("updUrl").apply();
-            File f = new File(new File(getCacheDir(), "shared"), UPD_FILE);
-            try {
-                File dir = f.getParentFile();
-                if (dir != null && !dir.exists() && !dir.mkdirs()) throw new Exception("нет доступа к памяти");
-                String u = url;
-                HttpURLConnection c = null;
-                for (int i = 0; i < 6; i++) { // GitHub отдаёт файл через переадресацию
-                    c = (HttpURLConnection) new URL(u).openConnection();
-                    c.setInstanceFollowRedirects(false);
-                    c.setConnectTimeout(20000);
-                    c.setReadTimeout(30000);
-                    int code = c.getResponseCode();
-                    if (code >= 300 && code < 400) {
-                        String loc = c.getHeaderField("Location");
-                        c.disconnect();
-                        if (loc == null || !loc.startsWith("https://")) throw new Exception("ошибка переадресации");
-                        u = loc;
-                        continue;
-                    }
-                    if (code != 200) throw new Exception("сервер ответил " + code);
-                    break;
-                }
-                if (c == null) throw new Exception("нет ответа");
-                final long total = c.getContentLength();
-                long done = 0;
-                try (InputStream in = c.getInputStream(); FileOutputStream out = new FileOutputStream(f)) {
-                    byte[] buf = new byte[65536];
-                    int n, last = -1;
-                    while ((n = in.read(buf)) > 0) {
-                        out.write(buf, 0, n);
-                        done += n;
-                        if (total > 0) {
-                            final int pct = (int) (done * 100 / total);
-                            if (pct != last) {
-                                last = pct;
-                                if (prog != null) prog.on(pct);
-                            }
-                        }
-                    }
-                }
-                c.disconnect();
-                if (done < 100000) throw new Exception("файл повреждён");
-            } catch (Exception e) {
-                return e.getMessage() == null ? e.toString() : e.getMessage();
-            }
-            prefs.edit().putString("updUrl", url).apply();
-            return null;
-    }
-
-    private boolean prefetching = false;
-
-    private void prefetch(final String url) {
-        if (prefetching || updBusy || !trustedApkUrl(url)) return;
-        if (updateReady(url)) { jsUpd("ready"); return; }
-        prefetching = true;
-        new Thread(() -> {
-            String err = download(url, null);
-            runOnUiThread(() -> { prefetching = false; if (err == null) jsUpd("ready"); });
-        }).start();
-    }
-
-    /** Открыть системный установщик. На Android 8+ сначала нужно разрешить установку из этого приложения. */
-    private void installApk() {
-        if (android.os.Build.VERSION.SDK_INT >= 26 && !getPackageManager().canRequestPackageInstalls()) {
-            updWaitPerm = true;
-            jsUpd("perm");
-            new AlertDialog.Builder(this).setTitle("Нужно разрешение")
-                    .setMessage("Android попросит разрешить установку обновлений из приложения клуба. Включите переключатель «Разрешить» и вернитесь назад — установка продолжится сама.")
-                    .setPositiveButton("Открыть настройки", (d, w) -> {
-                        try {
-                            startActivity(new Intent(android.provider.Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:" + getPackageName())));
-                        } catch (ActivityNotFoundException e) {
-                            updWaitPerm = false;
-                            Toast.makeText(this, "Разрешите установку из неизвестных источников в настройках", Toast.LENGTH_LONG).show();
-                        }
-                    })
-                    .setNegativeButton("Отмена", (d, w) -> { updWaitPerm = false; jsUpd("cancel"); }).show();
-            return;
-        }
-        try {
-            Uri uri = Uri.parse("content://" + SharedFileProvider.AUTHORITY + "/" + UPD_FILE);
-            Intent i = new Intent(Intent.ACTION_VIEW).setDataAndType(uri, "application/vnd.android.package-archive")
-                    .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_ACTIVITY_NEW_TASK);
-            startActivity(i);
-            jsUpd("install");
-        } catch (Exception e) {
-            jsUpd("error");
-            Toast.makeText(this, "Не удалось открыть установщик: " + e.getMessage(), Toast.LENGTH_LONG).show();
-        }
     }
 
     private void doOpenFile(String name, String mime, String base64) {
@@ -301,6 +129,8 @@ public class MainActivity extends Activity {
         WebSettings s = web.getSettings();
         s.setJavaScriptEnabled(true);
         s.setDomStorageEnabled(true);
+        // доступ страницы к файлам телефона по file:// не нужен — закрываем
+        s.setAllowFileAccess(false);
         s.setDatabaseEnabled(true);
         s.setSupportMultipleWindows(true);
         s.setJavaScriptCanOpenWindowsAutomatically(true);
@@ -535,12 +365,6 @@ public class MainActivity extends Activity {
     @Override
     protected void onResume() {
         super.onResume();
-        // вернулись из настроек разрешения — продолжаем установку обновления
-        if (updWaitPerm && android.os.Build.VERSION.SDK_INT >= 26) {
-            updWaitPerm = false;
-            if (getPackageManager().canRequestPackageInstalls()) installApk();
-            else { jsUpd("cancel"); Toast.makeText(this, "Установка не разрешена — обновление отменено", Toast.LENGTH_LONG).show(); }
-        }
         // после долгого перерыва перезагружаем страницу, чтобы подтянуть обновления
         if (pausedAt > 0 && System.currentTimeMillis() - pausedAt > 20 * 60 * 1000L) {
             pausedAt = 0;

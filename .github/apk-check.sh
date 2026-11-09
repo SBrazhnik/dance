@@ -19,7 +19,7 @@ adb shell am start -W -n ru.danceclub.app/.MainActivity; sleep 15; adb exec-out 
 adb shell pidof ru.danceclub.app > out/pid.txt || echo "НЕ ЗАПУЩЕНО" > out/pid.txt
 adb logcat -d -b crash > out/crash.txt
 adb logcat -d | grep -iE "AndroidRuntime|FATAL|chromium.*(error|ERR)|danceclub" | tail -200 > out/logcat.txt
-adb shell dumpsys package ru.danceclub.app | grep -E "versionName|versionCode" > out/version.txt
+adb shell dumpsys package ru.danceclub.app | grep -E "versionName|versionCode|permission" > out/version.txt
 ls -la out
 exit 0
 # 1794225075
