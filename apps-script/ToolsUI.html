@@ -284,9 +284,46 @@ function tgLinkModal(p) {
         try { await navigator.clipboard.writeText(r.url); toast('Ссылка скопирована'); } catch (e) { const s = getSelection(), rg = document.createRange(); rg.selectNodeContents($('#tlurl', bg)); s.removeAllRanges(); s.addRange(rg); toast('Выделено — скопируйте вручную'); }
         return false; }}] : []));
     TL.load(true).then(() => { if (S.route[0] === 'tools' && (S.route[1] === 'bot' || S.route[1] === 'tg')) TLV[S.route[1]](); });
+    // пока окно открыто — ждём подключения и сразу показываем результат
+    if (r.url && !r.linked) {
+      const st = document.createElement('p'); st.className = 'small'; st.id = 'tlwait'; st.innerHTML = '⏳ Ждём, когда человек нажмёт «Запустить» в Telegram…';
+      if (p.self) st.innerHTML = '⏳ Ждём подключения — откройте ссылку и нажмите «Запустить»…';
+      const mb = $('.mb', bg) || bg; mb.appendChild(st);
+      let n = 0;
+      const t = setInterval(async () => {
+        if (!document.body.contains(bg) || ++n > 60) { clearInterval(t); return; }
+        if (document.visibilityState !== 'visible') return;
+        try {
+          const x = await call('tgLink', p, true);
+          if (!x.linked) return;
+          clearInterval(t);
+          st.innerHTML = '<span class="badge ok">✅ Подключено</span> ' + esc(x.name) + ' — бот уже прислал приветствие.';
+          toast('Telegram подключён: ' + x.name);
+          TL.botSync(true);
+        } catch (e) { /* попробуем ещё раз */ }
+      }, 3000);
+    }
   }).catch(fail);
 }
+// ---------- автообновление вкладок «Telegram-бот» и «Telegram»: новые подключения видны без ⟳ ----------
+TL.botSig = () => S.T ? JSON.stringify([S.T.bot && [S.T.bot.linked, S.T.bot.pending, S.T.bot.mode, S.T.bot.hookErr], (S.T.tg || []).map(r => r.id + ':' + (r.linked ? 1 : 0)), S.T.me && S.T.me.tg && S.T.me.tg.linked]) : '';
+TL.botTab = () => { if (!S.user || S.route[0] !== 'tools' || !S.T) return ''; const tab = S.route[1] || (TL.tabs()[0] || [])[0]; return tab === 'bot' || tab === 'tg' ? tab : ''; };
+TL.botSync = async force => {
+  const tab = TL.botTab();
+  if (!tab && !force) return;
+  const before = TL.botSig();
+  try { await TL.load(true); } catch (e) { return; }
+  const now = TL.botTab();
+  if (!now || (TL.botSig() === before && !S.ui.tlPending)) return;
+  const a = document.activeElement;
+  if ($('.modal-bg') || S.ui.tlDirty || (a && /INPUT|TEXTAREA|SELECT/.test(a.tagName))) { S.ui.tlPending = 1; return; }
+  const y = window.scrollY; TLV[now](); window.scrollTo(0, y);
+};
+setInterval(() => { if (document.visibilityState === 'visible') TL.botSync(); }, 15000);
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') TL.botSync(); });
+document.addEventListener('input', e => { if (e.target.closest && e.target.closest('#tlb') && TL.botTab()) S.ui.tlDirty = 1; }, true);
 TLV.tg = () => {
+  S.ui.tlDirty = 0;
   const me = S.T.me.tg;
   $('#tlb').innerHTML = `<div class="card" style="max-width:640px"><h2 style="margin-top:0">Уведомления в Telegram</h2>
     ${!me.connected ? empty('Бот клуба пока не подключён. Как только администратор его включит, здесь появится кнопка.') : `
@@ -368,6 +405,7 @@ function broadcastForm() {
   count();
 }
 TLV.bot = () => {
+  S.ui.tlDirty = 0; S.ui.tlPending = 0;
   const b = S.T.bot, s = S.T.settings, admin = role() === 'admin';
   const ui = S.ui.tlbot || (S.ui.tlbot = {k: 'client', q: ''});
   const rows = (S.T.tg || []).filter(r => r.kind !== 'pending');
