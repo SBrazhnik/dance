@@ -7,7 +7,7 @@
  */
 
 const CLUB_NAME = 'Клуб корпоративных бальных танцев';
-const APP_VER = '2026-11-09.17'; // меняется при каждом обновлении — открытые страницы предложат перезагрузку
+const APP_VER = '2026-11-09.18'; // меняется при каждом обновлении — открытые страницы предложат перезагрузку
 const STAFF = ['admin', 'manager'];
 const ALL = ['admin', 'manager', 'trainer', 'client'];
 const SESSION_DAYS = 30;
@@ -425,6 +425,8 @@ const HANDLERS = {
   deleteDict: { roles: ['admin'], write: true, fn: deleteDict_ },
   deleteTrainer: { roles: ['admin'], write: true, fn: deleteTrainer_ },
   deleteClient: { roles: ['admin'], write: true, fn: deleteClient_ },
+  archive: { roles: ['admin', 'manager'], write: true, fn: archive_ },
+  dupFind: { roles: ['admin', 'manager'], fn: dupFind_ },
   deletePartner: { roles: ['admin'], write: true, fn: deletePartner_ },
   deleteAct: { roles: ['admin'], write: true, fn: deleteAct_ },
   editAct: { roles: ['admin'], write: true, fn: editAct_ },
@@ -997,7 +999,41 @@ function pubUserFull_(u) { const x = pubUser_(u); x.active = u.active; x.created
 // ---------------------------------------------------------------------------
 // Справочники
 // ---------------------------------------------------------------------------
+// ---------- защита от дублей: один человек — одна карточка (в том числе среди архивных) ----------
+const normName_ = s => String(s || '').toLowerCase().replace(/ё/g, 'е').replace(/[^a-zа-я0-9 -]/g, ' ').replace(/\s+/g, ' ').trim();
+const phoneK_ = s => { const d = String(s || '').replace(/\D/g, ''); return d.length >= 10 ? d.slice(-10) : ''; };
+/** Похожие карточки: тот же телефон или email (точно он) либо те же фамилия и имя (возможно, тёзка). */
+function dupFind_(u, p) {
+  const kind = p.kind === 'trainer' ? 'trainers' : 'clients';
+  const nm = normName_(p.name).split(' '), ph = [phoneK_(p.phone), phoneK_(p.phone2)].filter(Boolean), em = String(p.email || '').trim().toLowerCase();
+  const out = [];
+  tbl_(kind).rows.forEach(x => {
+    if (x.id === p.id) return;
+    const xn = normName_(x.name).split(' ');
+    const xph = [phoneK_(x.phone), phoneK_(x.phone2)].filter(Boolean);
+    let why = '';
+    if (ph.some(k => xph.indexOf(k) >= 0)) why = 'тот же телефон';
+    else if (em && String(x.email || '').trim().toLowerCase() === em) why = 'тот же email';
+    if (why) return out.push({ id: x.id, name: x.name, active: !!x.active, why, hard: true });
+    const n = Math.min(nm.length, xn.length, 2); // фамилия и имя совпадают (отчество может быть не указано)
+    if (n >= 2 && nm.slice(0, 2).join(' ') === xn.slice(0, 2).join(' ')) out.push({ id: x.id, name: x.name, active: !!x.active, why: 'то же ФИО', hard: false });
+    else if (nm.length === 1 && xn.length === 1 && nm[0] && nm[0] === xn[0]) out.push({ id: x.id, name: x.name, active: !!x.active, why: 'то же имя', hard: false });
+  });
+  return out.sort((a, b) => (b.hard - a.hard));
+}
+function dupGuard_(kind, p) {
+  if (p.force) return; // подтвердили: это другой человек (тёзка, общий семейный телефон)
+  if (p.id) { // правка: проверяем, только если поменяли ФИО, телефон или email
+    const o = find_(kind === 'trainer' ? 'trainers' : 'clients', p.id);
+    if (o && normName_(o.name) === normName_(p.name) && phoneK_(o.phone) === phoneK_(p.phone) && phoneK_(o.phone2) === phoneK_(p.phone2)
+      && String(o.email || '').trim().toLowerCase() === String(p.email || '').trim().toLowerCase()) return;
+  }
+  const x = dupFind_(null, Object.assign({}, p, { kind }))[0];
+  if (x) throw new Error((kind === 'trainer' ? 'Тренер' : 'Ученик') + ' «' + x.name + '» уже есть' + (x.active ? '' : ' в архиве') + ' (' + x.why + '). Откройте его карточку' + (x.active ? '' : ' и нажмите «Восстановить»') + ' вместо новой.');
+}
+
 function saveTrainer_(u, p) {
+  dupGuard_('trainer', p);
   const rates = {};
   Object.keys(p.rates || {}).forEach(k => {
     const v = p.rates[k];
@@ -1014,12 +1050,15 @@ function saveTrainer_(u, p) {
     active: p.active !== false, notes: p.notes || ''
   };
   let id = p.id;
+  const old = id ? find_('trainers', id) : null, wasOn = old ? !!old.active : null; // до записи: строка в кэше меняется
   if (id) update_('trainers', id, d); else id = insert_('trainers', d);
+  if (wasOn !== null && wasOn !== d.active) archiveAccess_('trainerId', id, d.active);
   contractFromForm_('trainer', id, p);
   return id;
 }
 
 function saveClient_(u, p) {
+  dupGuard_('client', p);
   const tids = [].concat(p.trainerIds || []).filter(Boolean);
   const d = {
     name: String(req_(p.name, 'Укажите ФИО')).trim(), phone: p.phone || '', email: p.email || '',
@@ -1029,7 +1068,9 @@ function saveClient_(u, p) {
     gender: ['М', 'Ж'].indexOf(p.gender) >= 0 ? p.gender : ''
   };
   let id = p.id;
+  const old = id ? find_('clients', id) : null, wasOn = old ? !!old.active : null; // до записи: строка в кэше меняется
   if (id) update_('clients', id, d); else id = insert_('clients', d);
+  if (wasOn !== null && wasOn !== d.active) archiveAccess_('clientId', id, d.active);
   contractFromForm_('client', id, p);
   return id;
 }
@@ -1382,25 +1423,35 @@ function dropFromList_(table, field, namesField, nameTable, id) {
     update_(table, r.id, patch);
   });
 }
-function deleteTrainer_(u, p) {
-  const t = must_('trainers', p.id, 'Тренер');
-  const used = tbl_('lessons').rows.some(l => l.trainerId === t.id) || tbl_('events').rows.some(e => ids_(e.trainerIds).indexOf(t.id) >= 0) ||
-    tbl_('subs').rows.some(s => s.trainerId === t.id) || tbl_('slots').rows.some(s => s.trainerId === t.id) || tbl_('acts').rows.some(a => a.trainerId === t.id);
-  if (used) throw new Error('У тренера есть занятия, абонементы или акты — удалить нельзя. Снимите «Активен», и он уйдёт в архив.');
-  const name = t.name;
-  dropFromList_('groups', 'trainerIds', 'trainerNames', 'trainers', t.id);
-  dropFromList_('clients', 'trainerIds', 'trainerNames', 'trainers', t.id);
-  delUsersOf_('trainerId', t.id);
-  del_('trainers', t.id);
-  return name;
+// Ученики и тренеры не удаляются: «Удалить» отправляет в архив, вся история (занятия, абонементы, посещения, акты) остаётся.
+function deleteTrainer_(u, p) { return setActive_('trainers', p.id, false); }
+function deleteClient_(u, p) { return setActive_('clients', p.id, false); }
+/** В архив / из архива. kind — 'trainers' или 'clients'. */
+function setActive_(kind, id, on) {
+  const x = must_(kind, id, kind === 'trainers' ? 'Тренер' : 'Ученик');
+  update_(kind, x.id, { active: !!on });
+  archiveAccess_(kind === 'trainers' ? 'trainerId' : 'clientId', x.id, !!on);
+  return x.name;
 }
-function deleteClient_(u, p) {
-  const c = must_('clients', p.id, 'Ученик');
-  const used = tbl_('lessons').rows.some(l => l.clientId === c.id) || tbl_('subs').rows.some(s => s.clientId === c.id) || tbl_('bookings').rows.some(b => b.clientId === c.id);
-  if (used) throw new Error('У ученика есть занятия, абонементы или записи — удалить нельзя. Снимите «Активен», и он уйдёт в архив.');
-  dropFromList_('groups', 'clientIds', 'clientNames', 'clients', c.id);
-  delUsersOf_('clientId', c.id);
-  return del_('clients', c.id);
+function archive_(u, p) { return setActive_(p.kind === 'trainer' ? 'trainers' : 'clients', p.id, p.on === true); }
+/** Архив закрывает вход в приложение, возврат из архива открывает снова — только те логины, что закрыл архив. */
+function archiveAccess_(field, id, on) {
+  const S = settings_();
+  let off = [];
+  try { off = JSON.parse(S.archOff || '[]'); } catch (e) { off = []; }
+  const users = tbl_('users').rows.filter(x => x[field] === id);
+  if (!users.length) return;
+  const ids = users.map(x => x.id);
+  if (!on) {
+    users.filter(x => x.active).forEach(x => { update_('users', x.id, { active: false }); if (off.indexOf(x.id) < 0) off.push(x.id); });
+    const st = tbl_('sessions'); // сразу выходим из приложения на всех устройствах
+    const rows = st.rows.filter(r => ids.indexOf(r.userId) >= 0).map(r => r._r).sort((a, b) => b - a);
+    if (rows.length) { rows.forEach(r => st.sh.deleteRow(r)); delete _cache.sessions; invalidate_('sessions'); }
+  } else {
+    users.filter(x => !x.active && off.indexOf(x.id) >= 0).forEach(x => update_('users', x.id, { active: true }));
+    off = off.filter(k => ids.indexOf(k) < 0);
+  }
+  setSetting_('archOff', JSON.stringify(off));
 }
 function deletePartner_(u, p) {
   const x = must_('partners', p.id, 'Партнёр');
