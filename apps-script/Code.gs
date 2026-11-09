@@ -7,7 +7,7 @@
  */
 
 const CLUB_NAME = 'Клуб корпоративных бальных танцев';
-const APP_VER = '2026-11-09.4'; // меняется при каждом обновлении — открытые страницы предложат перезагрузку
+const APP_VER = '2026-11-09.5'; // меняется при каждом обновлении — открытые страницы предложат перезагрузку
 const STAFF = ['admin', 'manager'];
 const ALL = ['admin', 'manager', 'trainer', 'client'];
 const SESSION_DAYS = 30;
@@ -338,7 +338,8 @@ function api(token, action, payload) {
 function api_(token, action, payload) {
   try {
     payload = payload || {};
-    prefetch_(Object.keys(TABLES).filter(k => (k !== 'messages' || /Message/.test(action)) && (k !== 'errors' || /Error/.test(action))));
+    // лёгким запросам не нужны все листы — они возьмут из кэша только то, что используют
+    if (LIGHT_ACTIONS.indexOf(action) < 0) prefetch_(Object.keys(TABLES).filter(k => (k !== 'messages' || /Message/.test(action)) && (k !== 'errors' || /Error/.test(action))));
     if (action === 'login') return { ok: true, data: login_(payload) };
     if (action === 'loginCode' && typeof loginByCode_ === 'function') return { ok: true, data: loginByCode_(payload) };
     if (action === 'ping') return { ok: true, data: { club: CLUB_NAME } };
@@ -350,7 +351,8 @@ function api_(token, action, payload) {
     const data = h.write ? withLock_(() => {
       // внутри блокировки перечитываем версии листов: кто-то мог сохранить данные, пока мы ждали
       Object.keys(_cache).forEach(k => delete _cache[k]);
-      prefetch_(Object.keys(TABLES).filter(k => (k !== 'messages' || /Message/.test(action)) && (k !== 'errors' || /Error/.test(action))));
+      Object.keys(_lazy).forEach(k => delete _lazy[k]);
+      if (LIGHT_ACTIONS.indexOf(action) < 0 || payload.__snap) prefetch_(Object.keys(TABLES).filter(k => (k !== 'messages' || /Message/.test(action)) && (k !== 'errors' || /Error/.test(action))));
       return h.fn(user, payload);
     }) : h.fn(user, payload);
     if (h.write && payload.__snap) {
@@ -489,8 +491,11 @@ function norm_(v, type) {
   return s;
 }
 
+const LIGHT_ACTIONS = ['ping', 'avatarsLoad', 'avatarGet', 'markSeen', 'logError', 'getMessages', 'mediaList', 'mediaGet'];
+const _lazy = {};
 function tbl_(key) {
   if (_cache[key]) return _cache[key];
+  if (!_lazy[key] && !_dirty[key]) { _lazy[key] = 1; prefetch_([key]); if (_cache[key]) return _cache[key]; }
   const sh = ss_().getSheetByName(TABLES[key][0]);
   if (!sh) throw new Error('Нет листа «' + TABLES[key][0] + '». Запустите setup().');
   const values = sh.getDataRange().getValues();
@@ -556,6 +561,10 @@ function invalidate_(key) {
   if (_dirty[key]) return;
   _dirty[key] = 1;
   try { cache_().remove('v_' + key); } catch (e) { /* нет кэша */ }
+}
+/** Держит кэш листов «тёплым» (вызывается фоновой задачей бота раз в минуту): пользователи не ждут чтения таблицы. */
+function warmCache_() {
+  prefetch_(Object.keys(TABLES).filter(k => k !== 'errors' && k !== 'messages'));
 }
 /** Ручная правка таблицы администратором — сбрасываем кэш изменённого листа. */
 function onEdit(e) {
@@ -899,6 +908,8 @@ function load_(user) {
   });
   if (user.role === 'admin') res.settings.spreadsheetUrl = ss_().getUrl();
   res.homeLayout = S['home:' + user.id] || '';
+  res.seenNews = S['seen:' + user.id] || '';
+  res.newsCustom = S.news_custom || '';
   res.toolsAccess = typeof toolsAccess_ === 'function' ? toolsAccess_() : {};
   res.dict = tbl_('dict').rows;
 

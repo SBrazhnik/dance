@@ -719,15 +719,22 @@ function mediaSs_() {
   if (_cache.__mss) return _cache.__mss;
   const id = settings_().media_ssid;
   let ss = null;
-  if (id) { try { if (!DriveApp.getFileById(id).isTrashed()) ss = SpreadsheetApp.openById(id); } catch (e) { ss = null; } }
+  if (id) {
+    // проверка «не в корзине» — раз в 6 часов: обращение к Диску медленное
+    let ok = false; try { ok = cache_().get('mss_ok') === id; } catch (e) { ok = false; }
+    try {
+      if (ok || !DriveApp.getFileById(id).isTrashed()) { ss = SpreadsheetApp.openById(id); if (!ok) { try { cache_().put('mss_ok', id, 21600); } catch (e) { /* без кэша */ } } }
+    } catch (e) { ss = null; }
+  }
   if (!ss) {
     ss = SpreadsheetApp.create('Медиа — ' + CLUB_NAME);
     DriveApp.getFileById(ss.getId()).moveTo(mediaFolder_());
     setSetting_('media_ssid', ss.getId());
   }
+  const names = ss.getSheets().map(x => x.getName());
   Object.keys(MEDIA_SHEETS).forEach(k => {
     const [title, cols] = MEDIA_SHEETS[k];
-    if (ss.getSheetByName(title)) return;
+    if (names.indexOf(title) >= 0) return;
     const sh = ss.insertSheet(title);
     sh.getRange(1, 1, 1, cols.length).setValues([cols.map(c => c[1])]).setFontWeight('bold');
     sh.getRange(2, 1, sh.getMaxRows() - 1, cols.length).setNumberFormat('@');
@@ -754,11 +761,13 @@ function mwrite_(k, o, row) {
   const r = row || sh.getLastRow() + 1;
   sh.getRange(r, 1, 1, cols.length).setNumberFormat('@').setValues(vals);
   delete _cache['__m_' + k];
+  if (k === 'avatars') { try { cache_().remove('av_v'); } catch (e) { /* без кэша */ } }
   return r;
 }
 function mdelete_(k, o) {
   mediaSs_().getSheetByName(MEDIA_SHEETS[k][0]).deleteRow(o._r);
   delete _cache['__m_' + k];
+  if (k === 'avatars') { try { cache_().remove('av_v'); } catch (e) { /* без кэша */ } }
 }
 function trashFile_(id) { if (id) { try { DriveApp.getFileById(id).setTrashed(true); } catch (e) { /* уже удалён */ } } }
 function safeName_(s) { return String(s || '').replace(/[\\/:*?"<>|]+/g, ' ').trim().slice(0, 80) || 'без имени'; }
@@ -787,7 +796,7 @@ function avatarStore_(kind, refId, data) {
   if (ex) trashFile_(ex.fileId);
   const o = { id: ex ? ex.id : newId_(10), kind, refId, name, fileId: file.getId(), data, updatedAt: now_() };
   mwrite_('avatars', o, ex ? ex._r : null);
-  return o.updatedAt;
+  return o.updatedAt + '|' + o.fileId;
 }
 
 // ---------------------------------------------------------------------------
@@ -820,14 +829,21 @@ function avatarDel_(user, p) {
   return 1;
 }
 function avatarsLoad_(user, p) {
-  migrateAvatars_();
   const have = (p && p.have) || {};
+  // быстрый путь: у устройства уже все актуальные фото — таблицу «Медиа» не открываем
+  let cv = null; try { cv = cache_().get('av_v'); } catch (e) { cv = null; }
+  if (cv) {
+    const v0 = JSON.parse(cv);
+    if (Object.keys(v0).every(k => have[k] === v0[k])) return { v: v0, data: {} };
+  }
+  migrateAvatars_();
   const v = {}, data = {};
   mrows_('avatars').forEach(a => {
     const k = a.kind + ':' + a.refId;
-    v[k] = a.updatedAt;
-    if (have[k] !== a.updatedAt) data[k] = a.data;
+    v[k] = a.updatedAt + '|' + a.fileId;
+    if (have[k] !== v[k]) data[k] = a.data;
   });
+  try { const j = JSON.stringify(v); if (j.length < 90000) cache_().put('av_v', j, 21600); } catch (e) { /* без кэша */ }
   return { v, data };
 }
 
@@ -918,6 +934,21 @@ function mediaGet_(user, p) {
 // ---------------------------------------------------------------------------
 // Главная и загрузка модуля
 // ---------------------------------------------------------------------------
+/** Свои сообщения администратора для окна «Что нового» (последние 30). */
+function saveNews_(user, p) {
+  let list = [];
+  try { list = JSON.parse(settings_().news_custom || '[]') || []; } catch (e) { list = []; }
+  if (p.del) list = list.filter(n => n.id !== p.del);
+  if (p.item) {
+    const it = p.item, roles = ['admin', 'manager', 'trainer', 'client'];
+    const r = (it.items && it.items[0] && it.items[0].r || []).filter(x => roles.indexOf(x) >= 0);
+    list.unshift({ id: String(it.id).slice(0, 30), date: String(it.date || '').slice(0, 12), title: String(it.title || '').slice(0, 120),
+      items: [{ t: String(it.items[0].t || '').slice(0, 2000), r: r }], custom: 1 });
+  }
+  list = list.slice(0, 30);
+  setSetting_('news_custom', JSON.stringify(list));
+  return list;
+}
 function saveHome_(user, p) {
   const s = JSON.stringify(p.layout || {});
   if (s.length > 4000) throw new Error('Слишком много настроек');
@@ -969,6 +1000,8 @@ function clubHandlers_() {
     clubLoad: { roles: A, fn: clubLoad_ },
     clubHome: { roles: STAFF, fn: clubHome_ },
     saveHome: { roles: STAFF, write: true, fn: saveHome_ },
+    markSeen: { roles: ['admin', 'manager', 'trainer', 'client'], write: true, fn: (u, p) => { setSetting_('seen:' + u.id, String(p.id || '').slice(0, 40)); return true; } },
+    saveNews: { roles: ['admin'], write: true, fn: saveNews_ },
     joinWait: { roles: ['client', 'admin', 'manager'], write: true, fn: joinWaitApi_ },
     renewals: { roles: A, fn: () => renewals_() },
     renewRemind: { roles: A, write: true, fn: renewRemind_ },

@@ -445,6 +445,7 @@ function botPoll() {
   const offset = Number(props.getProperty('tgOffset') || 0);
   let ups;
   try { ups = tgCall_('getUpdates', { offset: offset, timeout: 0, allowed_updates: ['message', 'callback_query'] }); } catch (e) { return; }
+  try { warmCache_(); } catch (e) { /* не критично */ }
   if (typeof clubTick_ === 'function') { try { clubTick_(); } catch (e) { try { logError_('бот', 'clubTick', e.message, e.stack, ''); } catch (x) { /* без журнала */ } } }
   if (!ups || !ups.length) return;
   props.setProperty('tgOffset', String(ups[ups.length - 1].update_id + 1));
