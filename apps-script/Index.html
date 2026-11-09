@@ -570,6 +570,7 @@ function index() {
   checkVer();
 }
 function checkVer() {
+  if (S.D && S.D.ver === APP_VER && $('#upd')) $('#upd').remove(); // свежие данные той же версии — подсказка не нужна
   if (!S.D || !S.D.ver || S.D.ver === APP_VER || $('#upd')) return;
   const d = document.createElement('div'); d.id = 'upd'; d.className = 'updbar';
   d.innerHTML = `<span>Вышло обновление приложения</span>` + (S.D.url ? `<a class="btn sm pri" href="${esc(S.D.url)}" target="_top">Обновить</a>` : `<button class="btn sm pri" id="updb">Обновить</button>`);
