@@ -20,6 +20,15 @@
 .cl-yt{display:block;margin-top:6px;max-width:260px;border-radius:10px;overflow:hidden;position:relative}
 .cl-yt img{width:100%;display:block}
 .cl-yt:after{content:'▶';position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:46px;height:46px;border-radius:50%;background:rgba(0,0,0,.6);color:#fff;display:flex;align-items:center;justify-content:center;font-size:18px}
+a.btn{text-decoration:none}
+.md-grid{display:grid;gap:10px;grid-template-columns:repeat(auto-fill,minmax(160px,1fr))}
+.md-it{border:1px solid var(--line);border-radius:12px;overflow:hidden;background:var(--card);cursor:pointer;display:flex;flex-direction:column}
+.md-th{aspect-ratio:4/3;background:var(--soft) center/cover no-repeat;display:flex;align-items:center;justify-content:center;font-size:30px;position:relative}
+.md-th .md-b{position:absolute;left:6px;top:6px;background:rgba(0,0,0,.6);color:#fff;font-size:11px;border-radius:6px;padding:2px 6px}
+.md-tx{padding:7px 9px;font-size:12px;line-height:1.3}
+.md-view img{max-width:100%;max-height:70vh;display:block;margin:0 auto;border-radius:10px}
+.md-view iframe{width:100%;aspect-ratio:16/9;border:0;border-radius:10px}
+.md-q{font-size:12px;margin-top:6px}
 @media (max-width:600px){.cl-plan{grid-template-columns:1fr 1fr}.cl-plan input[name=pt]{grid-column:1/-1}}
 </style>
 <script>
@@ -46,12 +55,12 @@ const CL = {
 async function clRefresh() { await CL.load(true); await TL.load(true); if (S.route[0] === 'tools' && $('#tlb')) TLV[S.route[1] || TL.tabs()[0][0]](); }
 
 const TOOL_TABS = {bot: 'Telegram-бот', renew: 'Продления', lost: 'Удержание', rate: 'Оценки', fests: 'Мероприятия', halls: 'Залы', subst: 'Замена тренера', money: 'Финансы',
-  pair: 'Подбор пары', passport: 'Паспорт танцора', league: 'Корпоративная лига', hr: 'Отчёт для HR', my: 'Мой прогресс', tg: 'Telegram', access: 'Доступ'};
+  media: 'Фото и видео', pair: 'Подбор пары', passport: 'Паспорт танцора', league: 'Корпоративная лига', hr: 'Отчёт для HR', my: 'Мой прогресс', tg: 'Telegram', access: 'Доступ'};
 const TOOL_FOR = {
-  admin: ['bot', 'renew', 'lost', 'rate', 'fests', 'halls', 'subst', 'money', 'pair', 'passport', 'league', 'hr', 'access'],
-  manager: ['bot', 'renew', 'lost', 'rate', 'fests', 'halls', 'subst', 'money', 'pair', 'passport', 'league', 'hr'],
-  trainer: ['pair', 'passport', 'league', 'halls', 'tg'],
-  client: ['my', 'league', 'tg'],
+  admin: ['bot', 'renew', 'lost', 'rate', 'fests', 'halls', 'subst', 'money', 'media', 'pair', 'passport', 'league', 'hr', 'access'],
+  manager: ['bot', 'renew', 'lost', 'rate', 'fests', 'halls', 'subst', 'money', 'media', 'pair', 'passport', 'league', 'hr'],
+  trainer: ['pair', 'passport', 'league', 'halls', 'media', 'tg'],
+  client: ['my', 'league', 'media', 'tg'],
 };
 const toolAcc = () => (S.D && S.D.toolsAccess) || {};
 const hasTool = k => role() === 'admin' || (toolAcc()[role()] || []).includes(k);
@@ -69,7 +78,7 @@ const ACC_NOTE = {
   bot: 'рассылки, подключение людей к боту, настройки уведомлений (токен бота меняет только администратор)',
   renew: 'кому продлевать, напоминания и QR для оплаты, реквизиты', lost: 'кто перестал ходить, «позвать обратно»', rate: 'оценки тренеров от учеников',
   fests: 'мероприятия, участники, приглашения и итоги', halls: 'календарь залов (тренер видит только свои занятия)', subst: 'замена и отмена занятий тренеров',
-  money: 'доходы, расходы, прибыль — финансы клуба', pair: 'подбор пары и тренера (тренер — среди своих учеников)', passport: 'уровни и дневник (тренер — только своим ученикам)',
+  money: 'доходы, расходы, прибыль — финансы клуба', media: 'фото и видео с занятий, турниров и мероприятий (ученик видит только те, где он отмечен)', pair: 'подбор пары и тренера (тренер — среди своих учеников)', passport: 'уровни и дневник (тренер — только своим ученикам)',
   league: 'рейтинг компаний (ученик видит своё место и топ‑10)', hr: 'отчёт для HR и ссылки для компаний', my: 'свой паспорт танцора и анкета «ищу пару»', tg: 'подключить свой Telegram',
 };
 TLV.access = () => {
@@ -84,7 +93,7 @@ TLV.access = () => {
     <div class="row" style="margin-top:12px"><span class="spacer"></span><button class="btn pri" id="accs">Сохранить доступ</button></div>`;
   const set = o => { $$('[data-acc]').forEach(c => { const [r, k] = c.dataset.acc.split('|'); c.checked = (o[r] || []).includes(k); }); };
   $$('[data-pre]').forEach(b => b.onclick = () => set(b.dataset.pre === 'none' ? {} : b.dataset.pre === 'mgr' ? {manager: TOOL_FOR.manager.filter(k => k !== 'money')}
-    : {manager: TOOL_FOR.manager.filter(k => k !== 'money'), trainer: ['passport', 'league', 'halls', 'tg'], client: ['my', 'league', 'tg']}));
+    : {manager: TOOL_FOR.manager.filter(k => k !== 'money'), trainer: ['passport', 'league', 'halls', 'media', 'tg'], client: ['my', 'league', 'media', 'tg']}));
   $('#accs').onclick = async () => {
     const o = {manager: [], trainer: [], client: []};
     $$('[data-acc]').forEach(c => { if (c.checked) { const [r, k] = c.dataset.acc.split('|'); o[r].push(k); } });
@@ -574,4 +583,159 @@ HOME_W.push({k: 'halls', t: 'Залы и пересечения', html: c => {
     + (halls.length ? `<div class="hbars" style="margin-top:8px">${load.map(x => `<div class="hb"><span>${esc(x.h)}</span><div class="bar"><i style="width:${Math.min(100, x.min / Math.max(1, ...load.map(y => y.min)) * 100)}%"></i></div><span class="right"><b>${fh(x.min / 60)} ч</b></span></div>`).join('')}</div>` : ''),
     hasTool('halls') ? '<button class="btn sm" data-go="tools/halls">Календарь</button>' : '');
 }});
+
+I.ext = '<path d="M14 4h6v6"/><path d="M20 4 10 14"/><path d="M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/>';
+const MD_ICON = {photo: '🖼', video: '🎬', link: '🔗', file: '📄'};
+const canAddMedia = () => ['admin', 'manager', 'trainer'].includes(role());
+function mdThumb(it) {
+  const yt = CL.yt(it.url);
+  const bg = it.preview ? it.preview : yt ? CL.url('img.youtube.com/vi/' + yt + '/mqdefault.jpg') : '';
+  return `<div class="md-th" style="${bg ? 'background-image:url(&quot;' + bg + '&quot;)' : ''}">${bg ? '' : MD_ICON[it.type] || '📄'}${it.type === 'video' ? '<span class="md-b">▶ видео</span>' : it.type === 'link' ? '<span class="md-b">ссылка</span>' : ''}</div>`;
+}
+function mdGrid(items, empty1) {
+  return items.length ? `<div class="md-grid">${items.map(it => `<div class="md-it" data-md="${it.id}">${mdThumb(it)}<div class="md-tx"><b>${esc(it.title || it.festTitle || (it.type === 'photo' ? 'Фото' : it.type === 'video' ? 'Видео' : 'Ссылка'))}</b>
+    <div class="muted">${fd(it.date)}${it.festTitle && it.title ? ' · ' + esc(it.festTitle) : ''}</div>${it.names ? `<div class="muted" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(it.names)}</div>` : ''}</div></div>`).join('')}</div>` : empty(empty1 || 'Пока ничего нет');
+}
+function mdWire(root, items, after) {
+  $$('[data-md]', root).forEach(el => el.onclick = () => mdView(items.find(x => x.id === el.dataset.md), after));
+}
+function mdView(it, after) {
+  const mine = role() !== 'client' && (isStaffRole() || it.author === S.user.name);
+  const yt = CL.yt(it.url);
+  const bg = modal(esc(it.title || it.festTitle || 'Медиа'), `<div class="md-view" id="mdv">${it.type === 'photo' && it.hasFile ? empty('Загружаю фото…') : yt ? `<iframe src="${CL.url('www.youtube.com/embed/' + yt)}" allowfullscreen allow="autoplay; encrypted-media; picture-in-picture"></iframe>` : it.preview ? `<img src="${it.preview}" alt="">` : ''}</div>
+      <div class="small" style="margin-top:10px">${fd(it.date)}${it.festTitle ? ' · ' + esc(it.festTitle) : ''}${it.names ? '<br>На фото / видео: ' + esc(it.names) : ''}<br><span class="muted">Добавил(а): ${esc(it.author)}${it.size ? ' · ' + (it.size / 1048576).toFixed(1) + ' МБ' : ''}</span></div>
+      <div class="row" id="mdl" style="margin-top:10px;gap:8px"></div>`,
+  [mine ? {t: ic('trash') + 'Удалить', cls: 'danger', left: 1, fn: async () => { if (!(await askYes('Удалить? Файл уйдёт в корзину Google Диска.'))) return false; await call('mediaDel', {id: it.id}); toast('Удалено'); if (after) after(); }} : null,
+   mine ? {t: ic('edit') + 'Изменить', fn: () => { mdForm(null, it, after); }} : null,
+   {t: 'Закрыть'}].filter(Boolean), {wide: true});
+  const links = $('#mdl', bg);
+  if (it.url) links.insertAdjacentHTML('beforeend', `<a class="btn sm" href="${esc(it.url)}" target="_blank" rel="noopener">${ic('ext')}Открыть ссылку</a>`);
+  if (it.hasFile) call('mediaGet', {id: it.id}, true).then(r => {
+    if (r.data && String(r.mime).indexOf('image/') === 0) $('#mdv', bg).innerHTML = `<img src="data:${r.mime};base64,${r.data}" alt="">`;
+    else if (r.data && String(r.mime).indexOf('video/') === 0) $('#mdv', bg).innerHTML = `<video src="data:${r.mime};base64,${r.data}" controls playsinline style="width:100%;max-height:70vh;border-radius:10px"></video>`;
+    if (r.data) { const b = document.createElement('button'); b.className = 'btn sm'; b.innerHTML = ic('dl') + 'Скачать'; b.onclick = () => saveBlob(r.name, new Blob([Uint8Array.from(atob(r.data), c => c.charCodeAt(0))], {type: r.mime})); links.appendChild(b); }
+    else $('#mdv', bg).innerHTML = `<div class="card tight">${MD_ICON[it.type]} Файл большой — откройте его на Google Диске.</div>`;
+    if (r.driveUrl && isStaffRole()) links.insertAdjacentHTML('beforeend', `<a class="btn sm" href="${esc(r.driveUrl)}" target="_blank" rel="noopener">${ic('ext')}На Google Диске</a>`);
+  }).catch(e => { $('#mdv', bg).innerHTML = `<div class="small" style="color:var(--bad)">${esc(e.message)}</div>`; });
+}
+const isStaffRole = () => role() === 'admin' || role() === 'manager';
+function fileB64(f) { return new Promise((res, rej) => { const r = new FileReader(); r.onerror = () => rej(new Error('Не удалось прочитать файл')); r.onload = () => res(String(r.result).split(',')[1] || ''); r.readAsDataURL(f); }); }
+function jpegFit(src, w, h, max) {
+  const k = Math.min(1, max / Math.max(w, h));
+  const c = document.createElement('canvas'); c.width = Math.round(w * k); c.height = Math.round(h * k);
+  c.getContext('2d').drawImage(src, 0, 0, c.width, c.height);
+  let q = 0.8, d = c.toDataURL('image/jpeg', q);
+  while (d.length > 46000 && q > 0.35) { q -= 0.1; d = c.toDataURL('image/jpeg', q); }
+  return d.length <= 46000 ? d : '';
+}
+function mdPreview(f) {
+  return new Promise(res => {
+    const url = URL.createObjectURL(f);
+    const done = v => { URL.revokeObjectURL(url); res(v || ''); };
+    if (String(f.type).indexOf('image/') === 0) { const im = new Image(); im.onload = () => done(jpegFit(im, im.width, im.height, 420)); im.onerror = () => done(''); im.src = url; return; }
+    if (String(f.type).indexOf('video/') === 0) {
+      const v = document.createElement('video'); v.muted = true; v.playsInline = true; v.preload = 'metadata';
+      const t = setTimeout(() => done(''), 8000);
+      v.onloadeddata = () => { try { v.currentTime = Math.min(1, (v.duration || 2) / 3); } catch (e) { clearTimeout(t); done(''); } };
+      v.onseeked = () => { clearTimeout(t); try { done(jpegFit(v, v.videoWidth, v.videoHeight, 420)); } catch (e) { done(''); } };
+      v.onerror = () => { clearTimeout(t); done(''); };
+      v.src = url; return;
+    }
+    done('');
+  });
+}
+function mdForm(pre, edit, after) {
+  pre = pre || {};
+  const o = edit || {};
+  const fests = (S.C && S.C.fests) || [];
+  const cl = clOpts ? clOpts(null, '').filter(x => x[0]) : [];
+  const chosen = edit ? o.clientIds : (pre.clientIds || []);
+  const bg = modal(edit ? 'Изменить' : 'Добавить фото и видео', `<div class="fg">
+    ${edit ? '' : `<div class="full chips">${[['file', '📷 Фото или видео с устройства'], ['link', '🔗 Ссылка (YouTube, Диск, VK…)']].map((x, i) => `<label class="chip ${i ? '' : 'on'}"><input type="radio" name="how" value="${x[0]}" ${i ? '' : 'checked'} hidden>${x[1]}</label>`).join('')}</div>
+    <div class="full" data-how="file"><label class="btn pri" style="position:relative;overflow:hidden;cursor:pointer">📁 Выбрать файлы<input type="file" id="mdf" multiple accept="image/jpeg,image/png,image/webp,image/heic,video/mp4,video/quicktime,video/webm,video/3gpp" style="position:absolute;inset:0;opacity:0;cursor:pointer"></label>
+      <div class="small muted md-q" id="mdq">До 25 МБ на файл. Длинное видео лучше загрузить на YouTube или Google Диск и добавить ссылкой.</div></div>
+    <div class="full" data-how="link" style="display:none">${fld('Ссылка', inp('url', '', 'placeholder="' + CL.url('youtu.be/…') + '"'))}</div>`}
+    ${fld('Описание', inp('title', o.title || pre.title || '', 'placeholder="Финал, вальс, награждение…"'), 'full')}
+    ${fld('Дата', inp('date', o.date || pre.date || today(), 'type="date"'))}
+    ${fld('Мероприятие', sel('festId', [['', '— не связано —']].concat(fests.map(f => [f.id, fd(f.date) + ' ' + f.title])), o.festId || pre.festId || ''))}
+    ${fld('Кто на фото / видео', multi('clientIds', cl, chosen || []), 'full')}
+    <div class="full small muted">Файлы сохраняются в папку «Медиа» на Google Диске клуба, список — в отдельную таблицу «Медиа». Ученики видят в приложении только те фото и видео, где они отмечены.</div></div>`,
+  [{t: 'Отмена'}, {t: edit ? 'Сохранить' : ic('plus') + 'Добавить', cls: 'pri', fn: async m => {
+    const v = vals(m);
+    const base = {title: v.title, date: v.date, festId: v.festId, clientIds: v.clientIds || []};
+    if (edit) { await call('mediaSave', Object.assign({id: o.id}, base)); toast('Сохранено'); if (after) after(); return; }
+    if (v.how === 'link') { await call('mediaAdd', Object.assign({url: v.url}, base)); toast('Ссылка добавлена'); if (after) after(); return; }
+    const files = [...($('#mdf', m).files || [])];
+    if (!files.length) throw new Error('Выберите файлы');
+    const big = files.filter(f => f.size > 25 * 1048576);
+    if (big.length) throw new Error('Больше 25 МБ: ' + big.map(f => f.name).join(', ') + '. Добавьте такие видео ссылкой.');
+    let n = 0;
+    for (const f of files) {
+      $('#mdq', m).textContent = 'Загружаю ' + (n + 1) + ' из ' + files.length + ': ' + f.name + '…';
+      const [preview, data] = await Promise.all([mdPreview(f), fileB64(f)]);
+      await call('mediaAdd', Object.assign({data, mime: f.type || 'application/octet-stream', name: f.name, preview}, base), true);
+      n++;
+    }
+    toast('Загружено: ' + n); if (after) after();
+  }}]);
+  bg.addEventListener('change', e => {
+    if (e.target.name === 'how') { $$('[name=how]', bg).forEach(r => r.parentNode.classList.toggle('on', r.checked)); $$('[data-how]', bg).forEach(d => { d.style.display = d.dataset.how === e.target.value ? '' : 'none'; }); }
+    if (e.target.name === 'festId' && e.target.value) { const f = fests.find(x => x.id === e.target.value); if (f) $('[name=date]', bg).value = f.date; }
+    if (e.target.id === 'mdf') { const fs = [...e.target.files]; $('#mdq', bg).textContent = fs.length ? 'Выбрано: ' + fs.length + ' (' + (fs.reduce((a, f) => a + f.size, 0) / 1048576).toFixed(1) + ' МБ)' : ''; }
+  });
+}
+function mdSection(box, filter, pre, title) {
+  const my = S.pageSeq;
+  const load = () => call('mediaList', filter, true).then(r => {
+    if (S.pageSeq !== my || !document.body.contains(box)) return;
+    box.innerHTML = `<div class="row" style="margin-bottom:8px"><h2 class="grow" style="margin:0">${title || 'Фото и видео'}${r.total ? ' · ' + r.total : ''}</h2>${canAddMedia() ? `<button class="btn sm pri" data-mda>${ic('plus')}Добавить</button>` : ''}</div>${mdGrid(r.items, 'Фото и видео пока нет')}`;
+    mdWire(box, r.items, load);
+    const b = $('[data-mda]', box); if (b) b.onclick = () => (S.C ? Promise.resolve() : CL.load().catch(() => null)).then(() => mdForm(pre, null, load));
+  }).catch(e => { box.innerHTML = `<div class="small" style="color:var(--bad)">${esc(e.message)}</div>`; });
+  load();
+}
+TLV.media = () => {
+  const ui = S.ui.clmd || (S.ui.clmd = {festId: '', clientId: '', type: ''});
+  const my = S.pageSeq;
+  const prep = role() === 'client' ? Promise.resolve() : CL.load().catch(() => null);
+  $('#tlb').innerHTML = empty('Загрузка…');
+  prep.then(() => call('mediaList', {festId: ui.festId, clientId: ui.clientId, type: ui.type, limit: 120}, true)).then(r => {
+    if (S.pageSeq !== my || !$('#tlb')) return;
+    const fests = (S.C && S.C.fests) || [];
+    $('#tlb').innerHTML = `<div class="row" style="gap:8px;margin-bottom:10px;flex-wrap:wrap">
+        <div class="chips">${[['', 'Всё'], ['photo', 'Фото'], ['video', 'Видео'], ['link', 'Ссылки']].map(x => `<span class="chip ${ui.type === x[0] ? 'on' : ''}" data-mt="${x[0]}">${x[1]}</span>`).join('')}</div>
+        ${role() !== 'client' ? `<select class="inp" id="mdfs" style="width:auto;max-width:260px"><option value="">Все мероприятия</option>${fests.map(f => `<option value="${f.id}" ${ui.festId === f.id ? 'selected' : ''}>${esc(fd(f.date) + ' ' + f.title)}</option>`).join('')}</select>
+        <select class="inp" id="mdcs" style="width:auto;max-width:220px">${clOpts(null, 'Все ученики').map(x => `<option value="${x[0]}" ${ui.clientId === x[0] ? 'selected' : ''}>${esc(x[1])}</option>`).join('')}</select>` : ''}
+        <span class="spacer"></span>
+        ${r.folderUrl ? `<a class="btn sm" href="${esc(r.folderUrl)}" target="_blank" rel="noopener">${ic('ext')}Папка на Диске</a><a class="btn sm" href="${esc(r.sheetUrl)}" target="_blank" rel="noopener">${ic('ext')}Таблица «Медиа»</a>` : ''}
+        ${canAddMedia() ? `<button class="btn pri" id="mdadd">${ic('plus')}Добавить</button>` : ''}</div>
+      ${role() === 'client' ? '<p class="small muted" style="margin-top:0">Фото и видео с занятий, турниров и мероприятий, где вы отмечены.</p>' : ''}
+      ${mdGrid(r.items, role() === 'client' ? 'Пока нет фото и видео с вами' : 'Добавьте первые фото и видео с занятий и турниров')}
+      ${r.total > r.items.length ? `<div class="small muted" style="margin-top:8px">Показаны последние ${r.items.length} из ${r.total} — уточните фильтр</div>` : ''}`;
+    $$('[data-mt]').forEach(c => c.onclick = () => { ui.type = c.dataset.mt; TLV.media(); });
+    if ($('#mdfs')) $('#mdfs').onchange = e => { ui.festId = e.target.value; TLV.media(); };
+    if ($('#mdcs')) $('#mdcs').onchange = e => { ui.clientId = e.target.value; TLV.media(); };
+    if ($('#mdadd')) $('#mdadd').onclick = () => mdForm({festId: ui.festId, clientIds: ui.clientId ? [ui.clientId] : []}, null, TLV.media);
+    mdWire($('#tlb'), r.items, TLV.media);
+  }).catch(fail);
+};
+(function () {
+  const baseFV = festView;
+  festView = f => {
+    baseFV(f);
+    const box = document.createElement('div'); box.className = 'sect';
+    $('#tlb').appendChild(box);
+    const regs = S.C.regs.filter(g => g.festId === f.id && g.status !== 'cancelled').map(g => g.clientId);
+    mdSection(box, {festId: f.id}, {festId: f.id, date: f.date, clientIds: regs}, 'Фото и видео с мероприятия');
+  };
+  const basePass2 = TLV.passport;
+  TLV.passport = () => {
+    basePass2();
+    const cid = (S.ui.tlpp || {}).c;
+    if (!cid || !$('#tlb')) return;
+    const box = document.createElement('div'); box.className = 'card sect';
+    $('#tlb').appendChild(box);
+    mdSection(box, {clientId: cid}, {clientIds: [cid]}, 'Фото и видео ученика');
+  };
+})();
 </script>

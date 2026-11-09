@@ -724,9 +724,9 @@ function botBroadcasts_() {
 
 /** Вкладки «Инструментов», которые администратор может открыть другим ролям (настройка «Доступ»). Администратору доступно всё. */
 const TOOL_TABS_FOR = {
-  manager: ['bot', 'renew', 'lost', 'rate', 'fests', 'halls', 'subst', 'money', 'pair', 'passport', 'league', 'hr'],
-  trainer: ['pair', 'passport', 'league', 'halls', 'tg'],
-  client: ['my', 'league', 'tg'],
+  manager: ['bot', 'renew', 'lost', 'rate', 'fests', 'halls', 'subst', 'money', 'media', 'pair', 'passport', 'league', 'hr'],
+  trainer: ['pair', 'passport', 'league', 'halls', 'media', 'tg'],
+  client: ['my', 'league', 'media', 'tg'],
 };
 function toolsAccess_() {
   const a = parseJson_(settings_().tools_access, {}) || {};

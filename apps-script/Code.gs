@@ -7,7 +7,7 @@
  */
 
 const CLUB_NAME = 'Клуб корпоративных бальных танцев';
-const APP_VER = '2026-11-09.2'; // меняется при каждом обновлении — открытые страницы предложат перезагрузку
+const APP_VER = '2026-11-09.3'; // меняется при каждом обновлении — открытые страницы предложат перезагрузку
 const STAFF = ['admin', 'manager'];
 const ALL = ['admin', 'manager', 'trainer', 'client'];
 const SESSION_DAYS = 30;
@@ -122,7 +122,6 @@ const TABLES = {
   regs: ['Участники мероприятий', [
     ['id', 'ID'], ['festId', 'ID мероприятия'], ['clientId', 'ID ученика'], ['clientName', 'Ученик'], ['partnerName', 'Партнёр'], ['status', 'Статус'],
     ['note', 'Заметка'], ['result', 'Результат'], ['points', 'Баллы', 'n'], ['createdAt', 'Создано']]],
-  avatars: ['Фото', [['id', 'ID'], ['kind', 'Тип'], ['refId', 'ID карточки'], ['data', 'Изображение'], ['updatedAt', 'Обновлено']]],
   errors: ['Ошибки', [['id', 'ID'], ['createdAt', 'Время'], ['userName', 'Пользователь'], ['where', 'Где'], ['message', 'Ошибка'], ['stack', 'Подробности'], ['ua', 'Устройство']]],
 };
 
@@ -339,7 +338,7 @@ function api(token, action, payload) {
 function api_(token, action, payload) {
   try {
     payload = payload || {};
-    prefetch_(Object.keys(TABLES).filter(k => (k !== 'messages' || /Message/.test(action)) && (k !== 'errors' || /Error/.test(action)) && (k !== 'avatars' || /vatar/.test(action))));
+    prefetch_(Object.keys(TABLES).filter(k => (k !== 'messages' || /Message/.test(action)) && (k !== 'errors' || /Error/.test(action))));
     if (action === 'login') return { ok: true, data: login_(payload) };
     if (action === 'loginCode' && typeof loginByCode_ === 'function') return { ok: true, data: loginByCode_(payload) };
     if (action === 'ping') return { ok: true, data: { club: CLUB_NAME } };
@@ -351,7 +350,7 @@ function api_(token, action, payload) {
     const data = h.write ? withLock_(() => {
       // внутри блокировки перечитываем версии листов: кто-то мог сохранить данные, пока мы ждали
       Object.keys(_cache).forEach(k => delete _cache[k]);
-      prefetch_(Object.keys(TABLES).filter(k => (k !== 'messages' || /Message/.test(action)) && (k !== 'errors' || /Error/.test(action)) && (k !== 'avatars' || /vatar/.test(action))));
+      prefetch_(Object.keys(TABLES).filter(k => (k !== 'messages' || /Message/.test(action)) && (k !== 'errors' || /Error/.test(action))));
       return h.fn(user, payload);
     }) : h.fn(user, payload);
     if (h.write && payload.__snap) {

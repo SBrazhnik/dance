@@ -694,6 +694,103 @@ function clubAwardNotify_(clientId, title, points) {
 }
 
 // ---------------------------------------------------------------------------
+// Медиа: отдельная папка на Google Диске и отдельная таблица
+//   Папка «Медиа — <клуб>» рядом с основной таблицей:
+//     «Аватары» — фото профиля (по файлу на человека),
+//     «Фото и видео» — снимки и ролики с занятий, турниров и мероприятий (по подпапкам),
+//     таблица «Медиа — <клуб>»: листы «Аватары» и «Галерея» (каталог файлов и ссылок).
+//   В основной таблице медиа больше не хранится.
+// ---------------------------------------------------------------------------
+const MEDIA_SHEETS = {
+  avatars: ['Аватары', [['id', 'ID'], ['kind', 'Тип'], ['refId', 'ID карточки'], ['name', 'Чьё фото'], ['fileId', 'Файл на Диске'],
+    ['data', 'Миниатюра'], ['updatedAt', 'Обновлено']]],
+  items: ['Галерея', [['id', 'ID'], ['date', 'Дата'], ['type', 'Тип'], ['title', 'Описание'], ['festId', 'ID мероприятия'], ['festTitle', 'Мероприятие'],
+    ['clientIds', 'ID учеников'], ['names', 'Кто на фото / видео'], ['fileId', 'Файл на Диске'], ['url', 'Ссылка'], ['mime', 'Формат'],
+    ['size', 'Размер, байт'], ['preview', 'Миниатюра'], ['author', 'Кто добавил'], ['createdAt', 'Добавлено']]],
+};
+const MEDIA_MAX = 25 * 1024 * 1024;
+function mediaFolder_() { return folder_('media', 'Медиа'); }
+function mediaSub_(name, parent) {
+  const f = parent || mediaFolder_();
+  const it = f.getFoldersByName(name);
+  return it.hasNext() ? it.next() : f.createFolder(name);
+}
+function mediaSs_() {
+  if (_cache.__mss) return _cache.__mss;
+  const id = settings_().media_ssid;
+  let ss = null;
+  if (id) { try { if (!DriveApp.getFileById(id).isTrashed()) ss = SpreadsheetApp.openById(id); } catch (e) { ss = null; } }
+  if (!ss) {
+    ss = SpreadsheetApp.create('Медиа — ' + CLUB_NAME);
+    DriveApp.getFileById(ss.getId()).moveTo(mediaFolder_());
+    setSetting_('media_ssid', ss.getId());
+  }
+  Object.keys(MEDIA_SHEETS).forEach(k => {
+    const [title, cols] = MEDIA_SHEETS[k];
+    if (ss.getSheetByName(title)) return;
+    const sh = ss.insertSheet(title);
+    sh.getRange(1, 1, 1, cols.length).setValues([cols.map(c => c[1])]).setFontWeight('bold');
+    sh.getRange(2, 1, sh.getMaxRows() - 1, cols.length).setNumberFormat('@');
+    sh.setFrozenRows(1);
+  });
+  ss.getSheets().forEach(sh => { if (ss.getSheets().length > 2 && !Object.keys(MEDIA_SHEETS).some(k => MEDIA_SHEETS[k][0] === sh.getName())) { try { ss.deleteSheet(sh); } catch (e) { /* оставим */ } } });
+  _cache.__mss = ss;
+  return ss;
+}
+function mrows_(k) {
+  const ck = '__m_' + k;
+  if (_cache[ck]) return _cache[ck];
+  const cols = MEDIA_SHEETS[k][1];
+  const sh = mediaSs_().getSheetByName(MEDIA_SHEETS[k][0]);
+  const n = sh.getLastRow();
+  const vals = n > 1 ? sh.getRange(2, 1, n - 1, cols.length).getValues() : [];
+  _cache[ck] = vals.map((r, i) => { const o = { _r: i + 2 }; cols.forEach((c, j) => { o[c[0]] = r[j] instanceof Date ? Utilities.formatDate(r[j], tz_(), 'yyyy-MM-dd HH:mm:ss') : String(r[j]); }); return o; }).filter(o => o.id);
+  return _cache[ck];
+}
+function mwrite_(k, o, row) {
+  const cols = MEDIA_SHEETS[k][1];
+  const sh = mediaSs_().getSheetByName(MEDIA_SHEETS[k][0]);
+  const vals = [cols.map(c => o[c[0]] == null ? '' : String(o[c[0]]))];
+  const r = row || sh.getLastRow() + 1;
+  sh.getRange(r, 1, 1, cols.length).setNumberFormat('@').setValues(vals);
+  delete _cache['__m_' + k];
+  return r;
+}
+function mdelete_(k, o) {
+  mediaSs_().getSheetByName(MEDIA_SHEETS[k][0]).deleteRow(o._r);
+  delete _cache['__m_' + k];
+}
+function trashFile_(id) { if (id) { try { DriveApp.getFileById(id).setTrashed(true); } catch (e) { /* уже удалён */ } } }
+function safeName_(s) { return String(s || '').replace(/[\\/:*?"<>|]+/g, ' ').trim().slice(0, 80) || 'без имени'; }
+
+/** Переносит фото профиля из основной таблицы (лист «Фото») в медиа-таблицу и папку — один раз. */
+function migrateAvatars_() {
+  if (settings_().media_mig) return;
+  const sh = ss_().getSheetByName('Фото');
+  if (sh && sh.getLastRow() > 1) {
+    const vals = sh.getRange(2, 1, sh.getLastRow() - 1, 5).getValues();
+    vals.forEach(r => { if (r[1] && r[2] && /^data:image/.test(String(r[3]))) { try { avatarStore_(String(r[1]), String(r[2]), String(r[3])); } catch (e) { /* пропустим битое */ } } });
+  }
+  if (sh) { try { ss_().deleteSheet(sh); } catch (e) { /* нет прав — оставим */ } }
+  setSetting_('media_mig', '1');
+}
+function avatarOwnerName_(kind, refId) {
+  const t = kind === 'client' ? 'clients' : kind === 'trainer' ? 'trainers' : 'users';
+  const r = find_(t, refId);
+  return r ? r.name : refId;
+}
+function avatarStore_(kind, refId, data) {
+  const name = avatarOwnerName_(kind, refId);
+  const blob = Utilities.newBlob(Utilities.base64Decode(data.split(',')[1]), 'image/jpeg', safeName_(name) + '.jpg');
+  const file = mediaSub_('Аватары').createFile(blob);
+  const ex = mrows_('avatars').find(a => a.kind === kind && a.refId === refId);
+  if (ex) trashFile_(ex.fileId);
+  const o = { id: ex ? ex.id : newId_(10), kind, refId, name, fileId: file.getId(), data, updatedAt: now_() };
+  mwrite_('avatars', o, ex ? ex._r : null);
+  return o.updatedAt;
+}
+
+// ---------------------------------------------------------------------------
 // Фото-аватары
 // ---------------------------------------------------------------------------
 function avatarAllowed_(user, kind, refId) {
@@ -710,25 +807,112 @@ function avatarSet_(user, p) {
   const data = String(p.data || '');
   if (!/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(data)) throw new Error('Это не изображение');
   if (data.length > 48000) throw new Error('Фото слишком большое');
-  const ex = tbl_('avatars').rows.find(a => a.kind === kind && a.refId === refId);
-  const d = { kind, refId, data, updatedAt: now_() };
-  if (ex) update_('avatars', ex.id, d); else insert_('avatars', d);
-  return d.updatedAt;
+  migrateAvatars_();
+  return avatarStore_(kind, refId, data);
 }
 function avatarDel_(user, p) {
   if (!avatarAllowed_(user, p.kind, p.refId)) throw new Error('Можно удалить только своё фото');
-  const ex = tbl_('avatars').rows.find(a => a.kind === p.kind && a.refId === p.refId);
-  return ex ? del_('avatars', ex.id) : 0;
+  migrateAvatars_();
+  const ex = mrows_('avatars').find(a => a.kind === p.kind && a.refId === p.refId);
+  if (!ex) return 0;
+  trashFile_(ex.fileId);
+  mdelete_('avatars', ex);
+  return 1;
 }
 function avatarsLoad_(user, p) {
+  migrateAvatars_();
   const have = (p && p.have) || {};
   const v = {}, data = {};
-  tbl_('avatars').rows.forEach(a => {
+  mrows_('avatars').forEach(a => {
     const k = a.kind + ':' + a.refId;
     v[k] = a.updatedAt;
     if (have[k] !== a.updatedAt) data[k] = a.data;
   });
   return { v, data };
+}
+
+// ---------------------------------------------------------------------------
+// Галерея: фото, видео и ссылки с занятий, турниров и мероприятий
+// ---------------------------------------------------------------------------
+function mediaView_(o) {
+  return { id: o.id, date: o.date, type: o.type, title: o.title, festId: o.festId, festTitle: o.festTitle, clientIds: ids_(o.clientIds), names: o.names,
+    url: o.url, mime: o.mime, size: +o.size || 0, preview: o.preview, author: o.author, createdAt: o.createdAt, hasFile: !!o.fileId };
+}
+function mediaList_(user, p) {
+  let list = mrows_('items').slice();
+  if (user.role === 'client') list = list.filter(o => ids_(o.clientIds).indexOf(user.clientId) >= 0);
+  if (p.festId) list = list.filter(o => o.festId === p.festId);
+  if (p.clientId) list = list.filter(o => ids_(o.clientIds).indexOf(p.clientId) >= 0);
+  if (p.type) list = list.filter(o => o.type === p.type);
+  list.sort((a, b) => (b.date + b.createdAt).localeCompare(a.date + a.createdAt));
+  const total = list.length;
+  const res = { total, items: list.slice(0, Math.min(200, +p.limit || 60)).map(mediaView_) };
+  if (user.role === 'admin') { res.folderUrl = mediaFolder_().getUrl(); res.sheetUrl = mediaSs_().getUrl(); }
+  return res;
+}
+function mediaType_(mime, url) {
+  if (/^image\//.test(mime)) return 'photo';
+  if (/^video\//.test(mime)) return 'video';
+  if (url && /youtu\.?be|vk\.com\/video|rutube|vimeo/i.test(url)) return 'video';
+  return url ? 'link' : 'file';
+}
+function mediaAdd_(user, p) {
+  const isLink = !p.data;
+  const url = String(p.url || '').trim();
+  if (isLink && !/^https?:\/\//i.test(url)) throw new Error('Ссылка должна начинаться с https://');
+  const fest = p.festId ? find_('fests', p.festId) : null;
+  const cids = [].concat(p.clientIds || []).filter(id => find_('clients', id));
+  if (user.role === 'trainer') {
+    const mine = typeof toolClientIds_ === 'function' ? toolClientIds_(user) : null;
+    if (mine && cids.some(id => !mine[id])) throw new Error('Можно отмечать только своих учеников');
+  }
+  const date = isDate_(p.date) ? p.date : fest ? fest.date : today_();
+  const o = { id: newId_(10), date, title: String(p.title || '').slice(0, 300), festId: fest ? fest.id : '', festTitle: fest ? fest.title : '',
+    clientIds: cids.join(','), names: cids.map(id => nameOf_('clients', id)).join(', '), fileId: '', url: isLink ? url : '', mime: '', size: 0,
+    preview: /^data:image\/jpeg;base64,/.test(String(p.preview || '')) && String(p.preview).length <= 48000 ? p.preview : '', author: user.name, createdAt: now_() };
+  if (!isLink) {
+    const bytes = Utilities.base64Decode(String(p.data));
+    if (bytes.length > MEDIA_MAX) throw new Error('Файл больше 25 МБ. Длинное видео загрузите на YouTube, Google Диск или VK и добавьте ссылкой.');
+    const mime = String(p.mime || 'application/octet-stream');
+    if (!/^(image|video)\//.test(mime)) throw new Error('Можно загружать только фото и видео');
+    const sub = mediaSub_(fest ? safeName_(ruDate_(fest.date) + ' ' + fest.title) : date.slice(0, 7), mediaSub_('Фото и видео'));
+    const file = sub.createFile(Utilities.newBlob(bytes, mime, safeName_(p.name || ('файл ' + date))));
+    if (o.title) file.setDescription(o.title + (o.names ? ' — ' + o.names : ''));
+    o.fileId = file.getId(); o.mime = mime; o.size = bytes.length;
+  }
+  o.type = mediaType_(o.mime, o.url);
+  mwrite_('items', o);
+  return mediaView_(o);
+}
+function mediaSave_(user, p) {
+  const o = mrows_('items').find(x => x.id === p.id);
+  if (!o) throw new Error('Не найдено');
+  if (!isStaff_(user) && o.author !== user.name) throw new Error('Можно менять только то, что добавили сами');
+  const fest = p.festId ? find_('fests', p.festId) : null;
+  const cids = [].concat(p.clientIds || []).filter(id => find_('clients', id));
+  Object.assign(o, { title: String(p.title || '').slice(0, 300), date: isDate_(p.date) ? p.date : o.date, festId: fest ? fest.id : '', festTitle: fest ? fest.title : '',
+    clientIds: cids.join(','), names: cids.map(id => nameOf_('clients', id)).join(', ') });
+  mwrite_('items', o, o._r);
+  return mediaView_(o);
+}
+function mediaDel_(user, p) {
+  const o = mrows_('items').find(x => x.id === p.id);
+  if (!o) return 0;
+  if (!isStaff_(user) && o.author !== user.name) throw new Error('Можно удалить только то, что добавили сами');
+  trashFile_(o.fileId);
+  mdelete_('items', o);
+  return 1;
+}
+/** Сам файл: фото до 8 МБ отдаём в приложение, видео — ссылкой на Google Диск. */
+function mediaGet_(user, p) {
+  const o = mrows_('items').find(x => x.id === p.id);
+  if (!o) throw new Error('Не найдено');
+  if (user.role === 'client' && ids_(o.clientIds).indexOf(user.clientId) < 0) throw new Error('Нет доступа');
+  if (!o.fileId) return { url: o.url };
+  const f = DriveApp.getFileById(o.fileId);
+  const res = { driveUrl: f.getUrl(), name: f.getName(), mime: o.mime };
+  if (+o.size <= 8 * 1024 * 1024 || p.full) res.data = Utilities.base64Encode(f.getBlob().getBytes());
+  return res;
 }
 
 // ---------------------------------------------------------------------------
@@ -777,6 +961,7 @@ const CLUB_HANDLER_TABS = {
   finance: ['money'], saveExpense: ['money'], deleteExpense: ['money'], shareCreate: ['hr'], shareOff: ['hr'],
   saveFest: ['fests'], deleteFest: ['fests'], saveReg: ['fests'], deleteReg: ['fests'], festInvite: ['fests'], festResults: ['fests'],
   substitute: ['subst'], clubBotSave: ['bot'], clubTickNow: ['bot'],
+  mediaList: ['media', 'fests', 'passport', 'my'], mediaAdd: ['media', 'fests', 'passport'], mediaSave: ['media', 'fests', 'passport'], mediaDel: ['media', 'fests', 'passport'], mediaGet: ['media', 'fests', 'passport', 'my'],
 };
 function clubHandlers_() {
   const A = STAFF;
@@ -808,5 +993,10 @@ function clubHandlers_() {
     avatarSet: { roles: ALL, write: true, fn: avatarSet_ },
     avatarDel: { roles: ALL, write: true, fn: avatarDel_ },
     avatarsLoad: { roles: ALL, fn: avatarsLoad_ },
+    mediaList: { roles: ALL, fn: mediaList_ },
+    mediaAdd: { roles: ['admin', 'manager', 'trainer'], write: true, fn: mediaAdd_ },
+    mediaSave: { roles: ['admin', 'manager', 'trainer'], write: true, fn: mediaSave_ },
+    mediaDel: { roles: ['admin', 'manager', 'trainer'], write: true, fn: mediaDel_ },
+    mediaGet: { roles: ALL, fn: mediaGet_ },
   }, CLUB_HANDLER_TABS);
 }
