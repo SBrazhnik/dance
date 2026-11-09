@@ -7,7 +7,7 @@
  */
 
 const CLUB_NAME = 'Клуб корпоративных бальных танцев';
-const APP_VER = '2026-11-09.5'; // меняется при каждом обновлении — открытые страницы предложат перезагрузку
+const APP_VER = '2026-11-09.6'; // меняется при каждом обновлении — открытые страницы предложат перезагрузку
 const STAFF = ['admin', 'manager'];
 const ALL = ['admin', 'manager', 'trainer', 'client'];
 const SESSION_DAYS = 30;
@@ -343,6 +343,7 @@ function api_(token, action, payload) {
     if (action === 'login') return { ok: true, data: login_(payload) };
     if (action === 'loginCode' && typeof loginByCode_ === 'function') return { ok: true, data: loginByCode_(payload) };
     if (action === 'ping') return { ok: true, data: { club: CLUB_NAME } };
+    if (action === 'brandFont' && typeof brandFont_ === 'function') return { ok: true, data: brandFont_(payload) };
     const user = auth_(token);
     if (!user) return { ok: false, error: 'AUTH', message: 'Сессия истекла — войдите снова' };
     const h = HANDLERS[action] || (typeof toolHandlers_ === 'function' ? toolHandlers_()[action] : null) || (typeof clubHandlers_ === 'function' ? clubHandlers_()[action] : null);
@@ -491,7 +492,7 @@ function norm_(v, type) {
   return s;
 }
 
-const LIGHT_ACTIONS = ['ping', 'avatarsLoad', 'avatarGet', 'markSeen', 'logError', 'getMessages', 'mediaList', 'mediaGet'];
+const LIGHT_ACTIONS = ['brandFont', 'ping', 'avatarsLoad', 'avatarGet', 'markSeen', 'logError', 'getMessages', 'mediaList', 'mediaGet'];
 const _lazy = {};
 function tbl_(key) {
   if (_cache[key]) return _cache[key];

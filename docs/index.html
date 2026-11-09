@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
 <title>Клуб корпоративных бальных танцев</title>
 <meta name="description" content="Приложение клуба корпоративных бальных танцев: абонементы, запись на занятия, расписание">
-<meta name="theme-color" content="#253559">
+<meta name="theme-color" content="#121721">
 <link rel="manifest" href="/manifest.webmanifest">
 <link rel="icon" href="/icons/icon-32.png">
 <link rel="apple-touch-icon" href="/icons/icon-180.png">
@@ -14,19 +14,19 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="CorpDance">
 <style>
-  html, body { margin: 0; height: 100%; background: #253559; overflow: hidden; }
-  #app { position: fixed; inset: 0; width: 100%; height: 100%; border: 0; background: #f4f5f8; }
+  html, body { margin: 0; height: 100%; background: #121721; overflow: hidden; }
+  #app { position: fixed; inset: 0; width: 100%; height: 100%; border: 0; background: #121721; }
   #splash { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px;
-    background: #253559; color: #fff; font: 16px -apple-system, Segoe UI, Roboto, Arial, sans-serif; transition: opacity .4s; z-index: 2; text-align: center; padding: 20px; }
-  #splash img { width: 140px; height: 140px; border-radius: 28px; }
+    background: #121721 url(/brand/dancers.jpg) center 58%/min(560px, 120vw) no-repeat; color: #fff; font: 16px -apple-system, Segoe UI, Roboto, Arial, sans-serif; transition: opacity .4s; z-index: 2; text-align: center; padding: 20px; }
+  #splash img { width: 72px; height: 72px; }
   #splash b { font-size: 19px; }
   #splash small { opacity: .75; }
-  #splash a { color: #e9c46a; }
+  #splash a { color: #C9B8FF; }
   #splash.hide { opacity: 0; pointer-events: none; }
 </style>
 </head>
 <body>
-<div id="splash"><img src="/icons/icon-512.png" alt=""><b>Клуб корпоративных бальных танцев</b><small id="msg">Загрузка…</small></div>
+<div id="splash"><img src="/brand/logo.svg" alt=""><b>Клуб корпоративных бальных танцев</b><small id="msg">Загрузка…</small></div>
 <iframe id="app" title="Клуб корпоративных бальных танцев" allow="clipboard-read; clipboard-write; fullscreen" referrerpolicy="no-referrer-when-downgrade"></iframe>
 <script>
   // Адрес веб-приложения Google Apps Script. Если развёртывание поменяется — достаточно исправить его здесь.

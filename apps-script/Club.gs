@@ -709,6 +709,45 @@ const MEDIA_SHEETS = {
     ['size', 'Размер, байт'], ['preview', 'Миниатюра'], ['author', 'Кто добавил'], ['createdAt', 'Добавлено']]],
 };
 const MEDIA_MAX = 25 * 1024 * 1024;
+// ---------------------------------------------------------------------------
+// Фирменные шрифты сайта ano.dance: сервер скачивает их один раз, хранит копию
+// в папке «Медиа/Оформление» и отдаёт приложению (с сайта напрямую браузер их не даёт).
+// ---------------------------------------------------------------------------
+const BRAND_FONTS = { eddy: 'https://ano.dance/fonts/eddy-mits.otf', fog: 'https://ano.dance/fonts/FoglihtenNo.otf' };
+function brandFont_(p) {
+  const k = String((p && p.f) || '');
+  if (!BRAND_FONTS[k]) throw new Error('Нет такого шрифта');
+  const c = cache_();
+  try {
+    const n = Number(c.get('bf_' + k) || 0);
+    if (n) {
+      const keys = []; for (let i = 0; i < n; i++) keys.push('bf_' + k + '_' + i);
+      const got = c.getAll(keys);
+      if (keys.every(x => got[x])) return { f: k, b64: keys.map(x => got[x]).join('') };
+    }
+  } catch (e) { /* кэш недоступен */ }
+  let bytes = null;
+  const id = settings_()['brandfont_' + k];
+  if (id) { try { bytes = DriveApp.getFileById(id).getBlob().getBytes(); } catch (e) { bytes = null; } }
+  if (!bytes) {
+    const r = UrlFetchApp.fetch(BRAND_FONTS[k], { muteHttpExceptions: true });
+    if (r.getResponseCode() !== 200) throw new Error('Шрифт недоступен');
+    const blob = r.getBlob().setName(k + '.otf');
+    bytes = blob.getBytes();
+    try {
+      const f = mediaSub_('Оформление').createFile(blob);
+      withLock_(() => setSetting_('brandfont_' + k, f.getId()));
+    } catch (e) { /* без копии на Диске */ }
+  }
+  const b64 = Utilities.base64Encode(bytes);
+  try {
+    const put = {}; let n = 0;
+    for (let i = 0; i < b64.length; i += 90000) put['bf_' + k + '_' + (n++)] = b64.slice(i, i + 90000);
+    put['bf_' + k] = String(n);
+    c.putAll(put, 21600);
+  } catch (e) { /* без кэша */ }
+  return { f: k, b64 };
+}
 function mediaFolder_() { return folder_('media', 'Медиа'); }
 function mediaSub_(name, parent) {
   const f = parent || mediaFolder_();
