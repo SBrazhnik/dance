@@ -44,7 +44,7 @@ import java.io.FileOutputStream;
 public class MainActivity extends Activity {
     private static final int REQ_FILE = 41;
     private ValueCallback<Uri[]> fileCb;
-    private static final int NAVY = Color.parseColor("#253559");
+    private static final int NAVY = Color.parseColor("#121721");
     private WebView web;
     private View splash;
     private SharedPreferences prefs;
@@ -316,10 +316,10 @@ public class MainActivity extends Activity {
     private void showOffline(String why) {
         splash.setVisibility(View.GONE);
         String html = "<html><head><meta name='viewport' content='width=device-width,initial-scale=1'></head>"
-                + "<body style='margin:0;font-family:sans-serif;background:#253559;color:#fff;display:flex;align-items:center;justify-content:center;height:100vh;text-align:center'>"
+                + "<body style='margin:0;font-family:sans-serif;background:#121721;color:#fff;display:flex;align-items:center;justify-content:center;height:100vh;text-align:center'>"
                 + "<div style='padding:24px'><div style='font-size:46px'>⚠</div><h2>Нет связи с сервером</h2>"
                 + "<p style='opacity:.75'>Проверьте интернет и попробуйте снова.</p>"
-                + "<p><a href='app://retry' style='display:inline-block;background:#C9A24A;color:#fff;padding:12px 26px;border-radius:10px;text-decoration:none;font-weight:bold'>Повторить</a></p>"
+                + "<p><a href='app://retry' style='display:inline-block;background:#3F3561;color:#fff;padding:12px 26px;border-radius:10px;text-decoration:none;font-weight:bold'>Повторить</a></p>"
                 + "<p><a href='app://settings' style='color:#fff;opacity:.6;font-size:14px'>Изменить адрес приложения</a></p>"
                 + "<p style='opacity:.4;font-size:12px'>" + android.text.Html.escapeHtml(why) + "</p></div></body></html>";
         web.loadDataWithBaseURL("https://script.google.com/", html, "text/html", "utf-8", null);
