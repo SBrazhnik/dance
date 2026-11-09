@@ -7,7 +7,7 @@
  */
 
 const CLUB_NAME = 'Клуб корпоративных бальных танцев';
-const APP_VER = '2026-11-09.16'; // меняется при каждом обновлении — открытые страницы предложат перезагрузку
+const APP_VER = '2026-11-09.17'; // меняется при каждом обновлении — открытые страницы предложат перезагрузку
 const STAFF = ['admin', 'manager'];
 const ALL = ['admin', 'manager', 'trainer', 'client'];
 const SESSION_DAYS = 30;
@@ -758,7 +758,7 @@ function hoursOk_(h) { h = Number(h); if (!(h > 0 && h <= 24)) throw new Error('
 function createUser_(p) {
   const salt = newId_(16);
   return insert_('users', {
-    login: String(p.login).trim().toLowerCase(), name: p.name || p.login, role: p.role,
+    login: String(p.login).trim(), name: p.name || p.login, role: p.role,
     trainerId: p.trainerId || '', clientId: p.clientId || '', active: true,
     mustChange: !!p.mustChange, salt, passHash: hash_(p.password, salt)
   });
@@ -770,7 +770,7 @@ function login_(p) {
   const failKey = 'fail_' + login;
   const fails = Number(cache.get(failKey) || 0);
   if (fails >= 8) throw new Error('Слишком много попыток. Подождите 15 минут.');
-  const u = tbl_('users').rows.find(x => x.login === login && x.active);
+  const u = tbl_('users').rows.find(x => String(x.login).toLowerCase() === login && x.active); // регистр букв в логине не важен
   if (!u || hash_(String(p.password || ''), u.salt) !== u.passHash) {
     cache.put(failKey, String(fails + 1), 900);
     throw new Error('Неверный логин или пароль');
@@ -833,13 +833,13 @@ function changePassword_(user, p) {
 }
 
 function saveUser_(admin, p) {
-  const login = String(req_(p.login, 'Укажите логин')).trim().toLowerCase();
-  if (!/^[a-z0-9._-]{3,30}$/.test(login)) throw new Error('Логин: латиница, цифры, точка, дефис; 3–30 символов');
+  const login = String(req_(p.login, 'Укажите логин')).trim(); // храним как написано (BlokhinaP), вход — без учёта регистра
+  if (!/^[a-z0-9._-]{3,30}$/i.test(login)) throw new Error('Логин: латиница, цифры, точка, дефис; 3–30 символов');
   if (ALL.indexOf(p.role) < 0) throw new Error('Неверная роль');
   if (p.role === 'trainer' && !p.trainerId) throw new Error('Выберите тренера для этого логина');
   if (p.role === 'client' && !p.clientId) throw new Error('Выберите ученика для этого логина');
   const users = tbl_('users').rows;
-  if (users.some(u => u.login === login && u.id !== p.id)) throw new Error('Такой логин уже есть');
+  if (users.some(u => String(u.login).toLowerCase() === login.toLowerCase() && u.id !== p.id)) throw new Error('Такой логин уже есть');
   const data = {
     login, role: p.role, name: p.name || nameOf_('trainers', p.trainerId) || nameOf_('clients', p.clientId) || login,
     trainerId: p.role === 'trainer' ? p.trainerId : '', clientId: p.role === 'client' ? p.clientId : '',
