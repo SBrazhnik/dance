@@ -7,7 +7,7 @@
  */
 
 const CLUB_NAME = 'Клуб корпоративных бальных танцев';
-const APP_VER = '2026-11-09.10'; // меняется при каждом обновлении — открытые страницы предложат перезагрузку
+const APP_VER = '2026-11-09.11'; // меняется при каждом обновлении — открытые страницы предложат перезагрузку
 const STAFF = ['admin', 'manager'];
 const ALL = ['admin', 'manager', 'trainer', 'client'];
 const SESSION_DAYS = 30;
@@ -169,6 +169,15 @@ const DEFAULT_PROGRAMS = ['Стандарт', 'Латина', '10 танцев',
 // ---------------------------------------------------------------------------
 // Точки входа
 // ---------------------------------------------------------------------------
+/** Telegram присылает сообщения боту сюда (мгновенные ответы). Ответ — HtmlService: он не перенаправляет, и Telegram видит «200 OK». */
+function doPost(e) {
+  try {
+    const p = (e && e.parameter) || {};
+    const secret = PropertiesService.getScriptProperties().getProperty('tgHook');
+    if (p.tg && secret && p.tg === secret && e.postData && typeof tgWebhook_ === 'function') tgWebhook_(JSON.parse(e.postData.contents));
+  } catch (er) { try { logError_('бот', 'doPost', er.message, er.stack, ''); } catch (x) { /* без журнала */ } }
+  return HtmlService.createHtmlOutput('ok');
+}
 function doGet(e) {
   ensureSchema_();
   if (e && e.parameter && e.parameter.hr && typeof clubHrPage_ === 'function') {

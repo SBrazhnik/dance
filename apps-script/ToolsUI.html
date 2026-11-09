@@ -381,7 +381,9 @@ TLV.bot = () => {
   $('#tlb').innerHTML = `
     <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));align-items:start">
       <div class="card"><div class="row"><h2 class="grow" style="margin:0">Бот клуба</h2><span class="badge ${b.connected ? 'ok' : 'warn'}">${b.connected ? 'Подключён' : 'Не подключён'}</span></div>
-        ${b.connected ? `<p>Бот: <b>@${esc(b.name)}</b>. Подключились ${b.linked} чел. ${b.triggers ? '' : '<br><span class="badge warn">Расписание не включено — нажмите «Сохранить»</span>'}</p>` : `
+        ${b.connected ? `<p>Бот: <b>@${esc(b.name)}</b>. Подключились ${b.linked} чел. ${b.triggers ? '' : '<br><span class="badge warn">Расписание не включено — нажмите «Сохранить»</span>'}</p>
+        <p class="small" style="margin-top:-4px">${b.mode === 'hook' ? '<span class="badge ok">⚡ мгновенные ответы</span> бот отвечает сразу, как только приходит сообщение' : '<span class="badge">раз в минуту</span> бот проверяет сообщения раз в минуту — ответ может прийти не сразу'}${b.hookNote ? `<br><span class="muted">${esc(b.hookNote)}</span>` : ''}${b.hookErr ? `<br><span style="color:var(--bad)">Telegram сообщает: ${esc(b.hookErr)}</span>` : ''}</p>
+        ${admin ? `<button class="btn sm" id="tlhook" style="margin-bottom:10px">${b.mode === 'hook' ? 'Выключить мгновенные ответы' : 'Включить мгновенные ответы'}</button>` : ''}` : `
         <ol class="tl-step"><li>Откройте в Telegram <b>@BotFather</b> и отправьте <b>/newbot</b>.</li><li>Придумайте имя, например «Клуб бальных танцев», и адрес бота, оканчивающийся на <b>bot</b>.</li>
           <li>BotFather пришлёт токен вида <span class="tl-link" style="display:inline;padding:1px 6px">123456789:AA…</span> — вставьте его ниже.</li></ol>`}
         ${admin ? `<div class="fg">${fld(b.connected ? 'Новый токен (если нужно заменить)' : 'Токен бота', inp('token', '', 'id="tltok" autocomplete="off" placeholder="123456789:AA…"'), 'full')}</div>` : '<p class="small muted">Подключает и настраивает бота администратор.</p>'}
@@ -454,6 +456,9 @@ TLV.bot = () => {
     const v = vals($('#tlbs')); v.token = $('#tltok') ? $('#tltok').value.trim() : '';
     ['bot_remind', 'bot_low', 'bot_digest', 'bot_nudge'].forEach(k => { v[k] = v[k] ? 'true' : 'false'; });
     try { await call('botSave', v); toast(v.token ? 'Бот подключён' : 'Настройки сохранены'); await tlRefresh(); } catch (e) { fail(e); }
+  };
+  if ($('#tlhook')) $('#tlhook').onclick = async () => {
+    try { const r = await call('botHook', {on: b.mode !== 'hook'}); toast(r.mode === 'hook' ? 'Мгновенные ответы включены' : 'Бот проверяет сообщения раз в минуту'); await tlRefresh(); } catch (e) { fail(e); }
   };
   if ($('#tlbrun')) $('#tlbrun').onclick = async () => { try { const r = await call('botRunNow', {}); toast('Отправлено сообщений: ' + r.sent); await tlRefresh(); } catch (e) { fail(e); } };
   if ($('#tlboff')) $('#tlboff').onclick = () => modal('Отключить бота?', '<p style="margin-top:0">Бот перестанет отвечать и присылать уведомления. Подключения людей сохранятся — после нового подключения всё заработает снова.</p>',

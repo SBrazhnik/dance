@@ -339,7 +339,13 @@ function botStatus_(user) {
   let trig = false;
   try { trig = ScriptApp.getProjectTriggers().some(t => t.getHandlerFunction() === 'botPoll'); } catch (e) { /* нет прав */ }
   const rows = tbl_('tg').rows.filter(r => r.kind !== 'pending');
-  return { connected: !!tgToken_(), name: T.bot_name || '', link: T.bot_name ? 'https://t.me/' + T.bot_name : '', triggers: trig,
+  const mode = PropertiesService.getScriptProperties().getProperty('tgMode') || 'poll';
+  let hookErr = '';
+  if (mode === 'hook' && user.role === 'admin') {
+    try { const w = tgCall_('getWebhookInfo'); if (w.last_error_date && Date.now() / 1000 - w.last_error_date < 3600) hookErr = (w.last_error_message || 'ошибка доставки') + (w.pending_update_count ? ', ждут доставки: ' + w.pending_update_count : ''); } catch (e) { /* не критично */ }
+  }
+  return { connected: !!tgToken_(), name: T.bot_name || '', link: T.bot_name ? 'https://t.me/' + T.bot_name : '', triggers: trig, mode,
+    hookNote: PropertiesService.getScriptProperties().getProperty('tgHookNote') || '', hookErr,
     linked: rows.filter(r => r.chatId).length, total: rows.length, pending: tbl_('tg').rows.filter(r => r.kind === 'pending').length, admin: user.role === 'admin' };
 }
 function botSave_(user, p) {
@@ -356,10 +362,65 @@ function botSave_(user, p) {
   ['bot_hour', 'bot_remind', 'bot_low', 'bot_lowHours', 'bot_inactive', 'bot_digest', 'bot_nudge'].forEach(k => { if (k in p) setSetting_(k, p[k]); });
   installBotTriggers_();
   if (typeof clubSetCommands_ === 'function') { try { clubSetCommands_(); } catch (e) { /* не критично */ } }
+  // мгновенные ответы включаются сами (если не выключены вручную)
+  if (PropertiesService.getScriptProperties().getProperty('tgMode') !== 'poll-manual') { try { botHookOn_(); } catch (e) { /* останется опрос раз в минуту */ } }
   return botStatus_(user);
+}
+// ---------------------------------------------------------------------------
+// Мгновенные ответы: Telegram сам присылает сообщения в приложение (webhook).
+// Если доставка не работает, бот сам возвращается к проверке раз в минуту.
+// ---------------------------------------------------------------------------
+function botHookOn_() {
+  const url = ScriptApp.getService().getUrl();
+  if (!url || /\/dev$/.test(url)) throw new Error('Не удалось определить адрес приложения');
+  const props = PropertiesService.getScriptProperties();
+  const secret = props.getProperty('tgHook') || newId_(24);
+  props.setProperty('tgHook', secret);
+  tgCall_('setWebhook', { url: url + '?tg=' + secret, allowed_updates: ['message', 'callback_query'], max_connections: 20 });
+  props.setProperty('tgMode', 'hook');
+  props.setProperty('tgHookAt', String(Date.now()));
+  props.deleteProperty('tgHookNote');
+}
+function botHookOff_(note, manual) {
+  const props = PropertiesService.getScriptProperties();
+  try { tgCall_('deleteWebhook', { drop_pending_updates: false }); } catch (e) { /* бот отключён */ }
+  props.setProperty('tgMode', manual ? 'poll-manual' : 'poll');
+  if (note) props.setProperty('tgHookNote', note); else props.deleteProperty('tgHookNote');
+}
+function botHook_(user, p) {
+  if (user.role !== 'admin') throw new Error('Только администратор');
+  if (p.on) botHookOn_(); else botHookOff_('', true);
+  return botStatus_(user);
+}
+/** Сообщение от Telegram (webhook). Повторы одного и того же сообщения отбрасываются. */
+function tgWebhook_(u) {
+  if (!u || !u.update_id) return;
+  const c = cache_(), key = 'tgu_' + u.update_id;
+  try { if (c.get(key)) return; c.put(key, '1', 21600); } catch (e) { /* без кэша */ }
+  PropertiesService.getScriptProperties().setProperty('tgHookOk', String(Date.now()));
+  withLock_(() => {
+    Object.keys(_cache).forEach(k => delete _cache[k]);
+    try { if (u.callback_query) { if (typeof clubCallback_ === 'function') clubCallback_(u.callback_query); } else if (u.message) botHandle_(u.message); }
+    catch (e) { try { logError_('бот', 'webhook', e.message, e.stack, ''); } catch (x) { /* без журнала */ } }
+  });
+}
+/** Раз в 5 минут: если Telegram не может доставить сообщения — назад к опросу раз в минуту. */
+function botHookCheck_() {
+  const props = PropertiesService.getScriptProperties();
+  const last = Number(props.getProperty('tgHookChk') || 0);
+  if (Date.now() - last < 5 * 60000) return;
+  props.setProperty('tgHookChk', String(Date.now()));
+  let w; try { w = tgCall_('getWebhookInfo'); } catch (e) { return; }
+  const now = Date.now() / 1000;
+  const broken = !w.url || (w.last_error_date && now - w.last_error_date < 600 && (w.pending_update_count || 0) > 0);
+  if (broken) {
+    botHookOff_('Telegram не смог доставить сообщения' + (w.last_error_message ? ' (' + w.last_error_message + ')' : '') + ' — бот снова проверяет сообщения раз в минуту.');
+    try { logError_('бот', 'webhook', 'Мгновенные ответы выключены: ' + (w.last_error_message || 'нет адреса'), '', ''); } catch (x) { /* без журнала */ }
+  }
 }
 function botDisconnect_(user) {
   if (user.role !== 'admin') throw new Error('Только администратор');
+  botHookOff_('', false);
   PropertiesService.getScriptProperties().deleteProperty('tgToken');
   ScriptApp.getProjectTriggers().filter(t => ['botPoll', 'botDaily'].indexOf(t.getHandlerFunction()) >= 0).forEach(t => ScriptApp.deleteTrigger(t));
   setSetting_('bot_name', '');
@@ -443,8 +504,9 @@ function botPoll() {
   if (!tgToken_()) return;
   const props = PropertiesService.getScriptProperties();
   const offset = Number(props.getProperty('tgOffset') || 0);
-  let ups;
-  try { ups = tgCall_('getUpdates', { offset: offset, timeout: 0, allowed_updates: ['message', 'callback_query'] }); } catch (e) { return; }
+  let ups = [];
+  if (props.getProperty('tgMode') === 'hook') { try { botHookCheck_(); } catch (e) { /* не критично */ } }
+  if (props.getProperty('tgMode') !== 'hook') { try { ups = tgCall_('getUpdates', { offset: offset, timeout: 0, allowed_updates: ['message', 'callback_query'] }); } catch (e) { return; } }
   try { warmCache_(); } catch (e) { /* не критично */ }
   if (typeof clubTick_ === 'function') { try { clubTick_(); } catch (e) { try { logError_('бот', 'clubTick', e.message, e.stack, ''); } catch (x) { /* без журнала */ } } }
   if (!ups || !ups.length) return;
@@ -756,7 +818,7 @@ const TOOL_HANDLER_TABS = {
   toolsLoad: '*', saveDancer: ['pair', 'my', 'passport'], toolsMatch: ['pair'],
   saveProgress: ['passport'], deleteProgress: ['passport'], saveDiary: ['passport'], deleteDiary: ['passport'],
   leagueTable: ['league'], saveAward: ['league'], deleteAward: ['league'], saveLeague: ['league'], hrReport: ['hr'],
-  botSave: ['bot'], botDisconnect: ['bot'], botRunNow: ['bot'], tgLink: ['bot', 'tg'], tgSetNotify: ['bot', 'tg'],
+  botSave: ['bot'], botHook: ['bot'], botDisconnect: ['bot'], botRunNow: ['bot'], tgLink: ['bot', 'tg'], tgSetNotify: ['bot', 'tg'],
   tgUnlink: ['bot'], tgTest: ['bot'], tgAssign: ['bot'], tgReject: ['bot'], botBroadcast: ['bot'], botBroadcasts: ['bot'],
 };
 function toolHandlers_() {
@@ -779,6 +841,7 @@ function toolHandlersAll_() {
   saveLeague: { roles: STAFF, write: true, fn: saveLeague_ },
   hrReport: { roles: STAFF, fn: hrReport_ },
   botSave: { roles: ['admin'], write: true, fn: botSave_ },
+  botHook: { roles: ['admin'], write: true, fn: botHook_ },
   botDisconnect: { roles: ['admin'], write: true, fn: botDisconnect_ },
   botRunNow: { roles: ['admin'], write: true, fn: botRunNow_ },
   tgLink: { roles: ALL, write: true, fn: tgLink_ },
