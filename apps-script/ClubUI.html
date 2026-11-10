@@ -88,7 +88,7 @@ const TOOL_FOR = {
 };
 const toolAcc = () => (S.D && S.D.toolsAccess) || {};
 const hasTool = k => role() === 'admin' || (toolAcc()[role()] || []).includes(k);
-TL.tabs = () => (TOOL_FOR[role()] || []).filter(hasTool).map(k => [k, k === 'league' && role() !== 'admin' && role() !== 'manager' ? 'Лига' : TOOL_TABS[k]]);
+TL.tabs = () => (TOOL_FOR[role()] || []).filter(k => k !== 'fests' && hasTool(k)).map(k => [k, k === 'league' && role() !== 'admin' && role() !== 'manager' ? 'Лига' : TOOL_TABS[k]]);
 (function () {
   const pg = PAGES.find(p => p.k === 'tools');
   if (pg) Object.defineProperty(pg, 'r', {get: () => ['admin'].concat(['manager', 'trainer', 'client'].filter(r => (toolAcc()[r] || []).length)), configurable: true});
@@ -614,6 +614,10 @@ function festForm(o) {
   bg.addEventListener('click', e => { const d = e.target.closest('[data-pdel]'); if (d) d.closest('.cl-plan').remove(); });
 }
 function festDate(d) { return `<div class="cl-date"><b>${+d.slice(8, 10)}</b><span>${MONTHS[+d.slice(5, 7) - 1].slice(0, 3)}</span></div>`; }
+VIEWS.fests = () => {
+  $('#main').innerHTML = `<div class="head"><h1>Мероприятия</h1></div><div id="tlb">${empty('Загрузка…')}</div>`;
+  TLV.fests();
+};
 TLV.fests = () => {
   const my = S.pageSeq;
   $('#tlb').innerHTML = empty('Загрузка…');
@@ -626,7 +630,7 @@ TLV.fests = () => {
     const past = C.fests.filter(x => !(x.status === 'active' && x.date >= today()));
     const card = x => `<div class="card tight click cl-fest" data-f="${x.id}">${festDate(x.date)}<div class="grow"><b>${esc(x.title)}</b><div class="small muted">${esc(festKind(x.kind))}${x.time ? ' · ' + esc(x.time) : ''}${x.place ? ' · ' + esc(x.place) : ''}</div>
       <div class="small" style="margin-top:4px">${ic('users', 13)} ${regs(x.id)}${+x.capacity ? ' из ' + x.capacity : ''} участников ${x.status === 'done' ? '<span class="badge ok">итоги подведены</span>' : x.open ? '<span class="badge gold">регистрация открыта</span>' : ''}</div></div></div>`;
-    $('#tlb').innerHTML = `<div class="row" style="margin-bottom:10px"><p class="small muted grow" style="margin:0">Корпоративные вечера, турниры, выступления. Ученики регистрируются через бота (кнопка «🎉 Участвую»), бот напоминает о репетициях, а итоги попадают в лигу и паспорт танцора.</p>
+    $('#tlb').innerHTML = `<div class="row" style="margin-bottom:10px;flex-wrap:wrap;gap:10px"><p class="small muted grow" style="margin:0;min-width:220px">Корпоративные вечера, турниры, выступления. Ученики регистрируются через бота (кнопка «🎉 Участвую»), бот напоминает о репетициях, а итоги попадают в лигу и паспорт танцора.</p>
       <button class="btn pri" id="fnew">${ic('plus')}Мероприятие</button></div>
       <h2>Ближайшие</h2><div class="stack">${up.map(card).join('') || `<div class="card">${empty('Пока ничего не запланировано')}</div>`}</div>
       ${past.length ? `<h2 class="sect">Прошедшие</h2><div class="stack">${past.slice(0, 20).map(card).join('')}</div>` : ''}`;
@@ -823,7 +827,7 @@ HOME_W.push({k: 'rating', t: 'Оценки тренеров', club: true, html: 
     $('#hw-rating').innerHTML = x.total ? `<div class="row" style="margin-bottom:8px"><b style="font-size:24px">${fh(x.avg)}</b>${CL.stars(x.avg)}<span class="small muted">${x.total} оценок</span></div>
       <div class="hbars">${x.trainers.map(t => `<div class="hb"><span>${esc(t.name)}</span><div class="bar"><i style="width:${t.avg / 5 * 100}%;background:${t.avg >= 4.5 ? 'var(--ok)' : t.avg >= 3.5 ? 'var(--gold)' : 'var(--bad)'}"></i></div><span class="right"><b>${fh(t.avg)}</b> <span class="small muted">(${t.n})</span></span></div>`).join('')}</div>
       ${x.low.length ? `<div class="small" style="margin-top:8px;color:var(--bad)">Низкая оценка: ${x.low.map(f => esc(f.clientName) + ' → ' + esc(f.trainerName) + ' (' + f.score + '★' + (f.comment ? ': «' + esc(f.comment.slice(0, 60)) + '»' : '') + ')').join('; ')}</div>` : ''}` : empty('Оценок пока нет — их собирает бот после занятий'); }});
-HOME_W.push({k: 'fests', t: 'Мероприятия', club: true, html: () => hcard('Ближайшие мероприятия', '<div id="hw-fests"><div class="empty small">Загрузка…</div></div>', hasTool('fests') ? '<button class="btn sm" data-go="tools/fests">Все</button>' : ''),
+HOME_W.push({k: 'fests', t: 'Мероприятия', club: true, html: () => hcard('Ближайшие мероприятия', '<div id="hw-fests"><div class="empty small">Загрузка…</div></div>', hasTool('fests') ? '<button class="btn sm" data-go="fests">Все</button>' : ''),
   fill: r => { $('#hw-fests').innerHTML = (r.fests || []).length ? r.fests.map(f => `<div class="row sub cl-fest" style="align-items:center">${festDate(f.date)}<div class="grow"><b>${esc(f.title)}</b><div class="small muted">${f.time ? esc(f.time) + ' · ' : ''}${esc(f.place || '')}</div></div><span class="badge">${f.regs}${+f.capacity ? '/' + f.capacity : ''} уч.</span></div>`).join('') : empty('Мероприятий не запланировано'); }});
 HOME_W.push({k: 'money', t: 'Финансы за период', admin: () => hasTool('money'), club: true, html: c => hcard('Финансы <span class="small muted">· ' + esc(c.label) + '</span>', '<div id="hw-money"><div class="empty small">Считаю…</div></div>', hasTool('money') ? '<button class="btn sm" data-go="tools/money">Подробно</button>' : ''),
   fill: r => { const m = r.money; if (!m) return; const T = m.total;

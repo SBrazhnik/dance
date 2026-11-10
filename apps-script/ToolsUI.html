@@ -59,6 +59,7 @@ const TL = {
 };
 
 VIEWS.tools = tab => {
+  if (tab === 'fests') return go('fests');
   const tabs = TL.tabs();
   const cur = tabs.find(t => t[0] === tab) ? tab : tabs[0][0];
   $('#main').innerHTML = `<div class="head"><h1>Инструменты</h1></div>
