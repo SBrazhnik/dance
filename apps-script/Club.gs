@@ -232,6 +232,7 @@ function clubCallback_(cq) {
       try { bookingDecide_(b.id, d[0] === 'ba', who.name || who.login, ''); }
       catch (e) { tgAnswer_(cq, e.message); return tgEdit_(cq, { text: tgEsc_(cq.message.text || '') + '\n\nℹ️ ' + tgEsc_(e.message) }); }
       tgAnswer_(cq, d[0] === 'ba' ? '✅ Подтверждено, ученику отправлено сообщение' : 'Заявка отклонена, ученик получил сообщение');
+      if (_askClosed[String(cq.message.chat.id) + ':' + cq.message.message_id]) return; // сообщения у всех уже обновлены
       return tgEdit_(cq, { text: tgEsc_(cq.message.text || '') + '\n\n' + (d[0] === 'ba' ? '✅ Подтвердил(а): ' : '✖ Отклонил(а): ') + tgEsc_(who.name || who.login) });
     }
     // индивидуальное занятие в свободное время тренера: окно → начало → длительность → заявка

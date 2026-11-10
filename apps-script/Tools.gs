@@ -325,10 +325,11 @@ function tgCall_(method, payload) {
   if (!j.ok) throw new Error('Telegram: ' + (j.description || ('код ' + r.getResponseCode())));
   return j.result;
 }
+let _tgCollect = null; // если массив — сюда пишутся [chatId, messageId] отправленных сообщений (чтобы потом их обновить)
 function tgSend_(chatId, text, markup) {
   const p = { chat_id: chatId, text: text, parse_mode: 'HTML', disable_web_page_preview: true };
   if (markup) p.reply_markup = markup;
-  try { tgCall_('sendMessage', p); return true; }
+  try { const r = tgCall_('sendMessage', p); if (_tgCollect && r && r.message_id) _tgCollect.push([String(chatId), r.message_id]); return true; }
   catch (e) { return false; }
 }
 function num_(n) { return String(round2_(+n || 0)).replace('.', ','); }

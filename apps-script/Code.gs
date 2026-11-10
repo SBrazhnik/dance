@@ -7,7 +7,7 @@
  */
 
 const CLUB_NAME = 'Клуб корпоративных бальных танцев';
-const APP_VER = '2026-11-10.6'; // меняется при каждом обновлении — открытые страницы предложат перезагрузку
+const APP_VER = '2026-11-10.7'; // меняется при каждом обновлении — открытые страницы предложат перезагрузку
 const STAFF = ['admin', 'manager'];
 const ALL = ['admin', 'manager', 'trainer', 'client'];
 const SESSION_DAYS = 30;
@@ -75,7 +75,7 @@ const TABLES = {
     ['hall', 'Зал'], ['note', 'Заметка'], ['createdBy', 'Кто добавил'], ['createdAt', 'Создано']]],
   bookings: ['Записи', [
     ['id', 'ID'], ['slotId', 'ID слота'], ['clientId', 'ID ученика'], ['clientName', 'Ученик'], ['status', 'Статус'], ['createdAt', 'Создано'],
-    ['decidedBy', 'Кто подтвердил'], ['decidedAt', 'Когда подтвердил'], ['note', 'Комментарий']]],
+    ['decidedBy', 'Кто подтвердил'], ['decidedAt', 'Когда подтвердил'], ['note', 'Комментарий'], ['askMsgs', 'Сообщения сотрудникам (служебное)']]],
   rent: ['Аренда', [
     ['id', 'ID'], ['date', 'Дата', 'd'], ['time', 'Время', 't'], ['hours', 'Часов', 'n'], ['renter', 'Арендатор'],
     ['hall', 'Зал'], ['amount', 'Сумма', 'n'], ['paid', 'Оплачено', 'b'], ['contractNo', '№ договора'],
@@ -465,7 +465,7 @@ function tz_() { return ss_().getSpreadsheetTimeZone() || Session.getScriptTimeZ
 
 function ensureSchema_() {
   const props = PropertiesService.getScriptProperties();
-  const ver = 'schema-12';
+  const ver = 'schema-13';
   if (props.getProperty('schema') === ver) return;
   const ss = ss_();
   Object.keys(TABLES).forEach(key => {
@@ -1688,7 +1688,7 @@ function cancelSlot_(user, p) {
   if (!bs.length) { del_('slots', s.id); return 'deleted'; }
   const live = bs.filter(b => bLive_(b)).map(b => ({ clientId: b.clientId, status: b.status }));
   update_('slots', s.id, { status: 'cancelled' });
-  bs.forEach(b => { if (bLive_(b)) update_('bookings', b.id, { status: 'cancelled' }); });
+  bs.forEach(b => { if (bLive_(b)) { if (b.status === 'pending') bookingCloseAsk_(b, '🚫 Занятие отменено'); update_('bookings', b.id, { status: 'cancelled' }); } });
   if (typeof clubSlotCancelled_ === 'function') clubSlotCancelled_(s, live);
   return 'cancelled';
 }
@@ -1708,7 +1708,7 @@ function completeSlot_(user, p) {
   }
   update_('slots', s.id, { status: 'done', resultId });
   tbl_('bookings').rows.filter(b => b.slotId === s.id && b.status !== 'cancelled')
-    .forEach(b => update_('bookings', b.id, { status: cids.indexOf(b.clientId) >= 0 ? 'attended' : b.status === 'wait' || b.status === 'pending' ? 'cancelled' : 'missed' }));
+    .forEach(b => { if (b.status === 'pending') bookingCloseAsk_(b, 'ℹ️ Занятие уже отмечено'); update_('bookings', b.id, { status: cids.indexOf(b.clientId) >= 0 ? 'attended' : b.status === 'wait' || b.status === 'pending' ? 'cancelled' : 'missed' }); });
   return resultId;
 }
 
@@ -1744,9 +1744,26 @@ function bookingAsk_(b, s) {
     const text = '🕓 <b>Заявка на занятие</b>\n' + tgEsc_(b.clientName) + ' → ' + tgEsc_(slotTitle_(s)) + ', ' + slotWhen_(s) + ', тренер ' + tgEsc_(s.trainerName) +
       (s.hall ? ', зал ' + tgEsc_(s.hall) : '') + '\nМест занято: ' + busy + ' из ' + (s.capacity || 1) + '. Подтвердите или отклоните — ответит тот, кто увидит первым.';
     const kb = { inline_keyboard: [[{ text: '✅ Подтвердить', callback_data: 'ba:' + b.id }, { text: '✖ Отклонить', callback_data: 'bd:' + b.id }]] };
-    tgNotify_('trainer', s.trainerId, text, kb);
-    tbl_('users').rows.filter(u => u.active && (u.role === 'admin' || u.role === 'manager')).forEach(u => tgNotify_('user', u.id, text, kb));
+    _tgCollect = [];
+    try {
+      tgNotify_('trainer', s.trainerId, text, kb);
+      tbl_('users').rows.filter(u => u.active && (u.role === 'admin' || u.role === 'manager')).forEach(u => tgNotify_('user', u.id, text, kb));
+    } finally {
+      const sent = _tgCollect; _tgCollect = null;
+      if (sent.length) update_('bookings', b.id, { askMsgs: JSON.stringify({ t: text, m: sent }) });
+    }
   } catch (e) { /* без бота — заявки видны в разделе «Записи» */ }
+}
+/** Заявку решили (в приложении или в боте) — у всех сотрудников убираем кнопки и пишем, чем закончилось. */
+let _askClosed = {};
+function bookingCloseAsk_(b, line) {
+  const a = parseJson_(b && b.askMsgs, null);
+  if (!a || !a.m || !a.m.length || typeof tgCall_ !== 'function') return;
+  a.m.forEach(x => {
+    try { tgCall_('editMessageText', { chat_id: x[0], message_id: x[1], text: a.t + '\n\n' + line, parse_mode: 'HTML', reply_markup: { inline_keyboard: [] }, disable_web_page_preview: true }); } catch (e) { /* сообщение удалили — не важно */ }
+    _askClosed[x[0] + ':' + x[1]] = 1;
+  });
+  update_('bookings', b.id, { askMsgs: '' });
 }
 /** Кто может решать по заявке: тренер этого занятия, менеджер, администратор. */
 function bookingCanDecide_(user, s) {
@@ -1762,6 +1779,7 @@ function bookingDecide_(id, ok, by, note) {
   }
   note = String(note || '').trim().slice(0, 300);
   update_('bookings', b.id, { status: ok ? 'booked' : 'declined', decidedBy: by, decidedAt: now_(), note });
+  bookingCloseAsk_(b, ok ? '✅ Подтвердил(а): ' + tgEsc_(by) : '✖ Отклонил(а): ' + tgEsc_(by) + (note ? ' — «' + tgEsc_(note) + '»' : ''));
   try {
     if (typeof tgNotify_ === 'function') {
       if (ok) tgNotify_('client', b.clientId, '✅ Запись подтверждена!\n<b>' + tgEsc_(slotTitle_(s)) + '</b>, ' + slotWhen_(s) + ', тренер ' + tgEsc_(s.trainerName) + (s.hall ? ', зал ' + tgEsc_(s.hall) : '') + '.\nЖдём вас! Если не сможете прийти — отмените запись.',
@@ -1803,6 +1821,7 @@ function cancelBooking_(user, p) {
   if (user.role === 'client' && s.date < today_()) throw new Error('Слот уже прошёл');
   const was = b.status;
   update_('bookings', b.id, { status: 'cancelled' });
+  if (was === 'pending') bookingCloseAsk_(b, '🚫 Ученик отменил заявку');
   if ((was === 'booked' || was === 'pending') && typeof clubSeatFreed_ === 'function') clubSeatFreed_(s);
   if (typeof requestSlotFree_ === 'function') requestSlotFree_(find_('slots', s.id)); // индивидуальная заявка — время тренера снова свободно
   return true;
