@@ -291,6 +291,15 @@ function hallClash(x, y) {
   if (!x.hall || !y.hall) return false;
   return x.hall === y.hall;
 }
+function hallPar(h) { return Math.max(1, +((S.D.hallPar || {})[h]) || 1); }
+function hallOver(m, all) {
+  const xs = all.filter(x => x !== m && hallClash(m, x));
+  if (!xs.length) return [];
+  if (m.kind === 'rent' || WHOLE(m.hall) || xs.some(x => x.kind === 'rent' || WHOLE(x.hall))) return xs;
+  const par = hallPar(m.hall);
+  for (let t = m.a; t < m.b; t += 5) if (xs.filter(x => x.a <= t && t < x.b).length + 1 > par) return xs;
+  return [];
+}
 function hallConflicts(o) {
   const from = o.date, to = o.kind === 'rent' && o.unit === 'day' ? (o.endDate || o.date) : o.date;
   if (!from) return [];
@@ -301,7 +310,7 @@ function hallConflicts(o) {
     mine.push({kind: o.kind, date: d, a: whole ? 0 : a, b: whole ? 1440 : a >= 0 ? a + Math.round((+o.hours || 1) * 60) : -1, hall: o.hall || ''});
   }
   const res = [];
-  mine.forEach(m => all.forEach(x => { if (hallClash(m, x)) res.push(fd(x.date).slice(0, 5) + ' ' + (x.time || '') + ' ' + x.title + (x.hall ? ' (' + x.hall + ')' : '')); }));
+  mine.forEach(m => hallOver(m, all).forEach(x => res.push(fd(x.date).slice(0, 5) + ' ' + (x.time || '') + ' ' + x.title + (x.hall ? ' (' + x.hall + ')' : ''))));
   return [...new Set(res)].slice(0, 6);
 }
 // ---------- раздел «Залы»: карточки, фото, описание, оснащение ----------
@@ -446,6 +455,7 @@ function hallForm(h) {
     ${fld('Описание', `<textarea class="inp" name="descr" rows="4" placeholder="Чем хорош зал, для каких занятий подходит, как пройти">${esc(h.descr || '')}</textarea>`, 'full')}
     ${fld('Площадь, м²', inp('area', h.area || '', 'type="number" min="0" step="1"'))}
     ${fld('Вместимость, пар', inp('capacity', h.capacity || '', 'type="number" min="0" step="1"'))}
+    ${fld('Одновременно занятий (тренеров)', inp('parallel', h.parallel || 1, 'type="number" min="1" max="20" step="1"') + '<div class="small muted">Сколько тренеров с учениками могут заниматься в зале в одно время. Учитывается в календаре залов, при записи и в свободном времени тренеров.</div>')}
     ${fld('Этаж', inp('floor', h.floor || '', 'placeholder="1"'))}
     ${fld('Аренда, ₽ в час', inp('price', h.price || '', 'type="number" min="0" step="50"'))}
     ${fld('Адрес', inp('address', h.address || ''), 'full')}
@@ -488,7 +498,7 @@ TLV.halls = () => {
   const halls = CL.halls();
   const rows = halls.concat(items.some(x => !x.hall || !halls.includes(x.hall)) ? [''] : []);
   const bad = new Set();
-  items.forEach((x, i) => items.forEach((y, k) => { if (k > i && hallClash(x, y)) { bad.add(x); bad.add(y); } }));
+  items.forEach(x => { if (hallOver(x, items).length) bad.add(x); });
   const inRow = (h, x) => h === '' ? (!x.hall || !halls.includes(x.hall)) : (x.hall === h || (WHOLE(x.hall) && !halls.includes(x.hall)));
   const cell = (h, d) => items.filter(x => x.date === d && inRow(h, x)).sort((a, b) => a.a - b.a)
     .map(x => `<div class="cl-it ${x.kind === 'rent' ? 'rent' : ''} ${bad.has(x) ? 'bad' : ''}" title="${esc(x.title)}"><b>${esc(x.time || '')}</b> ${esc(x.title)}<div class="muted">${esc(x.kind === 'slot' ? x.who : (x.hall || ''))}</div></div>`).join('');
@@ -497,7 +507,7 @@ TLV.halls = () => {
     ${bad.size ? `<div class="card tight" style="border-color:var(--bad);margin-bottom:10px">⚠️ Есть пересечения по залу и времени (записей: ${bad.size}) — проверьте красные карточки.</div>` : ''}
     ${halls.length ? '' : `<div class="card tight" style="margin-bottom:10px">Залы не указаны в настройках. Добавьте их в «Настройки → Клуб», чтобы видеть занятость по каждому залу.</div>`}
     <div class="tw"><div class="cl-week"><div class="h">Зал</div>${days.map(d => `<div class="h ${d === today() ? 'today' : ''}">${wd(d)}, ${fd(d).slice(0, 5)}</div>`).join('')}
-      ${rows.map(h => `<div class="h">${esc(h || 'Без зала')}</div>${days.map(d => `<div class="${d === today() ? 'today' : ''}">${cell(h, d)}</div>`).join('')}`).join('')}</div></div>
+      ${rows.map(h => `<div class="h">${esc(h || 'Без зала')}${h && hallPar(h) > 1 ? `<div class="small muted" style="font-weight:400">до ${hallPar(h)} занятий сразу</div>` : ''}</div>${days.map(d => `<div class="${d === today() ? 'today' : ''}">${cell(h, d)}</div>`).join('')}`).join('')}</div></div>
     <p class="small muted">Зал занятия выбирается в форме слота («Расписание → Слот для записи»), зал аренды — в форме аренды. При сохранении приложение предупредит о пересечении. Аренда «Весь клуб» занимает все залы.</p>`;
   $('#hwp').onclick = () => { ui.from = addDays(ui.from, -7); TLV.halls(); };
   $('#hwn').onclick = () => { ui.from = addDays(ui.from, 7); TLV.halls(); };
@@ -778,7 +788,7 @@ HOME_W.push({k: 'money', t: 'Финансы за период', admin: () => has
 HOME_W.push({k: 'halls', t: 'Залы и пересечения', html: c => {
   const items = hallItems(c.from, c.to);
   const bad = [];
-  items.forEach((x, i) => items.forEach((y, k) => { if (k > i && hallClash(x, y)) bad.push([x, y]); }));
+  items.forEach((x, i) => { const o = hallOver(x, items).filter(y => items.indexOf(y) > i); if (o.length) bad.push([x, o[0]]); });
   const halls = CL.halls();
   const load = halls.map(h => ({h, n: items.filter(x => x.hall === h).length, min: sum(items.filter(x => x.hall === h && x.a >= 0), x => Math.max(0, x.b - x.a))}));
   return hcard('Залы', (bad.length ? bad.slice(0, 5).map(p => `<div class="cl-it bad">⚠️ ${fd(p[0].date).slice(0, 5)}: <b>${esc(p[0].time)} ${esc(p[0].title)}</b> и <b>${esc(p[1].time)} ${esc(p[1].title)}</b>${p[0].hall ? ' · ' + esc(p[0].hall) : ''}</div>`).join('') : '<div class="small" style="color:var(--ok);margin-bottom:8px">Пересечений нет ✓</div>')

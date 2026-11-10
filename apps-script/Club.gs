@@ -72,7 +72,7 @@ function waitList_(slotId) {
 /** Открытые слоты на ближайшие дни (сегодняшние — ещё не начавшиеся). */
 function slotsAhead_(days) {
   const td = today_(), last = addDays_(td, days), now = hm2min_(clubNowHM_());
-  return tbl_('slots').rows.filter(s => s.status === 'open' && s.date >= td && s.date <= last && !(s.date === td && hm2min_(s.time) >= 0 && hm2min_(s.time) <= now))
+  return tbl_('slots').rows.filter(s => s.status === 'open' && s.origin !== 'request' && s.date >= td && s.date <= last && !(s.date === td && hm2min_(s.time) >= 0 && hm2min_(s.time) <= now))
     .sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time));
 }
 function joinWait_(clientId, slotId) {
@@ -722,6 +722,126 @@ function clubAwardNotify_(clientId, title, points) {
 //     таблица «Медиа — <клуб>»: листы «Аватары» и «Галерея» (каталог файлов и ссылок).
 //   В основной таблице медиа больше не хранится.
 // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// Календарь тренеров: свободное время, индивидуальные заявки в «окна», загрузка залов.
+// В зале может одновременно идти несколько занятий — «Одновременно занятий» в карточке зала (по умолчанию 1).
+// Аренда занимает зал целиком.
+// ---------------------------------------------------------------------------
+function hallPar_() { return parseJson_(settings_().hallPar, {}) || {}; }
+const hm_ = t => { const m = String(t || '').match(/^(\d{1,2}):(\d{2})/); return m ? +m[1] * 60 + +m[2] : -1; };
+const mh_ = n => String(Math.floor(n / 60)).padStart(2, '0') + ':' + String(n % 60).padStart(2, '0');
+const WHOLE_ = h => /весь|все |целиком|клуб/i.test(String(h || ''));
+/** Что идёт в зале в этот день: [{a, b, rent, id, title}] — занятия и аренда. */
+function hallDay_(hall, date, skipSlot) {
+  const out = [];
+  tbl_('slots').rows.forEach(s => {
+    if (s.status === 'cancelled' || s.date !== date || s.id === skipSlot || !s.hall) return;
+    if (s.hall !== hall && !WHOLE_(s.hall)) return;
+    const a = hm_(s.time); if (a < 0) return;
+    out.push({ a, b: a + Math.round((+s.hours || 1) * 60), rent: WHOLE_(s.hall), id: s.id, title: s.title });
+  });
+  tbl_('rent').rows.forEach(r => {
+    if (!r.hall || (r.hall !== hall && !WHOLE_(r.hall))) return;
+    const end = r.unit === 'day' ? (r.endDate || r.date) : r.date;
+    if (date < r.date || date > end) return;
+    const a = hm_(r.time), whole = r.unit === 'day' && (a < 0 || !(+r.hours));
+    if (!whole && a < 0) return;
+    out.push({ a: whole ? 0 : a, b: whole ? 1440 : a + Math.round((+r.hours || 1) * 60), rent: true, title: 'Аренда: ' + r.renter });
+  });
+  return out;
+}
+/** Поместится ли ещё одно занятие в зал [a, b) — с учётом «одновременно занятий» и аренды. */
+function hallFits_(hall, date, a, b, skipSlot) {
+  if (!hall) return true;
+  const par = Math.max(1, +hallPar_()[hall] || 1);
+  const xs = hallDay_(hall, date, skipSlot).filter(x => x.a < b && a < x.b);
+  if (xs.some(x => x.rent)) return false;
+  for (let t = a; t < b; t += 5) if (xs.filter(x => x.a <= t && t < x.b).length >= par) return false; // пик загрузки
+  return true;
+}
+function hallList_() { return String(settings_().halls || '').split(',').map(x => x.trim()).filter(Boolean); }
+/** Занятость тренера в день: слоты (кроме отменённых). */
+function trainerBusy_(trainerId, date) {
+  return tbl_('slots').rows.filter(s => s.trainerId === trainerId && s.date === date && s.status !== 'cancelled' && hm_(s.time) >= 0)
+    .map(s => { const a = hm_(s.time); return { a, b: a + Math.round((+s.hours || 1) * 60) }; });
+}
+/** Свободные промежутки «окна» минус занятия тренера (не короче 30 минут). */
+function availFree_(w, nowMin) {
+  let parts = [[hm_(w.from), hm_(w.to)]];
+  if (nowMin != null) parts = parts.map(p => [Math.max(p[0], Math.ceil(nowMin / 30) * 30), p[1]]);
+  trainerBusy_(w.trainerId, w.date).forEach(x => {
+    parts = parts.flatMap(p => x.b <= p[0] || x.a >= p[1] ? [p] : [[p[0], x.a], [x.b, p[1]]]);
+  });
+  return parts.filter(p => p[1] - p[0] >= 30);
+}
+/** Для load_: сотрудникам — все «окна» на 2 месяца; ученику — свободные промежутки для заявки. */
+function availFor_(user) {
+  const td = today_(), till = addDays_(td, 60);
+  const rows = tbl_('avail').rows.filter(w => w.date >= td && w.date <= till);
+  if (user.role !== 'client') return { avail: rows };
+  const nowMin = (() => { const t = Utilities.formatDate(new Date(), tz_(), 'HH:mm'); return hm_(t); })();
+  const TR = {}; tbl_('trainers').rows.forEach(t => { TR[t.id] = t; });
+  const free = [];
+  rows.filter(w => w.date <= addDays_(td, 30) && TR[w.trainerId] && TR[w.trainerId].active).forEach(w => availFree_(w, w.date === td ? nowMin + 60 : null).forEach(p =>
+    free.push({ id: w.id, trainerId: w.trainerId, trainerName: TR[w.trainerId].name, date: w.date, from: mh_(p[0]), to: mh_(p[1]), hall: w.hall || '' })));
+  return { free: free.sort((a, b) => (a.date + a.from).localeCompare(b.date + b.from)) };
+}
+function saveAvail_(user, p) {
+  const trainerId = user.role === 'trainer' ? user.trainerId : req_(p.trainerId, 'Выберите тренера');
+  const t = must_('trainers', trainerId, 'Тренер');
+  if (!isDate_(p.date)) throw new Error('Укажите дату');
+  const a = hm_(p.from), b = hm_(p.to);
+  if (a < 0 || b < 0 || b - a < 30) throw new Error('Укажите время: «с» раньше «до», не меньше 30 минут');
+  const d = { trainerId, trainerName: t.name, from: mh_(a), to: mh_(b), hall: String(p.hall || '').trim(), note: String(p.note || '').slice(0, 300) };
+  if (p.id) {
+    const o = must_('avail', p.id, 'Свободное время');
+    if (user.role === 'trainer' && o.trainerId !== user.trainerId) throw new Error('Это не ваше время');
+    update_('avail', o.id, Object.assign(d, { date: p.date }));
+    return o.id;
+  }
+  const weeks = Math.min(Math.max(+p.repeatWeeks || 0, 0), 12);
+  const rows = [];
+  for (let w = 0; w <= weeks; w++) rows.push(Object.assign({}, d, { date: addDays_(p.date, 7 * w), createdBy: user.name }));
+  return insertMany_('avail', rows)[0];
+}
+function deleteAvail_(user, p) {
+  const o = must_('avail', p.id, 'Свободное время');
+  if (user.role === 'trainer' && o.trainerId !== user.trainerId) throw new Error('Это не ваше время');
+  del_('avail', o.id);
+  return o.id;
+}
+/** Ученик просит индивидуальное занятие в свободное время тренера: создаётся слот на 1 место и заявка (или сразу запись). */
+function requestInd_(user, p) {
+  const cid = user.role === 'client' ? user.clientId : req_(p.clientId, 'Выберите ученика');
+  const t = must_('trainers', req_(p.trainerId, 'Выберите тренера'), 'Тренер');
+  if (!isDate_(p.date) || p.date < today_()) throw new Error('Выберите дату');
+  const a = hm_(p.time), len = Math.round((+p.hours || 1) * 60);
+  if (a < 0 || len < 30 || len > 240) throw new Error('Выберите время и длительность');
+  const b = a + len;
+  const lock = LockService.getScriptLock(); lock.waitLock(20000);
+  try {
+    const wins = tbl_('avail').rows.filter(w => w.trainerId === t.id && w.date === p.date);
+    const w = wins.find(x => availFree_(x).some(q => q[0] <= a && b <= q[1]));
+    if (!w) throw new Error('Это время у тренера уже занято — выберите другое');
+    // зал: из «окна», иначе любой, где есть место
+    const halls = w.hall ? [w.hall] : hallList_();
+    const hall = halls.find(h => hallFits_(h, p.date, a, b)) || (halls.length ? null : '');
+    if (hall === null) throw new Error(w.hall ? 'В зале «' + w.hall + '» в это время нет места — выберите другое время' : 'Все залы в это время заняты — выберите другое время');
+    const ty = tbl_('dict').rows.find(x => x.group === 'type' && typeKind_(x.id) === 'ind' && x.active !== false);
+    const type = ty ? ty.id : 'ind';
+    const sid = insert_('slots', { date: p.date, time: mh_(a), hours: len / 60, trainerId: t.id, trainerName: t.name, type, title: 'Индивидуальное занятие',
+      capacity: 1, status: 'open', notes: String(p.note || '').slice(0, 300), createdBy: user.name || 'ученик', hall, origin: 'request' });
+    try { return { slotId: sid, bookingId: book_(user.role === 'client' ? user : { role: 'client', clientId: cid }, { slotId: sid }) }; }
+    catch (e) { del_('slots', sid); throw e; }
+  } finally { lock.releaseLock(); }
+}
+/** Слот, созданный заявкой ученика, освобождается, если заявку отклонили или ученик её отменил. */
+function requestSlotFree_(s) {
+  if (!s || s.origin !== 'request' || s.status !== 'open') return;
+  if (tbl_('bookings').rows.some(b => b.slotId === s.id && bLive_(b))) return;
+  update_('slots', s.id, { status: 'cancelled' });
+}
+
 const MEDIA_SHEETS = {
   avatars: ['Аватары', [['id', 'ID'], ['kind', 'Тип'], ['refId', 'ID карточки'], ['name', 'Чьё фото'], ['fileId', 'Файл на Диске'],
     ['data', 'Миниатюра'], ['updatedAt', 'Обновлено']]],
@@ -1010,7 +1130,8 @@ function hallView_(h) {
     color: h.color || '', sort: Number(h.sort) || 0, active: h.active !== 'нет', pics: (h.fileId ? 1 : 0) + hallMore_(h).length };
 }
 function hallsList_() {
-  return mrows_('halls').map(hallView_).sort((a, b) => (a.sort || 999) - (b.sort || 999) || a.name.localeCompare(b.name));
+  const par = hallPar_();
+  return mrows_('halls').map(hallView_).map(h => Object.assign(h, { parallel: +par[h.name] || 1 })).sort((a, b) => (a.sort || 999) - (b.sort || 999) || a.name.localeCompare(b.name));
 }
 function hallHeader_() {
   const cols = MEDIA_SHEETS.halls[1];
@@ -1070,6 +1191,11 @@ function hallSave_(user, p) {
     if (h.fileId) trashFile_(h.fileId);
     if (h.thumbId) trashFile_(h.thumbId);
     h.fileId = fid; h.thumbId = p.thumb ? hallStoreImg_(p.thumb, name + ' — уменьшенное', 600000) : '';
+  }
+  if (p.parallel !== undefined) { // сколько занятий одновременно (несколько тренеров с учениками)
+    const par = hallPar_(); if (oldName && oldName !== name) delete par[oldName];
+    par[name] = Math.min(Math.max(Math.round(+p.parallel) || 1, 1), 20);
+    setSetting_('hallPar', JSON.stringify(par));
   }
   h.updatedAt = now_();
   hallHeader_();
@@ -1273,5 +1399,8 @@ function clubHandlers_() {
     hallPhotoMain: { roles: ['admin', 'manager'], write: true, fn: hallPhotoMain_ },
     hallDel: { roles: ['admin'], write: true, fn: hallDel_ },
     hallsImport: { roles: ['admin'], write: true, fn: hallsImport_ },
+    saveAvail: { roles: ['admin', 'manager', 'trainer'], write: true, fn: saveAvail_ },
+    deleteAvail: { roles: ['admin', 'manager', 'trainer'], write: true, fn: deleteAvail_ },
+    requestInd: { roles: ['client', 'admin', 'manager'], write: true, fn: requestInd_ },
   }, CLUB_HANDLER_TABS);
 }

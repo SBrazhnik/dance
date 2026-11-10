@@ -7,7 +7,7 @@
  */
 
 const CLUB_NAME = 'Клуб корпоративных бальных танцев';
-const APP_VER = '2026-11-10.2'; // меняется при каждом обновлении — открытые страницы предложат перезагрузку
+const APP_VER = '2026-11-10.3'; // меняется при каждом обновлении — открытые страницы предложат перезагрузку
 const STAFF = ['admin', 'manager'];
 const ALL = ['admin', 'manager', 'trainer', 'client'];
 const SESSION_DAYS = 30;
@@ -68,7 +68,11 @@ const TABLES = {
   slots: ['Расписание', [
     ['id', 'ID'], ['date', 'Дата', 'd'], ['time', 'Время', 't'], ['hours', 'Часов', 'n'], ['trainerId', 'ID тренера'],
     ['trainerName', 'Тренер'], ['type', 'Тип'], ['title', 'Название'], ['capacity', 'Мест', 'n'], ['status', 'Статус'],
-    ['resultId', 'ID результата'], ['notes', 'Заметки'], ['createdBy', 'Кто создал'], ['createdAt', 'Создано'], ['hall', 'Зал']]],
+    ['resultId', 'ID результата'], ['notes', 'Заметки'], ['createdBy', 'Кто создал'], ['createdAt', 'Создано'], ['hall', 'Зал'],
+    ['origin', 'Откуда']]],
+  avail: ['Свободное время тренеров', [
+    ['id', 'ID'], ['trainerId', 'ID тренера'], ['trainerName', 'Тренер'], ['date', 'Дата', 'd'], ['from', 'С', 't'], ['to', 'До', 't'],
+    ['hall', 'Зал'], ['note', 'Заметка'], ['createdBy', 'Кто добавил'], ['createdAt', 'Создано']]],
   bookings: ['Записи', [
     ['id', 'ID'], ['slotId', 'ID слота'], ['clientId', 'ID ученика'], ['clientName', 'Ученик'], ['status', 'Статус'], ['createdAt', 'Создано'],
     ['decidedBy', 'Кто подтвердил'], ['decidedAt', 'Когда подтвердил'], ['note', 'Комментарий']]],
@@ -459,7 +463,7 @@ function tz_() { return ss_().getSpreadsheetTimeZone() || Session.getScriptTimeZ
 
 function ensureSchema_() {
   const props = PropertiesService.getScriptProperties();
-  const ver = 'schema-10';
+  const ver = 'schema-11';
   if (props.getProperty('schema') === ver) return;
   const ss = ss_();
   Object.keys(TABLES).forEach(key => {
@@ -946,6 +950,8 @@ function load_(user) {
   res.toolsAccess = typeof toolsAccess_ === 'function' ? toolsAccess_() : {};
   res.dict = tbl_('dict').rows;
   res.bookConfirm = bookConfirmOn_();
+  res.hallPar = hallPar_();
+  if (typeof availFor_ === 'function') Object.assign(res, availFor_(user));
 
   const trainers = tbl_('trainers').rows;
   const clients = tbl_('clients').rows;
@@ -992,7 +998,8 @@ function load_(user) {
       trainers: trainers.filter(t => t.active).map(t => ({ id: t.id, name: t.name, spec: t.spec, programs: t.programs })),
       subs: subs.filter(s => s.clientId === cid).map(s => { const x = Object.assign({}, s); delete x.notes; return x; }),
       lessons: tbl_('lessons').rows.filter(l => l.clientId === cid),
-      slots: fut.filter(s => s.status === 'open').map(s => Object.assign({}, s, { booked: cnt[s.id] || 0 })),
+      // индивидуальные занятия по заявкам видит только тот, кто их попросил
+      slots: fut.filter(s => s.status === 'open' && (s.origin !== 'request' || bookings.some(b => b.slotId === s.id && b.clientId === cid))).map(s => Object.assign({}, s, { booked: cnt[s.id] || 0 })),
       bookings: bookings.filter(b => b.clientId === cid),
     });
   }
@@ -1607,7 +1614,28 @@ function clientHistory_(user, p) {
   return {
     lessons: tbl_('lessons').rows.filter(l => l.clientId === cid).sort((a, b) => (b.date + b.time).localeCompare(a.date + a.time)),
     subs: tbl_('subs').rows.filter(s => s.clientId === cid).map(s => subView_(s, used, S, today_())),
+    bookings: clientBookings_(cid),
+    events: clientEvents_(cid),
   };
+}
+/** Все записи ученика на тренировки (с данными занятия) — от новых к старым. */
+function clientBookings_(cid) {
+  const SL = {}; tbl_('slots').rows.forEach(s => { SL[s.id] = s; });
+  return tbl_('bookings').rows.filter(b => b.clientId === cid && SL[b.slotId]).map(b => {
+    const s = SL[b.slotId];
+    return { id: b.id, status: b.status, slotId: s.id, date: s.date, time: s.time, hours: s.hours, title: s.title, trainerId: s.trainerId, trainerName: s.trainerName,
+      hall: s.hall, slotStatus: s.status, decidedBy: b.decidedBy || '', note: b.note || '', createdAt: b.createdAt };
+  }).sort((a, b) => (b.date + b.time).localeCompare(a.date + a.time));
+}
+/** Мероприятия и турниры ученика (регистрации и итоги) и баллы лиги. */
+function clientEvents_(cid) {
+  const F = {}; tbl_('fests').rows.forEach(f => { F[f.id] = f; });
+  const regs = tbl_('regs').rows.filter(r => r.clientId === cid && F[r.festId]).map(r => {
+    const f = F[r.festId];
+    return { id: r.id, festId: f.id, title: f.title, kind: f.kind, date: f.date, place: f.place, festStatus: f.status, status: r.status, partner: r.partnerName, result: r.result, points: r.points };
+  }).sort((a, b) => String(b.date).localeCompare(String(a.date)));
+  const awards = tbl_('awards').rows.filter(a => a.clientId === cid).map(a => ({ date: a.date, title: a.title, points: a.points })).sort((a, b) => String(b.date).localeCompare(String(a.date)));
+  return { regs, awards };
 }
 
 // ---------------------------------------------------------------------------
@@ -1729,6 +1757,7 @@ function bookingDecide_(id, ok, by, note) {
     }
   } catch (e) { /* без бота */ }
   if (!ok && typeof clubSeatFreed_ === 'function') clubSeatFreed_(s);
+  if (!ok && typeof requestSlotFree_ === 'function') requestSlotFree_(find_('slots', s.id));
   return b.id;
 }
 function decideBooking_(user, p) {
@@ -1755,6 +1784,7 @@ function cancelBooking_(user, p) {
   const was = b.status;
   update_('bookings', b.id, { status: 'cancelled' });
   if ((was === 'booked' || was === 'pending') && typeof clubSeatFreed_ === 'function') clubSeatFreed_(s);
+  if (typeof requestSlotFree_ === 'function') requestSlotFree_(find_('slots', s.id)); // индивидуальная заявка — время тренера снова свободно
   return true;
 }
 
