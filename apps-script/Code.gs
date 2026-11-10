@@ -7,7 +7,7 @@
  */
 
 const CLUB_NAME = 'Клуб корпоративных бальных танцев';
-const APP_VER = '2026-11-10.3'; // меняется при каждом обновлении — открытые страницы предложат перезагрузку
+const APP_VER = '2026-11-10.4'; // меняется при каждом обновлении — открытые страницы предложат перезагрузку
 const STAFF = ['admin', 'manager'];
 const ALL = ['admin', 'manager', 'trainer', 'client'];
 const SESSION_DAYS = 30;
@@ -368,7 +368,7 @@ function api_(token, action, payload) {
       Object.keys(_cache).forEach(k => delete _cache[k]);
       Object.keys(_lazy).forEach(k => delete _lazy[k]);
       if (LIGHT_ACTIONS.indexOf(action) < 0 || payload.__snap) prefetch_(Object.keys(TABLES).filter(k => (k !== 'messages' || /Message/.test(action)) && (k !== 'errors' || /Error/.test(action))));
-      return h.fn(user, payload);
+      try { return h.fn(user, payload); } finally { flushDirty_(); }
     }) : h.fn(user, payload);
     if (h.write && payload.__snap) {
       // свежие данные в том же ответе — интерфейсу не нужен второй запрос
@@ -420,6 +420,7 @@ const HANDLERS = {
   cancelBooking: { roles: ['client', 'admin', 'manager', 'trainer'], write: true, fn: cancelBooking_ },
   decideBooking: { roles: ['admin', 'manager', 'trainer'], write: true, fn: decideBooking_ },
   bookingSettings: { roles: ['admin'], write: true, fn: bookingSettings_ },
+  pendingInfo: { roles: ['admin', 'manager', 'trainer'], fn: pendingInfo_ },
 
   getMessages: { roles: ALL, fn: getMessages_ },
   postMessage: { roles: ALL, write: true, fn: postMessage_ },
@@ -510,15 +511,16 @@ function norm_(v, type) {
   return s;
 }
 
-const LIGHT_ACTIONS = ['brandFont', 'ping', 'avatarsLoad', 'avatarGet', 'markSeen', 'logError', 'getMessages', 'mediaList', 'mediaGet'];
+const LIGHT_ACTIONS = ['brandFont', 'ping', 'avatarsLoad', 'avatarGet', 'markSeen', 'logError', 'getMessages', 'mediaList', 'mediaGet', 'pendingInfo'];
 const _lazy = {};
 function tbl_(key) {
   if (_cache[key]) return _cache[key];
   if (!_lazy[key] && !_dirty[key]) { _lazy[key] = 1; prefetch_([key]); if (_cache[key]) return _cache[key]; }
   const sh = ss_().getSheetByName(TABLES[key][0]);
   if (!sh) throw new Error('Нет листа «' + TABLES[key][0] + '». Запустите setup().');
+  const g0 = genOf_(key); // поколение листа ДО чтения: если кто-то запишет, пока читаем, — в кэш не кладём
   const values = sh.getDataRange().getValues();
-  storeCache_(key, values);
+  storeCache_(key, values, g0);
   return (_cache[key] = buildTbl_(key, values.map(r => r.map(cellStr_)), sh));
 }
 
@@ -528,6 +530,7 @@ function tbl_(key) {
 // ---------------------------------------------------------------------------
 const CACHE_TTL = 1800;      // 30 минут — даже без сброса данные обновятся сами
 const CHUNK = 40000;         // символов в одном куске (лимит значения кэша — 100 КБ)
+const CK = 'k2';             // префикс ключей кэша (смена сбрасывает весь старый кэш)
 const _dirty = {};
 function cache_() { return CacheService.getScriptCache(); }
 function cellStr_(v) {
@@ -544,43 +547,52 @@ function prefetch_(keys) {
   if (!keys.length) return;
   let c;
   try { c = cache_(); } catch (e) { return; }
-  const vers = c.getAll(keys.map(k => 'v_' + k));
-  const metaKeys = keys.filter(k => vers['v_' + k]).map(k => 'm_' + k + '_' + vers['v_' + k]);
+  const vers = c.getAll(keys.map(k => CK + 'v_' + k));
+  const metaKeys = keys.filter(k => vers[CK + 'v_' + k]).map(k => CK + 'm_' + k + '_' + vers[CK + 'v_' + k]);
   const metas = metaKeys.length ? c.getAll(metaKeys) : {};
   const chunkKeys = [];
   const plan = {};
   keys.forEach(k => {
-    const v = vers['v_' + k]; const n = v && Number(metas['m_' + k + '_' + v]);
-    if (n) { plan[k] = { v, n }; for (let i = 0; i < n; i++) chunkKeys.push('c_' + k + '_' + v + '_' + i); }
+    const v = vers[CK + 'v_' + k]; const n = v && Number(metas[CK + 'm_' + k + '_' + v]);
+    if (n) { plan[k] = { v, n }; for (let i = 0; i < n; i++) chunkKeys.push(CK + 'c_' + k + '_' + v + '_' + i); }
   });
   const chunks = chunkKeys.length ? c.getAll(chunkKeys) : {};
   Object.keys(plan).forEach(k => {
     let str = '';
-    for (let i = 0; i < plan[k].n; i++) { const part = chunks['c_' + k + '_' + plan[k].v + '_' + i]; if (part === undefined || part === null) return; str += part; }
+    for (let i = 0; i < plan[k].n; i++) { const part = chunks[CK + 'c_' + k + '_' + plan[k].v + '_' + i]; if (part === undefined || part === null) return; str += part; }
     try { _cache[k] = buildTbl_(k, JSON.parse(str), null); _cache[k]._ver = plan[k].v; } catch (e) { /* испорченный кэш — перечитаем лист */ }
   });
   keys.filter(k => !_cache[k]).forEach(k => tbl_(k));
 }
-function storeCache_(key, values) {
+/** Поколение листа: меняется при каждой записи. Защищает кэш от гонки «прочитали старое → кто-то записал → положили старое в кэш». */
+function genOf_(key) { try { return cache_().get(CK + 'g_' + key) || ''; } catch (e) { return ''; } }
+function storeCache_(key, values, g0) {
   if (_dirty[key]) return; // лист менялся в этом запросе — кэшируем в следующем
   try {
     const c = cache_();
+    if (g0 !== undefined && (c.get(CK + 'g_' + key) || '') !== g0) return; // пока читали, лист изменили — не кладём устаревшее
     const v = newId_(8);
     const str = JSON.stringify(values.map(r => r.map(cellStr_)));
     const put = {};
     let n = 0;
-    for (let i = 0; i < str.length; i += CHUNK) put['c_' + key + '_' + v + '_' + (n++)] = str.slice(i, i + CHUNK);
-    put['m_' + key + '_' + v] = String(n || 1);
-    if (!n) put['c_' + key + '_' + v + '_0'] = '[]';
+    for (let i = 0; i < str.length; i += CHUNK) put[CK + 'c_' + key + '_' + v + '_' + (n++)] = str.slice(i, i + CHUNK);
+    put[CK + 'm_' + key + '_' + v] = String(n || 1);
+    if (!n) put[CK + 'c_' + key + '_' + v + '_0'] = '[]';
     c.putAll(put, CACHE_TTL);
-    c.put('v_' + key, v, CACHE_TTL);
+    c.put(CK + 'v_' + key, v, CACHE_TTL);
+    if (g0 !== undefined && (c.get(CK + 'g_' + key) || '') !== g0) c.remove(CK + 'v_' + key); // запись успела проскочить — сбрасываем
   } catch (e) { /* без кэша тоже работает */ }
+}
+function bumpGen_(key) {
+  try { const c = cache_(); c.put(CK + 'g_' + key, newId_(6), 21600); c.remove(CK + 'v_' + key); } catch (e) { /* нет кэша */ }
 }
 function invalidate_(key) {
   if (_dirty[key]) return;
   _dirty[key] = 1;
-  try { cache_().remove('v_' + key); } catch (e) { /* нет кэша */ }
+  bumpGen_(key);
 }
+/** В конце запроса, который что-то записал: ещё раз сбросить кэш изменённых листов — на случай параллельного чтения во время записи. */
+function flushDirty_() { Object.keys(_dirty).forEach(bumpGen_); }
 /** Держит кэш листов «тёплым» (вызывается фоновой задачей бота раз в минуту): пользователи не ждут чтения таблицы. */
 function warmCache_() {
   apkLatest_();
@@ -590,7 +602,7 @@ function warmCache_() {
 function onEdit(e) {
   try {
     const name = e && e.range ? e.range.getSheet().getName() : '';
-    Object.keys(TABLES).forEach(k => { if (!name || TABLES[k][0] === name) CacheService.getScriptCache().remove('v_' + k); });
+    Object.keys(TABLES).forEach(k => { if (!name || TABLES[k][0] === name) bumpGen_(k); });
   } catch (err) { /* нет доступа */ }
 }
 /** Последняя сборка приложения для Android (релиз build-N на GitHub). Кэш 30 минут — проверка почти ничего не стоит. */
@@ -1772,6 +1784,13 @@ function decideBooking_(user, p) {
     n++;
   });
   return n;
+}
+/** Лёгкая проверка для открытого приложения: сколько заявок ждёт и когда пришла последняя. */
+function pendingInfo_(user) {
+  const td = today_(), SL = {};
+  tbl_('slots').rows.forEach(s => { if (s.status === 'open' && s.date >= td && (user.role !== 'trainer' || s.trainerId === user.trainerId)) SL[s.id] = 1; });
+  const p = tbl_('bookings').rows.filter(b => b.status === 'pending' && SL[b.slotId]);
+  return { n: p.length, last: p.reduce((m, b) => String(b.createdAt) > m ? String(b.createdAt) : m, '') };
 }
 function bookingSettings_(user, p) { setSetting_('bookConfirm', p.on === false ? '0' : '1'); return bookConfirmOn_(); }
 

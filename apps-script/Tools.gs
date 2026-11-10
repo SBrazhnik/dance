@@ -402,6 +402,7 @@ function tgWebhook_(u) {
     Object.keys(_cache).forEach(k => delete _cache[k]);
     try { if (u.callback_query) { if (typeof clubCallback_ === 'function') clubCallback_(u.callback_query); } else if (u.message) botHandle_(u.message); }
     catch (e) { try { logError_('бот', 'webhook', e.message, e.stack, ''); } catch (x) { /* без журнала */ } }
+    finally { flushDirty_(); } // запись из бота сразу видна в приложении
   });
 }
 /** Раз в 5 минут: если Telegram не может доставить сообщения — назад к опросу раз в минуту. */
@@ -508,12 +509,13 @@ function botPoll() {
   if (props.getProperty('tgMode') === 'hook') { try { botHookCheck_(); } catch (e) { /* не критично */ } }
   if (props.getProperty('tgMode') !== 'hook') { try { ups = tgCall_('getUpdates', { offset: offset, timeout: 0, allowed_updates: ['message', 'callback_query'] }); } catch (e) { return; } }
   try { warmCache_(); } catch (e) { /* не критично */ }
-  if (typeof clubTick_ === 'function') { try { clubTick_(); } catch (e) { try { logError_('бот', 'clubTick', e.message, e.stack, ''); } catch (x) { /* без журнала */ } } }
+  if (typeof clubTick_ === 'function') { try { clubTick_(); } catch (e) { try { logError_('бот', 'clubTick', e.message, e.stack, ''); } catch (x) { /* без журнала */ } } finally { flushDirty_(); } }
   if (!ups || !ups.length) return;
   props.setProperty('tgOffset', String(ups[ups.length - 1].update_id + 1));
   withLock_(() => {
     Object.keys(_cache).forEach(k => delete _cache[k]);
     ups.forEach(u => { try { if (u.callback_query) { if (typeof clubCallback_ === 'function') clubCallback_(u.callback_query); } else botHandle_(u.message); } catch (e) { try { logError_('бот', 'botPoll', e.message, e.stack, ''); } catch (x) { /* без журнала */ } } });
+    flushDirty_();
   });
 }
 const TG_PHONE_KB = { keyboard: [[{ text: '📱 Поделиться номером', request_contact: true }]], resize_keyboard: true, one_time_keyboard: true };

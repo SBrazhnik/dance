@@ -60,6 +60,7 @@ function clubMenuKb_() {
   return { keyboard: [[{ text: '📅 Расписание' }, { text: '🗓 Мои записи' }], [{ text: '⏳ Остаток часов' }, { text: '🎉 Мероприятия' }], [{ text: '🔑 Войти в приложение' }, { text: '📲 Приложение для Android' }]], resize_keyboard: true };
 }
 function slotTitle_(s) { return s.title || typeOf_(s.type).name; }
+function wdShort_(d) { return TOOL_DAYS[(new Date(d + 'T12:00:00Z').getUTCDay() + 6) % 7]; }
 function slotWhen_(s) { return TOOL_DAYS[(new Date(s.date + 'T12:00:00Z').getUTCDay() + 6) % 7] + ' ' + ruDate_(s.date).slice(0, 5) + ' ' + (s.time || ''); }
 
 // ---------------------------------------------------------------------------
@@ -120,10 +121,22 @@ function joinWaitApi_(user, p) {
 }
 
 /** Текст и кнопки расписания для ученика в боте. */
+/** Свободные окна тренеров для ученика (бот): [{w, a, b}] на 14 дней. */
+function botFreeWins_() {
+  const td = today_(), till = addDays_(td, 14), nowMin = hm_(Utilities.formatDate(new Date(), tz_(), 'HH:mm'));
+  const TR = {}; tbl_('trainers').rows.forEach(t => { TR[t.id] = t; });
+  const out = [];
+  tbl_('avail').rows.filter(w => w.date >= td && w.date <= till && TR[w.trainerId] && TR[w.trainerId].active)
+    .forEach(w => availFree_(w, w.date === td ? nowMin + 60 : null).filter(p => p[1] - p[0] >= 60).forEach(p => out.push({ w, a: p[0], b: p[1] })));
+  return out.sort((x, y) => (x.w.date + mh_(x.a)).localeCompare(y.w.date + mh_(y.a)));
+}
+const IND_BTN_ = cid => [{ text: '🧑‍🏫 Индивидуально с тренером (свободное время)', callback_data: 'iv:' + cid }];
 function botScheduleMsg_(clientId) {
   const c = find_('clients', clientId);
   const list = slotsAhead_(7).slice(0, 14);
-  if (!list.length) return { text: 'На ближайшую неделю открытых занятий нет. Загляните позже!' };
+  const hasInd = botFreeWins_().length > 0;
+  if (!list.length) return hasInd ? { text: 'На ближайшую неделю групповых занятий нет, но у тренеров есть свободное время для индивидуальных занятий 👇', markup: { inline_keyboard: [IND_BTN_(clientId)] } }
+    : { text: 'На ближайшую неделю открытых занятий нет. Загляните позже!' };
   const mine = {};
   tbl_('bookings').rows.forEach(b => { if (b.clientId === clientId && bLive_(b)) mine[b.slotId] = b; });
   const rows = list.map(s => {
@@ -135,6 +148,7 @@ function botScheduleMsg_(clientId) {
     if (free > 0) return [{ text: '➕ ' + lbl + ' (мест: ' + free + ')', callback_data: 'bk:' + s.id + ':' + clientId }];
     return [{ text: '⏳ ' + lbl + ' — мест нет, в ожидание', callback_data: 'wt:' + s.id + ':' + clientId }];
   });
+  if (hasInd) rows.push(IND_BTN_(clientId));
   return { text: '📅 <b>Расписание на неделю</b>' + (c ? ' · ' + tgEsc_(c.name) : '') + '\n✅ — вы записаны, 🕓 — заявка ждёт подтверждения тренера, ⏳ — лист ожидания. Нажмите на занятие, чтобы записаться или отменить.\n' +
     list.map(s => '• ' + slotWhen_(s) + ' — ' + tgEsc_(slotTitle_(s)) + ', ' + tgEsc_(s.trainerName)).join('\n'), markup: { inline_keyboard: rows } };
 }
@@ -219,6 +233,52 @@ function clubCallback_(cq) {
       catch (e) { tgAnswer_(cq, e.message); return tgEdit_(cq, { text: tgEsc_(cq.message.text || '') + '\n\nℹ️ ' + tgEsc_(e.message) }); }
       tgAnswer_(cq, d[0] === 'ba' ? '✅ Подтверждено, ученику отправлено сообщение' : 'Заявка отклонена, ученик получил сообщение');
       return tgEdit_(cq, { text: tgEsc_(cq.message.text || '') + '\n\n' + (d[0] === 'ba' ? '✅ Подтвердил(а): ' : '✖ Отклонил(а): ') + tgEsc_(who.name || who.login) });
+    }
+    // индивидуальное занятие в свободное время тренера: окно → начало → длительность → заявка
+    if (d[0] === 'iv') {
+      if (!own(d[1])) return tgAnswer_(cq, 'Не найдено');
+      const fw = botFreeWins_().slice(0, 16);
+      tgAnswer_(cq, '');
+      if (!fw.length) return tgEdit_(cq, { text: 'Сейчас у тренеров нет свободного времени для индивидуальных занятий. Загляните позже!', markup: { inline_keyboard: [[{ text: '« К расписанию', callback_data: 'sch:' + d[1] }]] } });
+      return tgEdit_(cq, { text: '🧑‍🏫 <b>Индивидуально с тренером</b>\nВыберите свободное время — дальше укажете начало и длительность, тренер подтвердит заявку.',
+        markup: { inline_keyboard: fw.map(x => [{ text: wdShort_(x.w.date) + ' ' + x.w.date.slice(8) + '.' + x.w.date.slice(5, 7) + ' · ' + mh_(x.a) + '–' + mh_(x.b) + ' · ' + x.w.trainerName, callback_data: 'iw:' + x.w.id + ':' + d[1] }]).concat([[{ text: '« К расписанию', callback_data: 'sch:' + d[1] }]]) } });
+    }
+    if (d[0] === 'iw' || d[0] === 'is') {
+      const cid = d[0] === 'iw' ? d[2] : d[3];
+      if (!own(cid)) return tgAnswer_(cq, 'Не найдено');
+      const w = find_('avail', d[1]);
+      const part = w && availFree_(w).filter(p => p[1] - p[0] >= 60);
+      if (!w || !part.length) { tgAnswer_(cq, 'Это время уже заняли'); return tgEdit_(cq, { text: 'Это время уже заняли — выберите другое.', markup: { inline_keyboard: [[{ text: '🧑‍🏫 Другое время', callback_data: 'iv:' + cid }]] } }); }
+      tgAnswer_(cq, '');
+      const head = '🧑‍🏫 <b>' + tgEsc_(w.trainerName) + '</b>, ' + wdShort_(w.date) + ' ' + w.date.slice(8) + '.' + w.date.slice(5, 7) + (w.hall ? ', ' + tgEsc_(w.hall) : '');
+      if (d[0] === 'iw') { // выбор начала: каждые 30 минут
+        const st = [];
+        part.forEach(p => { for (let t = p[0]; t + 60 <= p[1] && st.length < 16; t += 30) st.push(t); });
+        const kb = []; for (let i = 0; i < st.length; i += 4) kb.push(st.slice(i, i + 4).map(t => ({ text: mh_(t), callback_data: 'is:' + w.id + ':' + mh_(t).replace(':', '') + ':' + cid })));
+        kb.push([{ text: '« Другое время', callback_data: 'iv:' + cid }]);
+        return tgEdit_(cq, { text: head + '\nВо сколько начать?', markup: { inline_keyboard: kb } });
+      }
+      const a = +d[2].slice(0, 2) * 60 + +d[2].slice(2), p = part.find(q => q[0] <= a && a < q[1]);
+      const durs = [60, 90, 120].filter(n => p && a + n <= p[1]);
+      return tgEdit_(cq, { text: head + ', начало в ' + mh_(a) + '\nСколько заниматься?', markup: { inline_keyboard: [durs.map(n => ({ text: n === 60 ? '1 час' : n === 90 ? '1,5 часа' : '2 часа', callback_data: 'ir:' + w.id + ':' + d[2] + ':' + n + ':' + cid }))].concat([[{ text: '« Другое время', callback_data: 'iv:' + cid }]]) } });
+    }
+    if (d[0] === 'ir') {
+      const cid = d[4];
+      if (!own(cid)) return tgAnswer_(cq, 'Не найдено');
+      const w = find_('avail', d[1]);
+      if (!w) return tgAnswer_(cq, 'Это время уже недоступно');
+      try {
+        requestInd_({ role: 'client', clientId: cid, name: nameOf_('clients', cid) }, { trainerId: w.trainerId, date: w.date, time: d[2].slice(0, 2) + ':' + d[2].slice(2), hours: +d[3] / 60 });
+      } catch (e) { tgAnswer_(cq, e.message); return tgEdit_(cq, { text: '⚠️ ' + tgEsc_(e.message), markup: { inline_keyboard: [[{ text: '🧑‍🏫 Выбрать другое время', callback_data: 'iv:' + cid }]] } }); }
+      const pend = bookConfirmOn_();
+      tgAnswer_(cq, pend ? '🕓 Заявка отправлена тренеру' : '✅ Вы записаны!');
+      return tgEdit_(cq, { text: (pend ? '🕓 <b>Заявка отправлена</b>' : '✅ <b>Вы записаны</b>') + '\nИндивидуальное занятие: ' + tgEsc_(w.trainerName) + ', ' + wdShort_(w.date) + ' ' + w.date.slice(8) + '.' + w.date.slice(5, 7) + ' в ' + d[2].slice(0, 2) + ':' + d[2].slice(2) + ', ' + (+d[3] / 60).toString().replace('.', ',') + ' ч.' + (pend ? '\nКогда тренер подтвердит — пришлём сообщение.' : ''),
+        markup: { inline_keyboard: [[{ text: '🗓 Мои записи', callback_data: 'my:' + cid }]] } });
+    }
+    if (d[0] === 'my') {
+      if (!own(d[1])) return tgAnswer_(cq, 'Не найдено');
+      tgAnswer_(cq, '');
+      const m = botMyMsg_(d[1]); return tgSend_(chatId, m.text, m.markup);
     }
     if (d[0] === 'sch') {
       if (!own(d[1])) return tgAnswer_(cq, 'Не найдено');
