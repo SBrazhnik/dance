@@ -634,32 +634,75 @@ TLV.fests = () => {
     $$('[data-f]').forEach(x => x.onclick = () => { if (typeof markScroll === 'function') markScroll(); S.ui.clf = x.dataset.f; TLV.fests(); window.scrollTo(0, 0); });
   }).catch(fail);
 };
+function festPartner(g) {
+  if (!g.partnerName) return '';
+  const k = g.partnerKind === 'trainer' ? 'тренер' : g.partnerKind === 'client' ? 'ученик' : '';
+  return esc(g.partnerName) + (k ? ` <span class="muted">(${k})</span>` : '');
+}
 function festView(f) {
   const C = S.C;
   const regs = C.regs.filter(g => g.festId === f.id && g.status !== 'cancelled').sort((a, b) => a.clientName.localeCompare(b.clientName));
   const plan = (() => { try { return JSON.parse(f.plan || '[]') || []; } catch (e) { return []; } })();
-  $('#tlb').innerHTML = `<div class="head" style="margin-bottom:6px"><button class="btn sm" id="fbk">${ic('back')}</button><h2 class="grow" style="margin:0">${esc(f.title)}</h2>
-      <button class="btn" id="fed">${ic('edit')}Изменить</button><button class="btn" id="fprn">${ic('print')}Список</button></div>
-    <div class="cl-grid"><div class="card cl-fest">${festDate(f.date)}<div class="grow"><b>${esc(festKind(f.kind))}</b><div class="small">${fd(f.date)}${f.time ? ' в ' + esc(f.time) : ''}${f.place ? ' · ' + esc(f.place) : ''}</div>
+  const regCard = g => `<div class="card tight"><div class="row" style="gap:10px;align-items:flex-start;flex-wrap:nowrap">
+      <div class="avatar c sm" data-av="client:${g.clientId}">${initials(g.clientName)}</div>
+      <div class="grow" style="min-width:0"><b style="overflow-wrap:anywhere">${esc(g.clientName)}</b>
+        <div class="small" style="margin-top:2px">${g.partnerName ? 'в паре с ' + festPartner(g) : '<span class="muted">партнёр не указан</span>'}</div>
+        ${g.note ? `<div class="small muted" style="margin-top:2px">${esc(g.note)}</div>` : ''}
+        ${g.result || g.points ? `<div class="small" style="margin-top:4px">${g.result ? '🏆 ' + esc(g.result) : ''}${g.points ? ` <span class="badge">${fh(g.points)} б.</span>` : ''}</div>` : ''}</div>
+      <div class="row noprint" style="gap:4px;flex-wrap:nowrap"><button class="btn sm" data-ge="${g.id}" aria-label="Изменить">${ic('edit')}</button><button class="btn sm" data-gd="${g.id}" aria-label="Убрать">${ic('trash')}</button></div></div></div>`;
+  $('#tlb').innerHTML = `<div class="row" style="gap:8px;flex-wrap:nowrap;margin-bottom:8px;align-items:center"><button class="btn sm" id="fbk" aria-label="Назад">${ic('back')}</button><h2 class="grow" style="margin:0;min-width:0;overflow-wrap:anywhere">${esc(f.title)}</h2></div>
+    <div class="row" style="gap:6px;flex-wrap:wrap;margin-bottom:12px"><button class="btn sm" id="fed">${ic('edit')}Изменить</button><button class="btn sm" id="fprn">${ic('print')}Список участников</button></div>
+    <div class="cl-grid"><div class="card cl-fest">${festDate(f.date)}<div class="grow" style="min-width:0"><b>${esc(festKind(f.kind))}</b><div class="small">${fd(f.date)}${f.time ? ' в ' + esc(f.time) : ''}${f.place ? ' · ' + esc(f.place) : ''}</div>
         ${f.about ? `<div class="small muted" style="margin-top:6px;white-space:pre-wrap">${esc(f.about)}</div>` : ''}
         <div class="small" style="margin-top:8px">${f.status === 'done' ? '<span class="badge ok">Итоги подведены</span>' : f.open ? '<span class="badge gold">Регистрация открыта</span>' : '<span class="badge">Регистрация закрыта</span>'}</div>
         ${f.results ? `<div class="small" style="margin-top:8px"><b>Итоги:</b> ${esc(f.results)}</div>` : ''}</div></div>
       <div class="card"><h2 style="margin-top:0">Репетиции</h2>${plan.length ? plan.map(p => `<div class="row sub"><b class="nowrap">${fd(p.date).slice(0, 5)} ${esc(p.time)}</b><span class="grow">${esc(p.title || 'Репетиция')}</span>${p.date < today() ? '<span class="small muted">прошла</span>' : ''}</div>`).join('') : empty('Репетиции не запланированы')}</div></div>
-    <div class="row sect"><h2 class="grow" style="margin:0">Участники · ${regs.length}${+f.capacity ? ' из ' + f.capacity : ''}</h2>
-      ${f.status !== 'done' ? `<button class="btn" id="finv" ${C.bot ? '' : 'disabled title="Подключите бота"'}>${ic('send')}Пригласить через бота</button><button class="btn" id="fadd">${ic('plus')}Участник</button>` : ''}
+    <h2 class="sect" style="margin-bottom:8px">Участники <span class="muted" style="font-weight:400">· ${regs.length}${+f.capacity ? ' из ' + f.capacity : ''}</span></h2>
+    <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px">
+      ${f.status !== 'done' ? `<button class="btn" id="fadd">${ic('plus')}Участник</button><button class="btn" id="finv" ${C.bot ? '' : 'disabled title="Подключите бота"'}>${ic('send')}Пригласить через бота</button>` : ''}
       <button class="btn pri" id="fres" ${regs.length ? '' : 'disabled'}>${ic('check')}Итоги</button></div>
-    <div class="tw" style="margin-top:10px" id="fregs"><table class="t"><thead><tr><th>Участник</th><th>Партнёр</th><th>Заметка</th><th>Результат</th><th class="n">Баллы</th><th></th></tr></thead><tbody>
-      ${regs.map(g => `<tr><td><div class="row" style="gap:8px;flex-wrap:nowrap"><div class="avatar c sm" data-av="client:${g.clientId}">${initials(g.clientName)}</div><b>${esc(g.clientName)}</b></div></td><td>${esc(g.partnerName || '—')}</td><td class="small">${esc(g.note || '')}</td><td>${esc(g.result || '')}</td><td class="n">${g.points ? fh(g.points) : ''}</td>
-        <td class="nowrap noprint"><button class="btn sm" data-ge="${g.id}">${ic('edit')}</button> <button class="btn sm" data-gd="${g.id}">${ic('trash')}</button></td></tr>`).join('') || `<tr><td colspan="6">${empty('Пока никто не зарегистрировался')}</td></tr>`}</tbody></table></div>`;
+    <div class="stack">${regs.map(regCard).join('') || `<div class="card">${empty('Пока никто не зарегистрировался')}</div>`}</div>`;
   $('#fbk').onclick = () => backStep('fest', () => { S.ui.clf = null; TLV.fests(); });
   if (typeof pushBack === 'function') pushBack(() => { S.ui.clf = null; TLV.fests(); }, 'fest');
   $('#fed').onclick = () => festForm(f);
-  $('#fprn').onclick = () => printEl(f.title + ' — участники', $('#fregs'), fd(f.date) + (f.place ? ' · ' + f.place : ''));
-  const regForm = g => modal(g ? 'Участник' : 'Добавить участника', `<div class="fg">
-      ${g ? fld('Ученик', `<div style="padding-top:8px"><b>${esc(g.clientName)}</b></div>`, 'full') : fld('Ученик', sel('clientId', clOpts(null, '— выберите —').filter(x => !regs.some(r => r.clientId === x[0])), ''), 'full')}
-      ${fld('Партнёр / партнёрша', inp('partnerName', g ? g.partnerName : '', 'list="fpn"') + `<datalist id="fpn">${TL.clients().map(c => `<option value="${esc(c.name)}">`).join('')}</datalist>`, 'full')}
+  $('#fprn').onclick = () => {
+    const box = document.createElement('div');
+    box.innerHTML = `<table class="t"><thead><tr><th>№</th><th>Участник</th><th>Партнёр</th><th>Заметка</th><th>Результат</th><th>Баллы</th></tr></thead><tbody>${regs.map((g, i) => `<tr><td>${i + 1}</td><td>${esc(g.clientName)}</td><td>${esc(g.partnerName || '')}</td><td>${esc(g.note || '')}</td><td>${esc(g.result || '')}</td><td>${g.points ? fh(g.points) : ''}</td></tr>`).join('')}</tbody></table>`;
+    printEl(f.title + ' — участники', box, fd(f.date) + (f.place ? ' · ' + f.place : ''));
+  };
+  const trs = (S.D.trainers || []).filter(t => t.active !== false).sort((a, b) => a.name.localeCompare(b.name)).map(t => ({id: t.id, t: t.name, s: t.spec || t.programs || ''}));
+  const cls = TL.clients().map(c => ({id: c.id, t: c.name, s: [c.company, ids(c.trainerIds).map(x => tName(x)).join(', ')].filter(Boolean).join(' · ')}));
+  const regForm = g => {
+    const kind0 = g ? (g.partnerKind || (g.partnerName ? 'other' : 'trainer')) : 'trainer';
+    const bg = modal(g ? 'Участник' : 'Добавить участника', `<div class="fg">
+      ${g ? fld('Ученик', `<div style="padding-top:8px"><b>${esc(g.clientName)}</b></div>`, 'full') : fld('Ученик', pickField('clientId', cls.filter(x => !regs.some(r => r.clientId === x.id)), '', 'Начните вводить фамилию ученика'), 'full')}
+      <div class="full"><label class="small muted" style="display:block;margin-bottom:4px">Партнёр / партнёрша</label>
+        <div class="tabs" style="margin-bottom:8px;grid-template-columns:repeat(3,minmax(0,1fr))">${[['trainer', 'Тренер'], ['client', 'Ученик'], ['other', 'Вписать']].map(x => `<a data-pkind="${x[0]}" class="${kind0 === x[0] ? 'on' : ''}">${x[1]}</a>`).join('')}</div>
+        <input type="hidden" name="partnerKind" value="${kind0}">
+        <div data-pbox="trainer" ${kind0 === 'trainer' ? '' : 'hidden'}>${pickField('pTrainer', trs, g && g.partnerKind === 'trainer' ? g.partnerId : '', 'Выберите тренера')}</div>
+        <div data-pbox="client" ${kind0 === 'client' ? '' : 'hidden'}>${pickField('pClient', cls, g && g.partnerKind === 'client' ? g.partnerId : '', 'Выберите ученика')}</div>
+        <div data-pbox="other" ${kind0 === 'other' ? '' : 'hidden'}>${inp('pOther', g && (g.partnerKind || 'other') === 'other' ? g.partnerName || '' : '', 'placeholder="Имя партнёра, если его нет в списках"')}</div>
+        <div class="small muted" style="margin-top:4px">Обычно ученик танцует с тренером. Пара из двух учеников тоже возможна.</div></div>
       ${fld('Заметка', inp('note', g ? g.note : '', 'placeholder="Номер, программа, костюм…"'), 'full')}</div>`,
-    [{t: 'Отмена'}, {t: 'Сохранить', cls: 'pri', fn: async m => { const v = vals(m); v.festId = f.id; if (g) v.id = g.id; await call('saveReg', v); toast('Сохранено'); await CL.load(true); TLV.fests(); }}]);
+    [{t: 'Отмена'}, {t: 'Сохранить', cls: 'pri', fn: async m => {
+      const v = vals(m), k = v.partnerKind;
+      const out = {festId: f.id, note: v.note, partnerKind: k, partnerId: k === 'trainer' ? v.pTrainer : k === 'client' ? v.pClient : '', partnerName: k === 'other' ? v.pOther : ''};
+      if (g) out.id = g.id; else { out.clientId = v.clientId; if (!out.clientId) { toast('Выберите ученика из списка', true); return false; } }
+      if ((k === 'trainer' || k === 'client') && !out.partnerId && !(g && g.partnerName && k === (g.partnerKind || 'other'))) { if (!(await askYes('Партнёр не выбран. Сохранить без партнёра?', 'Сохранить'))) return false; out.partnerKind = ''; }
+      await call('saveReg', out); toast('Сохранено'); await CL.load(true); TLV.fests();
+    }}]);
+    $$('[data-pkind]', bg).forEach(a => a.onclick = () => {
+      $$('[data-pkind]', bg).forEach(x => x.classList.toggle('on', x === a));
+      $('[name=partnerKind]', bg).value = a.dataset.pkind;
+      $$('[data-pbox]', bg).forEach(x => { x.hidden = x.dataset.pbox !== a.dataset.pkind; });
+    });
+    const cin = $('[name=clientId]', bg);
+    if (cin) cin.addEventListener('change', () => {
+      const c = S.m.clients && S.m.clients[cin.value], tid = c && ids(c.trainerIds)[0];
+      const tb = $('[data-pbox=trainer] .pick', bg);
+      if (tid && tb && !$('[name=pTrainer]', bg).value) { const t = trs.find(x => x.id === tid); if (t) { $('.pk-q', tb).value = t.t; $('[name=pTrainer]', bg).value = t.id; } }
+    });
+  };
   if ($('#fadd')) $('#fadd').onclick = () => regForm();
   $$('[data-ge]').forEach(b => b.onclick = () => regForm(regs.find(g => g.id === b.dataset.ge)));
   $$('[data-gd]').forEach(b => b.onclick = async () => { if (!(await askYes('Убрать участника из списка?'))) return; try { await call('deleteReg', {id: b.dataset.gd}); await CL.load(true); TLV.fests(); } catch (e) { fail(e); } });
@@ -673,8 +716,9 @@ function festView(f) {
     const cnt = () => call('festInvite', {festId: f.id, company: $('[name=company]', bg).value, dry: true}, true).then(r => { const b = $('#ficnt', bg); if (b) b.innerHTML = r.total ? `Получат: <b>${r.total}</b> учеников, подключивших бота` : '<span style="color:var(--bad)">Никто из выбранных не подключил бота</span>'; }).catch(fail);
     $('[name=company]', bg).onchange = cnt; cnt();
   };
-  $('#fres').onclick = () => modal('Итоги: ' + esc(f.title), `<div class="fg"><div class="full tw"><table class="t"><thead><tr><th>Участник</th><th>Результат</th><th class="n">Баллы</th></tr></thead><tbody>
-      ${regs.map(g => `<tr data-rg="${g.id}"><td>${esc(g.clientName)}${g.partnerName ? `<div class="small muted">с ${esc(g.partnerName)}</div>` : ''}</td><td><input class="inp" data-res value="${esc(g.result || '')}" placeholder="1 место, финал, участие…"></td><td style="width:90px"><input class="inp" data-pts type="number" value="${g.points || ''}" placeholder="0"></td></tr>`).join('')}</tbody></table></div>
+  $('#fres').onclick = () => modal('Итоги: ' + esc(f.title), `<div class="fg"><div class="full stack">
+      ${regs.map(g => `<div class="card tight" data-rg="${g.id}"><b>${esc(g.clientName)}</b>${g.partnerName ? `<div class="small muted">в паре с ${esc(g.partnerName)}</div>` : ''}
+        <div style="display:grid;grid-template-columns:minmax(0,1fr) 84px;gap:6px;margin-top:6px"><input class="inp" data-res value="${esc(g.result || '')}" placeholder="1 место, финал, участие…" aria-label="Результат"><input class="inp" data-pts type="number" value="${g.points || ''}" placeholder="баллы" aria-label="Баллы"></div></div>`).join('')}</div>
       ${fld('Общий итог (необязательно)', `<textarea class="inp" name="summary" rows="2">${esc(f.results || '')}</textarea>`, 'full')}
       <div class="full">${chk('toLeague', 'Начислить баллы в корпоративную лигу', true)}</div><div class="full">${chk('toPassport', 'Записать результат в паспорт танцора (дневник)', true)}</div>
       <div class="full">${chk('notify', 'Поздравить участников в Telegram', true)}</div></div>`,

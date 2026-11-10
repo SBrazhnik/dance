@@ -7,7 +7,7 @@
  */
 
 const CLUB_NAME = 'Клуб корпоративных бальных танцев';
-const APP_VER = '2026-11-10.4'; // меняется при каждом обновлении — открытые страницы предложат перезагрузку
+const APP_VER = '2026-11-10.5'; // меняется при каждом обновлении — открытые страницы предложат перезагрузку
 const STAFF = ['admin', 'manager'];
 const ALL = ['admin', 'manager', 'trainer', 'client'];
 const SESSION_DAYS = 30;
@@ -126,7 +126,8 @@ const TABLES = {
     ['capacity', 'Мест', 'n'], ['open', 'Регистрация открыта', 'b'], ['plan', 'Репетиции (JSON)'], ['status', 'Статус'], ['results', 'Итоги'], ['createdAt', 'Создано']]],
   regs: ['Участники мероприятий', [
     ['id', 'ID'], ['festId', 'ID мероприятия'], ['clientId', 'ID ученика'], ['clientName', 'Ученик'], ['partnerName', 'Партнёр'], ['status', 'Статус'],
-    ['note', 'Заметка'], ['result', 'Результат'], ['points', 'Баллы', 'n'], ['createdAt', 'Создано']]],
+    ['note', 'Заметка'], ['result', 'Результат'], ['points', 'Баллы', 'n'], ['createdAt', 'Создано'],
+    ['partnerKind', 'Партнёр — кто (тренер/ученик)'], ['partnerId', 'ID партнёра']]],
   errors: ['Ошибки', [['id', 'ID'], ['createdAt', 'Время'], ['userName', 'Пользователь'], ['where', 'Где'], ['message', 'Ошибка'], ['stack', 'Подробности'], ['ua', 'Устройство']]],
 };
 
@@ -464,7 +465,7 @@ function tz_() { return ss_().getSpreadsheetTimeZone() || Session.getScriptTimeZ
 
 function ensureSchema_() {
   const props = PropertiesService.getScriptProperties();
-  const ver = 'schema-11';
+  const ver = 'schema-12';
   if (props.getProperty('schema') === ver) return;
   const ss = ss_();
   Object.keys(TABLES).forEach(key => {
@@ -1644,7 +1645,7 @@ function clientEvents_(cid) {
   const F = {}; tbl_('fests').rows.forEach(f => { F[f.id] = f; });
   const regs = tbl_('regs').rows.filter(r => r.clientId === cid && F[r.festId]).map(r => {
     const f = F[r.festId];
-    return { id: r.id, festId: f.id, title: f.title, kind: f.kind, date: f.date, place: f.place, festStatus: f.status, status: r.status, partner: r.partnerName, result: r.result, points: r.points };
+    return { id: r.id, festId: f.id, title: f.title, kind: f.kind, date: f.date, place: f.place, festStatus: f.status, status: r.status, partner: r.partnerName + (r.partnerKind === 'trainer' ? ' (тренер)' : ''), result: r.result, points: r.points };
   }).sort((a, b) => String(b.date).localeCompare(String(a.date)));
   const awards = tbl_('awards').rows.filter(a => a.clientId === cid).map(a => ({ date: a.date, title: a.title, points: a.points })).sort((a, b) => String(b.date).localeCompare(String(a.date)));
   return { regs, awards };

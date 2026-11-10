@@ -689,9 +689,23 @@ function festRegister_(festId, clientId, partnerName, note) {
   if (ex) { update_('regs', ex.id, d); return ex.id; }
   return insert_('regs', d);
 }
+/** Партнёр участника: тренер (обычно), другой ученик или просто имя. */
+function regPartner_(p) {
+  const kind = ['trainer', 'client'].indexOf(p.partnerKind) >= 0 ? p.partnerKind : (p.partnerName ? 'other' : '');
+  if (kind === 'trainer' && p.partnerId) return { partnerKind: kind, partnerId: p.partnerId, partnerName: must_('trainers', p.partnerId, 'Тренер').name };
+  if (kind === 'client' && p.partnerId) {
+    if (p.partnerId === p.clientId) throw new Error('Партнёр не может совпадать с участником');
+    return { partnerKind: kind, partnerId: p.partnerId, partnerName: must_('clients', p.partnerId, 'Ученик').name };
+  }
+  return { partnerKind: p.partnerName ? 'other' : '', partnerId: '', partnerName: String(p.partnerName || '').trim().slice(0, 120) };
+}
 function saveReg_(user, p) {
-  if (p.id) { const g = must_('regs', p.id, 'Участник'); update_('regs', g.id, { partnerName: String(p.partnerName || '').slice(0, 120), note: String(p.note || '').slice(0, 300) }); return g.id; }
-  return festRegister_(req_(p.festId, 'Мероприятие?'), req_(p.clientId, 'Выберите ученика'), p.partnerName, p.note);
+  const g = p.id ? must_('regs', p.id, 'Участник') : null;
+  const part = regPartner_(Object.assign({}, p, { clientId: g ? g.clientId : p.clientId }));
+  if (g) { update_('regs', g.id, Object.assign(part, { note: String(p.note || '').slice(0, 300) })); return g.id; }
+  const id = festRegister_(req_(p.festId, 'Мероприятие?'), req_(p.clientId, 'Выберите ученика'), part.partnerName, p.note);
+  update_('regs', id, part);
+  return id;
 }
 function botFestsMsg_(clientId) {
   const td = today_();
