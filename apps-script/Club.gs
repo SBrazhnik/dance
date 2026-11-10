@@ -65,7 +65,7 @@ function slotWhen_(s) { return TOOL_DAYS[(new Date(s.date + 'T12:00:00Z').getUTC
 // ---------------------------------------------------------------------------
 // Запись через бота и лист ожидания
 // ---------------------------------------------------------------------------
-function bookedCount_(slotId) { return tbl_('bookings').rows.filter(b => b.slotId === slotId && b.status === 'booked').length; }
+function bookedCount_(slotId) { return tbl_('bookings').rows.filter(b => b.slotId === slotId && bSeat_(b)).length; } // подтверждённые + ждущие подтверждения
 function waitList_(slotId) {
   return tbl_('bookings').rows.filter(b => b.slotId === slotId && b.status === 'wait').sort((a, b) => String(a.createdAt).localeCompare(String(b.createdAt)));
 }
@@ -79,9 +79,9 @@ function joinWait_(clientId, slotId) {
   const s = must_('slots', slotId, 'Занятие');
   const c = must_('clients', clientId, 'Ученик');
   if (s.status !== 'open' || s.date < today_()) throw new Error('Запись на это занятие закрыта');
-  const mine = tbl_('bookings').rows.find(b => b.slotId === s.id && b.clientId === clientId && (b.status === 'booked' || b.status === 'wait'));
-  if (mine) throw new Error(mine.status === 'booked' ? 'Вы уже записаны' : 'Вы уже в листе ожидания');
-  if (bookedCount_(s.id) < (s.capacity || 1)) return { booked: true, id: book_({ role: 'client', clientId }, { slotId: s.id }) };
+  const mine = tbl_('bookings').rows.find(b => b.slotId === s.id && b.clientId === clientId && bLive_(b));
+  if (mine) throw new Error(mine.status === 'booked' ? 'Вы уже записаны' : mine.status === 'pending' ? 'Заявка уже отправлена и ждёт подтверждения' : 'Вы уже в листе ожидания');
+  if (bookedCount_(s.id) < (s.capacity || 1)) { const id = book_({ role: 'client', clientId }, { slotId: s.id }); return { booked: true, pending: find_('bookings', id).status === 'pending', id }; }
   const id = insert_('bookings', { slotId: s.id, clientId, clientName: c.name, status: 'wait' });
   return { wait: true, id, pos: waitList_(s.id).findIndex(b => b.id === id) + 1 };
 }
@@ -93,8 +93,15 @@ function clubSeatFreed_(s) {
     const wl = waitList_(s.id);
     while (free > 0 && wl.length) {
       const b = wl.shift();
-      update_('bookings', b.id, { status: 'booked' });
       free--;
+      if (bookConfirmOn_()) { // заявку из листа ожидания тоже подтверждает тренер или менеджер
+        update_('bookings', b.id, { status: 'pending' });
+        tgNotify_('client', b.clientId, '🎉 Освободилось место на <b>' + tgEsc_(slotTitle_(s)) + '</b>, ' + slotWhen_(s) + '!\nЗаявка передана тренеру — пришлём подтверждение.',
+          { inline_keyboard: [[{ text: '❌ Отказаться', callback_data: 'cx:' + b.id }]] }, null, null, false);
+        bookingAsk_(find_('bookings', b.id), s);
+        continue;
+      }
+      update_('bookings', b.id, { status: 'booked' });
       tgNotify_('client', b.clientId, '🎉 Освободилось место — вы записаны!\n<b>' + tgEsc_(slotTitle_(s)) + '</b>, ' + slotWhen_(s) + ', тренер ' + tgEsc_(s.trainerName) + '.\nЕсли не сможете прийти — отмените запись, чтобы место досталось следующему.',
         { inline_keyboard: [[{ text: '❌ Отменить запись', callback_data: 'cx:' + b.id }]] }, null, null, false);
     }
@@ -104,7 +111,7 @@ function clubSeatFreed_(s) {
 function clubSlotCancelled_(s, bookings) {
   try {
     const msg = '⚠️ Занятие <b>' + tgEsc_(slotTitle_(s)) + '</b> ' + slotWhen_(s) + ' отменено. Приносим извинения! Выберите другое время: «📅 Расписание».';
-    bookings.filter(b => b.status === 'booked' || b.status === 'wait').forEach(b => tgNotify_('client', b.clientId, msg, null, null, null, false));
+    bookings.filter(b => bLive_(b)).forEach(b => tgNotify_('client', b.clientId, msg, null, null, null, false));
   } catch (e) { /* без бота */ }
 }
 function joinWaitApi_(user, p) {
@@ -118,25 +125,26 @@ function botScheduleMsg_(clientId) {
   const list = slotsAhead_(7).slice(0, 14);
   if (!list.length) return { text: 'На ближайшую неделю открытых занятий нет. Загляните позже!' };
   const mine = {};
-  tbl_('bookings').rows.forEach(b => { if (b.clientId === clientId && (b.status === 'booked' || b.status === 'wait')) mine[b.slotId] = b; });
+  tbl_('bookings').rows.forEach(b => { if (b.clientId === clientId && bLive_(b)) mine[b.slotId] = b; });
   const rows = list.map(s => {
     const b = mine[s.id], free = (s.capacity || 1) - bookedCount_(s.id);
     const lbl = slotWhen_(s) + ' ' + slotTitle_(s);
     if (b && b.status === 'booked') return [{ text: '✅ ' + lbl + ' — отменить', callback_data: 'cx:' + b.id }];
+    if (b && b.status === 'pending') return [{ text: '🕓 ' + lbl + ' — ждёт подтверждения, отменить', callback_data: 'cx:' + b.id }];
     if (b) return [{ text: '⏳ ' + lbl + ' — выйти из ожидания', callback_data: 'cx:' + b.id }];
     if (free > 0) return [{ text: '➕ ' + lbl + ' (мест: ' + free + ')', callback_data: 'bk:' + s.id + ':' + clientId }];
     return [{ text: '⏳ ' + lbl + ' — мест нет, в ожидание', callback_data: 'wt:' + s.id + ':' + clientId }];
   });
-  return { text: '📅 <b>Расписание на неделю</b>' + (c ? ' · ' + tgEsc_(c.name) : '') + '\n✅ — вы записаны, ⏳ — лист ожидания. Нажмите на занятие, чтобы записаться или отменить.\n' +
+  return { text: '📅 <b>Расписание на неделю</b>' + (c ? ' · ' + tgEsc_(c.name) : '') + '\n✅ — вы записаны, 🕓 — заявка ждёт подтверждения тренера, ⏳ — лист ожидания. Нажмите на занятие, чтобы записаться или отменить.\n' +
     list.map(s => '• ' + slotWhen_(s) + ' — ' + tgEsc_(slotTitle_(s)) + ', ' + tgEsc_(s.trainerName)).join('\n'), markup: { inline_keyboard: rows } };
 }
 function botMyMsg_(clientId) {
   const td = today_();
   const S = {}; tbl_('slots').rows.forEach(s => { S[s.id] = s; });
-  const bs = tbl_('bookings').rows.filter(b => b.clientId === clientId && (b.status === 'booked' || b.status === 'wait') && S[b.slotId] && S[b.slotId].date >= td && S[b.slotId].status === 'open')
+  const bs = tbl_('bookings').rows.filter(b => b.clientId === clientId && bLive_(b) && S[b.slotId] && S[b.slotId].date >= td && S[b.slotId].status === 'open')
     .sort((a, b) => (S[a.slotId].date + S[a.slotId].time).localeCompare(S[b.slotId].date + S[b.slotId].time));
   if (!bs.length) return { text: 'Ближайших записей нет. Записаться: «📅 Расписание».' };
-  return { text: '🗓 <b>Мои записи</b>\n' + bs.map(b => '• ' + slotWhen_(S[b.slotId]) + ' — ' + tgEsc_(slotTitle_(S[b.slotId])) + (b.status === 'wait' ? ' (лист ожидания, №' + (waitList_(b.slotId).findIndex(x => x.id === b.id) + 1) + ')' : '')).join('\n'),
+  return { text: '🗓 <b>Мои записи</b>\n' + bs.map(b => '• ' + slotWhen_(S[b.slotId]) + ' — ' + tgEsc_(slotTitle_(S[b.slotId])) + (b.status === 'wait' ? ' (лист ожидания, №' + (waitList_(b.slotId).findIndex(x => x.id === b.id) + 1) + ')' : b.status === 'pending' ? ' (🕓 ждёт подтверждения)' : '')).join('\n'),
     markup: { inline_keyboard: bs.slice(0, 10).map(b => [{ text: '❌ Отменить: ' + slotWhen_(S[b.slotId]), callback_data: 'cx:' + b.id }]) } };
 }
 /** Обработка текста в боте (кнопки меню, команды, комментарий к оценке). true — обработано. */
@@ -184,7 +192,7 @@ function clubCallback_(cq) {
     if (d[0] === 'bk' || d[0] === 'wt') {
       if (!own(d[2])) return tgAnswer_(cq, 'Это не ваша запись');
       const r = joinWait_(d[2], d[1]);
-      tgAnswer_(cq, r.booked ? '✅ Вы записаны!' : '⏳ Вы в листе ожидания, №' + r.pos + '. Сообщим, если место освободится');
+      tgAnswer_(cq, r.pending ? '🕓 Заявка отправлена — тренер подтвердит, пришлём сообщение' : r.booked ? '✅ Вы записаны!' : '⏳ Вы в листе ожидания, №' + r.pos + '. Сообщим, если место освободится');
       return tgEdit_(cq, botScheduleMsg_(d[2]));
     }
     if (d[0] === 'cx') {
@@ -192,12 +200,25 @@ function clubCallback_(cq) {
       if (!b || !own(b.clientId)) return tgAnswer_(cq, 'Запись не найдена');
       if (b.status === 'cancelled') return tgAnswer_(cq, 'Запись уже отменена');
       cancelBooking_({ role: 'client', clientId: b.clientId }, { id: b.id });
-      tgAnswer_(cq, b.status === 'wait' ? 'Вы вышли из листа ожидания' : 'Запись отменена. Спасибо, что предупредили!');
+      tgAnswer_(cq, b.status === 'wait' ? 'Вы вышли из листа ожидания' : b.status === 'pending' ? 'Заявка отменена' : 'Запись отменена. Спасибо, что предупредили!');
       const isList = /Расписание на неделю/.test(cq.message.text || '');
       const isMy = /Мои записи/.test(cq.message.text || '');
       if (isList) return tgEdit_(cq, botScheduleMsg_(b.clientId));
       if (isMy) return tgEdit_(cq, botMyMsg_(b.clientId));
       return tgEdit_(cq, { text: (cq.message.text || '') + '\n\n❌ Вы отменили запись.' });
+    }
+    if (d[0] === 'ba' || d[0] === 'bd') { // заявка ученика: подтвердить / отклонить (тренер занятия, менеджер, администратор)
+      const b = find_('bookings', d[1]);
+      const sl = b && find_('slots', b.slotId);
+      if (!b || !sl) return tgAnswer_(cq, 'Заявка не найдена');
+      const U = {}; tbl_('users').rows.forEach(u => { U[u.id] = u; });
+      const who = mine.map(r => r.kind === 'trainer' && r.refId === sl.trainerId ? { role: 'trainer', trainerId: r.refId, name: nameOf_('trainers', r.refId) }
+        : r.kind === 'user' && U[r.refId] && U[r.refId].active && (U[r.refId].role === 'admin' || U[r.refId].role === 'manager') ? U[r.refId] : null).filter(Boolean)[0];
+      if (!who) return tgAnswer_(cq, 'Подтверждать может тренер этого занятия или менеджер');
+      try { bookingDecide_(b.id, d[0] === 'ba', who.name || who.login, ''); }
+      catch (e) { tgAnswer_(cq, e.message); return tgEdit_(cq, { text: tgEsc_(cq.message.text || '') + '\n\nℹ️ ' + tgEsc_(e.message) }); }
+      tgAnswer_(cq, d[0] === 'ba' ? '✅ Подтверждено, ученику отправлено сообщение' : 'Заявка отклонена, ученик получил сообщение');
+      return tgEdit_(cq, { text: tgEsc_(cq.message.text || '') + '\n\n' + (d[0] === 'ba' ? '✅ Подтвердил(а): ' : '✖ Отклонил(а): ') + tgEsc_(who.name || who.login) });
     }
     if (d[0] === 'sch') {
       if (!own(d[1])) return tgAnswer_(cq, 'Не найдено');
@@ -657,7 +678,7 @@ function substitute_(user, p) {
   const sl = [].concat(p.slotIds || []).map(id => find_('slots', id)).filter(s => s && s.status === 'open');
   if (!sl.length) throw new Error('Выберите занятия');
   const reason = String(p.reason || '').trim();
-  const bk = s => tbl_('bookings').rows.filter(b => b.slotId === s.id && (b.status === 'booked' || b.status === 'wait'));
+  const bk = s => tbl_('bookings').rows.filter(b => b.slotId === s.id && bLive_(b));
   if (p.mode === 'cancel') {
     sl.forEach(s => {
       const bs = bk(s);

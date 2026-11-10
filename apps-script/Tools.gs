@@ -634,7 +634,9 @@ function botDigestText_(short) {
   const T = toolSettings_(), td = today_(), used = usage_(), S = settings_();
   const parts = [];
   const slots = tbl_('slots').rows.filter(s => s.date === td && s.status === 'open').sort((a, b) => a.time.localeCompare(b.time));
-  if (slots.length) parts.push('<b>Сегодня в расписании</b>\n' + slots.map(s => '• ' + s.time + ' ' + tgEsc_(s.trainerName) + ' — ' + tgEsc_(s.title || typeOf_(s.type).name) + ' (' + tbl_('bookings').rows.filter(b => b.slotId === s.id && b.status === 'booked').length + ' зап.)').join('\n'));
+  if (slots.length) parts.push('<b>Сегодня в расписании</b>\n' + slots.map(s => '• ' + s.time + ' ' + tgEsc_(s.trainerName) + ' — ' + tgEsc_(s.title || typeOf_(s.type).name) + ' (' + tbl_('bookings').rows.filter(b => b.slotId === s.id && bSeat_(b)).length + ' зап.)').join('\n'));
+  const pend = tbl_('bookings').rows.filter(b => b.status === 'pending');
+  if (pend.length) parts.push('🕓 <b>Ждут подтверждения записи: ' + pend.length + '</b> — откройте раздел «Записи» в приложении.');
   const rent = tbl_('rent').rows.filter(r => r.date === td || (r.unit === 'day' && r.date <= td && (r.endDate || r.date) >= td));
   if (rent.length) parts.push('<b>Аренда</b>\n' + rent.map(r => '• ' + r.time + ' ' + tgEsc_(r.renter) + ', ' + tgEsc_(r.hall)).join('\n'));
   if (short) return parts.join('\n\n');

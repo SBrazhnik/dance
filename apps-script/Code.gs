@@ -7,7 +7,7 @@
  */
 
 const CLUB_NAME = 'Клуб корпоративных бальных танцев';
-const APP_VER = '2026-11-10.1'; // меняется при каждом обновлении — открытые страницы предложат перезагрузку
+const APP_VER = '2026-11-10.2'; // меняется при каждом обновлении — открытые страницы предложат перезагрузку
 const STAFF = ['admin', 'manager'];
 const ALL = ['admin', 'manager', 'trainer', 'client'];
 const SESSION_DAYS = 30;
@@ -70,7 +70,8 @@ const TABLES = {
     ['trainerName', 'Тренер'], ['type', 'Тип'], ['title', 'Название'], ['capacity', 'Мест', 'n'], ['status', 'Статус'],
     ['resultId', 'ID результата'], ['notes', 'Заметки'], ['createdBy', 'Кто создал'], ['createdAt', 'Создано'], ['hall', 'Зал']]],
   bookings: ['Записи', [
-    ['id', 'ID'], ['slotId', 'ID слота'], ['clientId', 'ID ученика'], ['clientName', 'Ученик'], ['status', 'Статус'], ['createdAt', 'Создано']]],
+    ['id', 'ID'], ['slotId', 'ID слота'], ['clientId', 'ID ученика'], ['clientName', 'Ученик'], ['status', 'Статус'], ['createdAt', 'Создано'],
+    ['decidedBy', 'Кто подтвердил'], ['decidedAt', 'Когда подтвердил'], ['note', 'Комментарий']]],
   rent: ['Аренда', [
     ['id', 'ID'], ['date', 'Дата', 'd'], ['time', 'Время', 't'], ['hours', 'Часов', 'n'], ['renter', 'Арендатор'],
     ['hall', 'Зал'], ['amount', 'Сумма', 'n'], ['paid', 'Оплачено', 'b'], ['contractNo', '№ договора'],
@@ -413,6 +414,8 @@ const HANDLERS = {
 
   book: { roles: ['client', 'admin', 'manager'], write: true, fn: book_ },
   cancelBooking: { roles: ['client', 'admin', 'manager', 'trainer'], write: true, fn: cancelBooking_ },
+  decideBooking: { roles: ['admin', 'manager', 'trainer'], write: true, fn: decideBooking_ },
+  bookingSettings: { roles: ['admin'], write: true, fn: bookingSettings_ },
 
   getMessages: { roles: ALL, fn: getMessages_ },
   postMessage: { roles: ALL, write: true, fn: postMessage_ },
@@ -456,7 +459,7 @@ function tz_() { return ss_().getSpreadsheetTimeZone() || Session.getScriptTimeZ
 
 function ensureSchema_() {
   const props = PropertiesService.getScriptProperties();
-  const ver = 'schema-9';
+  const ver = 'schema-10';
   if (props.getProperty('schema') === ver) return;
   const ss = ss_();
   Object.keys(TABLES).forEach(key => {
@@ -942,6 +945,7 @@ function load_(user) {
   res.newsCustom = S.news_custom || '';
   res.toolsAccess = typeof toolsAccess_ === 'function' ? toolsAccess_() : {};
   res.dict = tbl_('dict').rows;
+  res.bookConfirm = bookConfirmOn_();
 
   const trainers = tbl_('trainers').rows;
   const clients = tbl_('clients').rows;
@@ -982,7 +986,7 @@ function load_(user) {
     const me = clients.find(c => c.id === cid);
     const fut = slots.filter(s => s.date >= today && s.status !== 'cancelled');
     const cnt = {};
-    bookings.forEach(b => { if (b.status === 'booked') cnt[b.slotId] = (cnt[b.slotId] || 0) + 1; });
+    bookings.forEach(b => { if (bSeat_(b)) cnt[b.slotId] = (cnt[b.slotId] || 0) + 1; });
     Object.assign(res, {
       me: me ? { id: me.id, name: me.name, contractNo: me.contractNo, trainerIds: me.trainerIds } : null,
       trainers: trainers.filter(t => t.active).map(t => ({ id: t.id, name: t.name, spec: t.spec, programs: t.programs })),
@@ -1641,9 +1645,9 @@ function cancelSlot_(user, p) {
   const s = slotAccess_(user, p.id);
   const bs = tbl_('bookings').rows.filter(b => b.slotId === s.id);
   if (!bs.length) { del_('slots', s.id); return 'deleted'; }
-  const live = bs.filter(b => b.status === 'booked' || b.status === 'wait').map(b => ({ clientId: b.clientId, status: b.status }));
+  const live = bs.filter(b => bLive_(b)).map(b => ({ clientId: b.clientId, status: b.status }));
   update_('slots', s.id, { status: 'cancelled' });
-  bs.forEach(b => { if (b.status === 'booked' || b.status === 'wait') update_('bookings', b.id, { status: 'cancelled' }); });
+  bs.forEach(b => { if (bLive_(b)) update_('bookings', b.id, { status: 'cancelled' }); });
   if (typeof clubSlotCancelled_ === 'function') clubSlotCancelled_(s, live);
   return 'cancelled';
 }
@@ -1663,23 +1667,84 @@ function completeSlot_(user, p) {
   }
   update_('slots', s.id, { status: 'done', resultId });
   tbl_('bookings').rows.filter(b => b.slotId === s.id && b.status !== 'cancelled')
-    .forEach(b => update_('bookings', b.id, { status: cids.indexOf(b.clientId) >= 0 ? 'attended' : b.status === 'wait' ? 'cancelled' : 'missed' }));
+    .forEach(b => update_('bookings', b.id, { status: cids.indexOf(b.clientId) >= 0 ? 'attended' : b.status === 'wait' || b.status === 'pending' ? 'cancelled' : 'missed' }));
   return resultId;
 }
 
+// ---------------------------------------------------------------------------
+// Запись на занятия. Заявку ученика подтверждает тренер этого занятия, менеджер или администратор (любой из них).
+// pending — ждёт подтверждения (место уже держится), booked — подтверждена, declined — отклонена.
+// ---------------------------------------------------------------------------
+const bSeat_ = b => b.status === 'booked' || b.status === 'pending';               // занимает место
+const bLive_ = b => b.status === 'booked' || b.status === 'pending' || b.status === 'wait';
+function bookConfirmOn_() { return String(settings_().bookConfirm || '1') !== '0'; }
 function book_(user, p) {
   const s = must_('slots', p.slotId, 'Слот');
   const cid = user.role === 'client' ? user.clientId : req_(p.clientId, 'Выберите ученика');
   const c = must_('clients', cid, 'Ученик');
   if (s.status !== 'open') throw new Error('Запись на этот слот закрыта');
   if (s.date < today_()) throw new Error('Слот уже прошёл');
-  const bs = tbl_('bookings').rows.filter(b => b.slotId === s.id && b.status === 'booked');
-  if (bs.some(b => b.clientId === cid)) throw new Error('Вы уже записаны');
+  const bs = tbl_('bookings').rows.filter(b => b.slotId === s.id && bSeat_(b));
+  const own = bs.find(b => b.clientId === cid);
+  if (own) throw new Error(own.status === 'pending' ? 'Заявка уже отправлена и ждёт подтверждения' : 'Вы уже записаны');
   if (bs.length >= (s.capacity || 1)) throw new Error('Свободных мест нет');
+  // заявку ученика подтверждают; запись, сделанную сотрудником, — нет
+  const st = user.role === 'client' && bookConfirmOn_() ? 'pending' : 'booked';
   const w = tbl_('bookings').rows.find(b => b.slotId === s.id && b.clientId === cid && b.status === 'wait');
-  if (w) { update_('bookings', w.id, { status: 'booked' }); return w.id; }
-  return insert_('bookings', { slotId: s.id, clientId: cid, clientName: c.name, status: 'booked' });
+  const id = w ? (update_('bookings', w.id, { status: st }), w.id) : insert_('bookings', { slotId: s.id, clientId: cid, clientName: c.name, status: st });
+  if (st === 'pending') bookingAsk_(find_('bookings', id), s);
+  return id;
 }
+/** Сообщить тренеру занятия и менеджерам/администраторам о новой заявке — с кнопками прямо в Telegram. */
+function bookingAsk_(b, s) {
+  try {
+    if (typeof tgNotify_ !== 'function' || !b) return;
+    const busy = tbl_('bookings').rows.filter(x => x.slotId === s.id && bSeat_(x)).length;
+    const text = '🕓 <b>Заявка на занятие</b>\n' + tgEsc_(b.clientName) + ' → ' + tgEsc_(slotTitle_(s)) + ', ' + slotWhen_(s) + ', тренер ' + tgEsc_(s.trainerName) +
+      (s.hall ? ', зал ' + tgEsc_(s.hall) : '') + '\nМест занято: ' + busy + ' из ' + (s.capacity || 1) + '. Подтвердите или отклоните — ответит тот, кто увидит первым.';
+    const kb = { inline_keyboard: [[{ text: '✅ Подтвердить', callback_data: 'ba:' + b.id }, { text: '✖ Отклонить', callback_data: 'bd:' + b.id }]] };
+    tgNotify_('trainer', s.trainerId, text, kb);
+    tbl_('users').rows.filter(u => u.active && (u.role === 'admin' || u.role === 'manager')).forEach(u => tgNotify_('user', u.id, text, kb));
+  } catch (e) { /* без бота — заявки видны в разделе «Записи» */ }
+}
+/** Кто может решать по заявке: тренер этого занятия, менеджер, администратор. */
+function bookingCanDecide_(user, s) {
+  return user.role === 'admin' || user.role === 'manager' || (user.role === 'trainer' && s.trainerId === user.trainerId);
+}
+/** Подтвердить (ok) или отклонить заявку. by — имя того, кто решил. */
+function bookingDecide_(id, ok, by, note) {
+  const b = must_('bookings', id, 'Заявка');
+  const s = must_('slots', b.slotId, 'Занятие');
+  if (b.status !== 'pending') {
+    const what = { booked: 'уже подтверждена', declined: 'уже отклонена', cancelled: 'отменена', attended: 'занятие проведено', missed: 'занятие проведено', wait: 'в листе ожидания' }[b.status] || 'уже обработана';
+    throw new Error('Заявка ' + what + (b.decidedBy ? ' (' + b.decidedBy + ')' : ''));
+  }
+  note = String(note || '').trim().slice(0, 300);
+  update_('bookings', b.id, { status: ok ? 'booked' : 'declined', decidedBy: by, decidedAt: now_(), note });
+  try {
+    if (typeof tgNotify_ === 'function') {
+      if (ok) tgNotify_('client', b.clientId, '✅ Запись подтверждена!\n<b>' + tgEsc_(slotTitle_(s)) + '</b>, ' + slotWhen_(s) + ', тренер ' + tgEsc_(s.trainerName) + (s.hall ? ', зал ' + tgEsc_(s.hall) : '') + '.\nЖдём вас! Если не сможете прийти — отмените запись.',
+        { inline_keyboard: [[{ text: '❌ Отменить запись', callback_data: 'cx:' + b.id }]] }, null, null, false);
+      else tgNotify_('client', b.clientId, '😔 Запись на <b>' + tgEsc_(slotTitle_(s)) + '</b> ' + slotWhen_(s) + ' не подтверждена' + (note ? ': ' + tgEsc_(note) : '') + '.\nВыберите другое время: «📅 Расписание».', null, null, null, false);
+    }
+  } catch (e) { /* без бота */ }
+  if (!ok && typeof clubSeatFreed_ === 'function') clubSeatFreed_(s);
+  return b.id;
+}
+function decideBooking_(user, p) {
+  const ids = [].concat(p.ids || p.id || []).filter(Boolean);
+  if (!ids.length) throw new Error('Выберите заявки');
+  let n = 0;
+  ids.forEach(id => {
+    const b = must_('bookings', id, 'Заявка');
+    if (!bookingCanDecide_(user, must_('slots', b.slotId, 'Занятие'))) throw new Error('Это заявка на чужое занятие');
+    if (ids.length > 1 && b.status !== 'pending') return; // массово — пропускаем уже решённые
+    bookingDecide_(id, p.ok === true, user.name || user.login, p.note);
+    n++;
+  });
+  return n;
+}
+function bookingSettings_(user, p) { setSetting_('bookConfirm', p.on === false ? '0' : '1'); return bookConfirmOn_(); }
 
 function cancelBooking_(user, p) {
   const b = must_('bookings', p.id, 'Запись');
@@ -1689,7 +1754,7 @@ function cancelBooking_(user, p) {
   if (user.role === 'client' && s.date < today_()) throw new Error('Слот уже прошёл');
   const was = b.status;
   update_('bookings', b.id, { status: 'cancelled' });
-  if (was === 'booked' && typeof clubSeatFreed_ === 'function') clubSeatFreed_(s);
+  if ((was === 'booked' || was === 'pending') && typeof clubSeatFreed_ === 'function') clubSeatFreed_(s);
   return true;
 }
 
