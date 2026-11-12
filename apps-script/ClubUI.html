@@ -1058,7 +1058,7 @@ ST.deck = (P, opt, fontCss) => {
   const head = (h, s) => `<div class="hd"><h2>${h}</h2>${s ? `<div class="sc">${s}</div>` : ''}</div>`;
   const out = [], pn = [];
   const add = (k, h, sc, body, half) => { if (on(k)) pn.push({h, sc, body, half: !!half}); };
-  if (on('cover')) out.push(`<section class="s cover"><img class="logo" src="${ST.url('logo.svg')}" alt=""><div class="cv"><div class="sc">${esc(opt.kicker || 'итоги и цифры')}</div><h1>${esc(title)}</h1><div class="per">${esc(sub)}</div></div><img class="dn" src="${ST.url('dancers.jpg')}" alt=""></section>`);
+  if (on('cover')) out.push(`<section class="s cover"><img class="logo" src="${ST.url('logo-full.png')}" alt=""><div class="cv"><div class="sc">${esc(opt.kicker || 'итоги и цифры')}</div><h1>${esc(title)}</h1><div class="per">${esc(sub)}</div></div><img class="dn" src="${ST.url('dancers.jpg')}" alt=""></section>`);
   add('about', 'О клубе', 'танцуем вместе', `<p class="lead">${esc(opt.about || (club.name + ' — корпоративные спортивные бальные танцы: занятия для сотрудников компаний, турниры, праздники и выступления.'))}</p>
     <div class="chips">${club.programs.map(p => `<span>${esc(p)}</span>`).join('')}</div>
     <div class="kps mini">${club.since ? kp(club.since.slice(0, 4), 'год первых занятий') : ''}${kp(club.trainers.length, 'тренеров')}${club.halls.length ? kp(club.halls.length, 'залов') : ''}${kp(club.clients, 'учеников')}${club.companies ? kp(club.companies, 'компаний') : ''}</div>`, club.programs.length <= 6);
@@ -1100,7 +1100,7 @@ ST.deck = (P, opt, fontCss) => {
     if (j > 0) { used[j] = 1; out.push(`<section class="s two"><div>${box(a)}</div><div>${box(pn[j])}</div></section>`); }
     else out.push(`<section class="s${a.half ? ' one' : ''}">${box(a)}</section>`);
   });
-  if (on('final')) out.push(`<section class="s cover fin"><img class="logo" src="${ST.url('logo.svg')}" alt=""><div class="cv"><div class="sc">до встречи на паркете</div><h1>${esc(opt.finalTitle || 'Танцуйте с нами')}</h1><div class="per">ano.dance · corpdance.ru${club.city ? ' · ' + esc(club.city) : ''}</div>${opt.contacts ? `<div class="per">${esc(opt.contacts)}</div>` : ''}</div><img class="dn" src="${ST.url('dancers.jpg')}" alt=""></section>`);
+  if (on('final')) out.push(`<section class="s cover fin"><img class="logo" src="${ST.url('logo-full.png')}" alt=""><div class="cv"><div class="sc">до встречи на паркете</div><h1>${esc(opt.finalTitle || 'Танцуйте с нами')}</h1><div class="per">ano.dance · corpdance.ru${club.city ? ' · ' + esc(club.city) : ''}</div>${opt.contacts ? `<div class="per">${esc(opt.contacts)}</div>` : ''}</div><img class="dn" src="${ST.url('dancers.jpg')}" alt=""></section>`);
   const css = `${fontCss || ''}
 *{box-sizing:border-box}html,body{margin:0;background:#0B0F16;color:#F1F2F5;font-family:'Golos Text',Segoe UI,Arial,sans-serif;height:100%;overflow:hidden}
 .s{position:absolute;left:50%;top:50%;width:1280px;height:720px;margin:-360px 0 0 -640px;transform:scale(var(--k,1));background:#121721;padding:64px 72px;overflow:hidden;display:none}
@@ -1109,7 +1109,7 @@ h1,h2{font-family:Foglihten,'Cormorant Unicase',Georgia,serif;font-weight:400;ma
 h1{font-size:92px}h2{font-size:58px}.sc{font-family:'Eddy Mits','Marck Script',cursive;color:#C9B8FF;font-size:34px;margin-top:6px}
 .hd{margin-bottom:34px}.mu{color:#AAAEB6}.lead{font-size:26px;line-height:1.45;color:#D8DAE0;margin:0 0 24px}
 .cover{display:none;padding:80px}.cover.on{display:flex;align-items:center}.cover .cv{position:relative;z-index:2;max-width:760px}.cover .per{font-size:26px;color:#AAAEB6;margin-top:22px}
-.cover .logo{position:absolute;left:80px;top:56px;height:64px}.cover .dn{position:absolute;right:-40px;bottom:0;height:680px;opacity:.9;mask-image:linear-gradient(90deg,transparent,#000 35%);-webkit-mask-image:linear-gradient(90deg,transparent,#000 35%)}
+.cover .logo{position:absolute;left:72px;top:48px;height:96px}.cover .dn{position:absolute;right:-40px;bottom:0;height:680px;opacity:.9;mask-image:linear-gradient(90deg,transparent,#000 35%);-webkit-mask-image:linear-gradient(90deg,transparent,#000 35%)}
 .cols{display:grid;grid-template-columns:1fr 1fr;gap:48px;align-items:start}
 .kps{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}.kps.v{grid-template-columns:1fr 1fr}
 .kp{background:#1D222A;border-radius:18px;padding:22px 24px;border:1px solid rgba(255,255,255,.06)}.kp b{display:block;font-family:Foglihten,'Cormorant Unicase',Georgia,serif;font-weight:400;font-size:54px;color:#C9B8FF;line-height:1}.kp b small{font-size:24px;color:#AAAEB6}.kp span{display:block;color:#AAAEB6;font-size:19px;margin-top:8px}
@@ -1215,7 +1215,10 @@ ST.draw = async (cv, c, imgs) => {
   const x = cv.getContext('2d');
   x.fillStyle = th[1]; x.fillRect(0, 0, W, H);
   const g = x.createRadialGradient(W * .85, H * .1, 10, W * .85, H * .1, W * .9); g.addColorStop(0, c.theme === 'light' ? 'rgba(124,92,230,.18)' : c.theme === 'gold' ? 'rgba(233,199,123,.22)' : 'rgba(124,92,230,.35)'); g.addColorStop(1, 'rgba(0,0,0,0)'); x.fillStyle = g; x.fillRect(0, 0, W, H);
-  if (imgs.dn && c.photo !== false) {
+  if (c.theme === 'light' && imgs.mkB && c.photo !== false) {
+    const ih = H * (c.size === 'sq' ? .42 : .38), iw = imgs.mkB.width / imgs.mkB.height * ih;
+    x.save(); x.globalAlpha = .9; x.drawImage(imgs.mkB, (W - iw) / 2, H - ih - 150, iw, ih); x.restore();
+  } else if (imgs.dn && c.photo !== false) {
     const ih = H * (c.size === 'sq' ? .62 : .55), iw = imgs.dn.width / imgs.dn.height * ih;
     const oc = document.createElement('canvas'); oc.width = W; oc.height = Math.round(ih); const ox = oc.getContext('2d');
     ox.drawImage(imgs.dn, (W - iw) / 2, 0, iw, ih); ox.globalCompositeOperation = 'destination-in';
@@ -1223,10 +1226,11 @@ ST.draw = async (cv, c, imgs) => {
     const gr = ox.createRadialGradient(W / 2, ih * .6, ih * .3, W / 2, ih * .6, W * .55); gr.addColorStop(0, 'rgba(0,0,0,1)'); gr.addColorStop(1, 'rgba(0,0,0,0)'); ox.fillStyle = gr; ox.fillRect(0, 0, W, ih);
     x.save(); x.globalAlpha = c.theme === 'light' ? .9 : .95; if (c.theme === 'light') x.globalCompositeOperation = 'multiply'; x.drawImage(oc, 0, H - ih); x.restore();
   }
-  if (imgs.br) { x.save(); x.globalAlpha = c.theme === 'light' ? .18 : .22; const bw = W * .8, bh = imgs.br.height / imgs.br.width * bw; x.drawImage(imgs.br, W * .1, 64 + 84 + 40, bw, bh); x.restore(); }
-  if (imgs.logo) { const lh = 84, lw = imgs.logo.width / imgs.logo.height * lh || lh; x.drawImage(imgs.logo, (W - lw) / 2, 64, lw, lh); }
+  if (imgs.br) { x.save(); x.globalAlpha = c.theme === 'light' ? .18 : .22; const bw = W * .8, bh = imgs.br.height / imgs.br.width * bw; x.drawImage(imgs.br, W * .1, 44 + 130 + 30, bw, bh); x.restore(); }
+  const lg = c.theme === 'light' ? (imgs.logoB || imgs.logo) : imgs.logo;
+  if (lg) { const lh = 130, lw = lg.width / lg.height * lh || lh; x.drawImage(lg, (W - lw) / 2, 44, lw, lh); }
   x.textAlign = 'center'; x.textBaseline = 'alphabetic';
-  let y = 64 + 84 + 120;
+  let y = 44 + 130 + 110;
   const disp = '% Foglihten, "Cormorant Unicase", Georgia, serif', scr = '% "Eddy Mits", "Marck Script", cursive';
   if (c.kicker) { x.fillStyle = th[4]; x.font = '600 30px "Golos Text", "Segoe UI", Arial, sans-serif'; x.fillText(c.kicker.toUpperCase(), W / 2, y); y += 80; }
   const hs = ST.fit(x, c.title, scr, 140, W - 140, 60);
@@ -1281,7 +1285,7 @@ ST.fillFest = c => { const f = ((S.C && S.C.fests) || []).find(x => x.id === c.f
 ST.imgs = null;
 ST.render = async () => {
   const cv = $('#stcv'); if (!cv) return;
-  if (!ST.imgs) { try { if (typeof loadBrandFonts === 'function') await loadBrandFonts(); await document.fonts.ready; } catch (e) {} const [dn, br, logo] = await Promise.all([ST.img(ST.url('dancers.jpg')), ST.img(ST.url('brush.webp')), ST.img(ST.url('logo.svg'))]); ST.imgs = {dn, br, logo}; }
+  if (!ST.imgs) { try { if (typeof loadBrandFonts === 'function') await loadBrandFonts(); await document.fonts.ready; } catch (e) {} const [dn, br, logo, logoB, mkB] = await Promise.all([ST.img(ST.url('dancers.jpg')), ST.img(ST.url('brush.webp')), ST.img(ST.url('logo-full-v.png')), ST.img(ST.url('logo-full-v-black.png')), ST.img(ST.url('mark-black.png'))]); ST.imgs = {dn, br, logo, logoB, mkB}; }
   await ST.draw(cv, S.ui.stCard, ST.imgs);
 };
 ST.png = async () => {

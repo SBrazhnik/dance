@@ -19,7 +19,7 @@
   #app { position: fixed; inset: 0; width: 100%; height: 100%; border: 0; background: #121721; }
   #splash { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px;
     background: #121721 url(/brand/dancers.jpg) center 58%/min(560px, 120vw) no-repeat; color: #fff; font: 16px -apple-system, Segoe UI, Roboto, Arial, sans-serif; transition: opacity .4s; z-index: 2; text-align: center; padding: 20px; }
-  #splash img { width: 72px; height: 72px; }
+  #splash img { width: min(320px, 80vw); height: auto; }
   #splash b { font-size: 19px; }
   #splash small { opacity: .75; }
   #splash a { color: #C9B8FF; }
@@ -27,7 +27,7 @@
 </style>
 </head>
 <body>
-<div id="splash"><img src="/brand/logo.svg" alt=""><b>Клуб корпоративных бальных танцев</b><small id="msg">Загрузка…</small></div>
+<div id="splash"><img src="/brand/logo-full-v.png" alt="Клуб корпоративных бальных танцев"><small id="msg">Загрузка…</small></div>
 <iframe id="app" title="Клуб корпоративных бальных танцев" allow="clipboard-read; clipboard-write; fullscreen" referrerpolicy="no-referrer-when-downgrade"></iframe>
 <script>
   // Адрес веб-приложения Google Apps Script. Если развёртывание поменяется — достаточно исправить его здесь.
