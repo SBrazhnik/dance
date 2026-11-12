@@ -7,7 +7,7 @@
  */
 
 const CLUB_NAME = 'Клуб корпоративных бальных танцев';
-const APP_VER = '2026-11-10.7'; // меняется при каждом обновлении — открытые страницы предложат перезагрузку
+const APP_VER = '2026-11-12.1'; // меняется при каждом обновлении — открытые страницы предложат перезагрузку
 const STAFF = ['admin', 'manager'];
 const ALL = ['admin', 'manager', 'trainer', 'client'];
 const SESSION_DAYS = 30;
@@ -116,6 +116,9 @@ const TABLES = {
   feedback: ['Оценки занятий', [
     ['id', 'ID'], ['date', 'Дата', 'd'], ['clientId', 'ID ученика'], ['clientName', 'Ученик'], ['trainerId', 'ID тренера'], ['trainerName', 'Тренер'],
     ['lessonId', 'ID занятия'], ['score', 'Оценка', 'n'], ['comment', 'Комментарий'], ['createdAt', 'Создано']]],
+  grades: ['Оценки учеников', [
+    ['id', 'ID'], ['date', 'Дата', 'd'], ['clientId', 'ID ученика'], ['clientName', 'Ученик'], ['trainerId', 'ID тренера'], ['trainerName', 'Тренер'],
+    ['lessonId', 'ID занятия'], ['scores', 'Оценки по критериям'], ['total', 'Общая', 'n'], ['comment', 'Комментарий'], ['createdBy', 'Кто оценил'], ['createdAt', 'Создано']]],
   expenses: ['Расходы', [
     ['id', 'ID'], ['date', 'Дата', 'd'], ['category', 'Статья'], ['amount', 'Сумма', 'n'], ['note', 'Комментарий'], ['createdBy', 'Кто внёс'], ['createdAt', 'Создано']]],
   shares: ['Ссылки для HR', [
@@ -465,7 +468,7 @@ function tz_() { return ss_().getSpreadsheetTimeZone() || Session.getScriptTimeZ
 
 function ensureSchema_() {
   const props = PropertiesService.getScriptProperties();
-  const ver = 'schema-13';
+  const ver = 'schema-14';
   if (props.getProperty('schema') === ver) return;
   const ss = ss_();
   Object.keys(TABLES).forEach(key => {
@@ -1575,8 +1578,9 @@ function saveEvent_(user, p) {
   cids.forEach(id => must_('clients', id, 'Ученик'));
   const date = isDate_(p.date) ? p.date : today_();
   const hours = hoursOk_(p.hours);
+  let old = null;
   if (p.id) {
-    const old = must_('events', p.id, 'Запись');
+    old = must_('events', p.id, 'Запись');
     if (user.role === 'trainer') {
       if (ids_(old.trainerIds).indexOf(user.trainerId) < 0) throw new Error('Это не ваша группа');
       checkEditWindow_(user, old);
@@ -1586,7 +1590,7 @@ function saveEvent_(user, p) {
     type, title: String(req_(p.title, 'Укажите название')).trim(), date, time: p.time || '', hours,
     trainerIds: tids.join(','), trainerNames: tids.map(x => nameOf_('trainers', x)).join(', '),
     clientIds: cids.join(','), clientNames: cids.map(x => nameOf_('clients', x)).join(', '),
-    deduct: !!p.deduct, notes: p.notes || '', groupId: p.groupId || '', location: p.location || '', results: p.results || ''
+    deduct: p.deduct === undefined || p.deduct === '' ? (old && old.type === type ? old.deduct === true || old.deduct === 'TRUE' : !!typeOf_(type).deduct) : !!p.deduct, notes: p.notes || '', groupId: p.groupId || '', location: p.location || '', results: p.results || ''
   };
   let id = p.id;
   if (id) update_('events', id, d); else { d.createdBy = user.name; id = insert_('events', d); }
@@ -1629,6 +1633,7 @@ function clientHistory_(user, p) {
     subs: tbl_('subs').rows.filter(s => s.clientId === cid).map(s => subView_(s, used, S, today_())),
     bookings: clientBookings_(cid),
     events: clientEvents_(cid),
+    grades: gradesOf_({ clientId: cid }),
   };
 }
 /** Все записи ученика на тренировки (с данными занятия) — от новых к старым. */

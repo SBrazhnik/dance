@@ -100,7 +100,7 @@ TL.tabs = () => (TOOL_FOR[role()] || []).filter(k => k !== 'fests' && hasTool(k)
 })();
 const ACC_NOTE = {
   bot: 'рассылки, подключение людей к боту, настройки уведомлений (токен бота меняет только администратор)',
-  renew: 'кому продлевать, напоминания и QR для оплаты, реквизиты', lost: 'кто перестал ходить, «позвать обратно»', rate: 'оценки тренеров от учеников',
+  renew: 'кому продлевать, напоминания и QR для оплаты, реквизиты', lost: 'кто перестал ходить, «позвать обратно»', rate: 'оценки занятий от учеников и оценки учеников тренерами по критериям',
   fests: 'мероприятия, участники, приглашения и итоги', halls: 'календарь залов (тренер видит только свои занятия)', subst: 'замена и отмена занятий тренеров',
   money: 'доходы, расходы, прибыль — финансы клуба', media: 'фото и видео с занятий, турниров и мероприятий (ученик видит только те, где он отмечен)', pair: 'подбор пары и тренера (тренер — среди своих учеников)', passport: 'уровни и дневник (тренер — только своим ученикам)',
   league: 'рейтинг компаний (ученик видит своё место и топ‑10)', hr: 'отчёт для HR и ссылки для компаний', my: 'свой паспорт танцора и анкета «ищу пару»', tg: 'подключить свой Telegram',
@@ -253,7 +253,7 @@ TLV.rate = () => {
   call('ratings', {from: pp.p.from, to: pp.p.to}, true).then(r => {
     if (S.pageSeq !== my || !$('#clr')) return;
     const bot = (S.T && S.T.bot) || {};
-    $('#clr').innerHTML = `${!r.total ? `<div class="card">${empty(bot.connected ? 'Оценок за период пока нет. Бот сам спрашивает учеников после занятия — включите «Просить оценить занятие» на вкладке «Telegram-бот».' : 'Оценки собирает Telegram-бот после занятия. Подключите бота на вкладке «Telegram-бот».')}</div>` : `
+    const fbHtml = `${!r.total ? `<div class="card">${empty(bot.connected ? 'Оценок за период пока нет. Бот сам спрашивает учеников после занятия — включите «Просить оценить занятие» на вкладке «Telegram-бот».' : 'Оценки собирает Telegram-бот после занятия. Подключите бота на вкладке «Telegram-бот».')}</div>` : `
       <div class="kpis"><div class="kpi"><b>${fh(r.avg)} ${CL.stars(r.avg)}</b><span>средняя оценка занятий</span></div><div class="kpi"><b>${r.total}</b><span>оценок за период</span></div>
         <div class="kpi"><b style="color:${r.low.length ? 'var(--bad)' : 'var(--ok)'}">${r.low.length}</b><span>оценок 3 и ниже</span></div></div>
       <div class="cl-grid sect">${r.trainers.map(t => `<div class="card"><div class="row"><div class="avatar" data-av="trainer:${t.id}">${initials(t.name)}</div><div class="grow"><b>${esc(t.name)}</b><div class="small muted">${t.n} оценок</div></div><div class="right"><b style="font-size:22px">${fh(t.avg)}</b><div>${CL.stars(t.avg)}</div></div></div>
@@ -261,6 +261,21 @@ TLV.rate = () => {
         ${t.comments.map(c => `<div class="cl-cm">${CL.stars(c.score)} <span class="muted">${fd(c.date)} · ${esc(c.client)}</span><div>${esc(c.text)}</div></div>`).join('')}</div>`).join('')}</div>
       ${r.low.length ? `<h2 class="sect">Низкие оценки — стоит разобраться</h2><div class="tw"><table class="t"><thead><tr><th>Дата</th><th>Ученик</th><th>Тренер</th><th>Оценка</th><th>Комментарий</th></tr></thead><tbody>
         ${r.low.map(f => `<tr><td class="nowrap">${fd(f.date)}</td><td><a class="click" data-c="${f.clientId}">${esc(f.clientName)}</a></td><td>${esc(f.trainerName)}</td><td>${CL.stars(f.score)}</td><td>${esc(f.comment || '—')}</td></tr>`).join('')}</tbody></table></div>` : ''}`}`;
+
+    const g = r.grades || {crit: [], all: {n: 0, by: {}}, trainers: [], clients: []};
+    S.gradeCrit = g.crit;
+    const grHtml = `<h2 class="sect">Оценки учеников тренерами</h2>
+      <div class="small muted" style="margin:4px 0 10px">Тренер оценивает занятие ученика по критериям от 1 до 5 — в карточке ученика («Оценить занятие» или «Оценить» в истории занятий). Общая оценка — среднее по выставленным критериям. Ученик видит свои оценки в приложении${g.botGrade ? ' и получает их в Telegram-боте' : ''}.</div>
+      ${g.all.n ? `<div class="kpis"><div class="kpi"><b>${fh(g.all.total)} ${grStars(g.all.total)}</b><span>средняя оценка учеников</span></div><div class="kpi"><b>${g.all.n}</b><span>оценок за период</span></div><div class="kpi"><b>${g.clients.length}</b><span>учеников оценено</span></div></div>
+      <div class="cl-grid sect"><div class="card"><h3 style="margin:0 0 8px">По критериям — все тренеры</h3>${grBars(g.all, g.crit)}</div>
+        ${g.trainers.map(t => `<div class="card"><div class="row"><div class="avatar" data-av="trainer:${t.id}">${initials(t.name)}</div><div class="grow"><b>${esc(t.name)}</b><div class="small muted">выставил(а) ${t.n} оценок</div></div><div class="right"><b style="font-size:22px">${fh(t.total)}</b></div></div><div style="margin-top:8px">${grBars(t, g.crit)}</div></div>`).join('')}</div>
+      <div class="tw sect"><table class="t"><thead><tr><th>Ученик</th><th class="n">Оценок</th><th class="n">Общая</th>${g.crit.map(k => `<th class="n small">${esc(k)}</th>`).join('')}</tr></thead><tbody>
+        ${g.clients.map(c => `<tr class="click" data-c="${c.id}"><td><b>${esc(c.name)}</b></td><td class="n">${c.n}</td><td class="n">${grNum(c.total)}</td>${g.crit.map(k => `<td class="n">${+c.by[k] ? fh(c.by[k]) : '—'}</td>`).join('')}</tr>`).join('')}</tbody></table></div>` : `<div class="card">${empty('За период тренеры ещё не оценивали учеников')}</div>`}
+      <div class="card sect"><h3 style="margin:0 0 6px">Критерии оценки</h3><div class="small muted" style="margin-bottom:8px">По одному в строке (до 12). Переименование не меняет уже выставленные оценки — старые пункты останутся в истории.</div>
+        <textarea class="inp" id="grc" rows="6">${esc(g.crit.join('\n'))}</textarea>
+        <div class="row" style="margin-top:8px">${chk('bot_grade', 'Отправлять ученику оценку в Telegram-бот', g.botGrade)}<span class="spacer"></span><button class="btn pri sm" id="grcs">Сохранить критерии</button></div></div>`;
+    $('#clr').innerHTML = `<h2>Оценки занятий от учеников</h2><div class="small muted" style="margin:4px 0 10px">Ученик ставит занятию 1–5 звёзд в Telegram-боте после занятия — это оценка тренера учеником.</div>` + fbHtml + grHtml;
+    $('#grcs').onclick = async () => { try { await call('saveGradeCrit', {crit: $('#grc').value, bot_grade: $('[name=bot_grade]', $('#clr')).checked}); toast('Критерии сохранены'); TLV.rate(); } catch (e) { fail(e); } };
     $$('#clr [data-c]').forEach(a => a.onclick = () => { S.prev = ['tools', 'rate']; go('client', a.dataset.c); });
   }).catch(fail);
 };
@@ -998,4 +1013,270 @@ TLV.media = () => {
     mdSection(box, {clientId: cid}, {clientIds: [cid]}, 'Фото и видео ученика');
   };
 })();
+</script>
+<style>
+.st-prev{width:100%;aspect-ratio:16/9;border:0;border-radius:14px;background:#121721;display:block}
+.st-slides{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:6px 14px;margin:6px 0}
+.st-cv{width:100%;max-width:440px;border-radius:14px;box-shadow:0 6px 24px rgba(0,0,0,.25);display:block;margin:0 auto;background:#121721}
+.st-grid{display:grid;grid-template-columns:minmax(260px,1fr) minmax(260px,440px);gap:16px;align-items:start}
+@media (max-width:760px){.st-grid{grid-template-columns:1fr}}
+.st-tpl{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:8px}
+.st-tpl .chip{justify-content:center;text-align:center;padding:10px}
+</style>
+<script>
+I.gift = '<rect x="3" y="8" width="18" height="13" rx="2"/><path d="M12 8v13M3 12h18M12 8c-2-4-6-4-6-1.5S9 8 12 8c3 0 6 .5 6-1.5S14 4 12 8z"/>';
+const ST = {
+  url: p => 'https:' + '/' + '/corpdance.ru/brand/' + p,
+  slides: [['cover', 'Обложка'], ['about', 'О клубе'], ['kpi', 'Цифры периода'], ['months', 'Посещаемость по месяцам'], ['types', 'Виды занятий'], ['trainers', 'Тренеры: часы и ученики'],
+    ['companies', 'Компании'], ['events', 'Мероприятия и турниры'], ['book', 'Запись на тренировки'], ['rating', 'Оценки'], ['league', 'Корпоративная лига'], ['team', 'Команда тренеров'], ['final', 'Контакты']],
+  mon: m => { const [y, mm] = m.split('-'); return MONTHS[+mm - 1].slice(0, 3) + ' ' + y.slice(2); },
+  per: (a, b) => fd(a) + ' — ' + fd(b),
+  async fonts() {
+    const out = [];
+    try { if (typeof loadBrandFonts === 'function') await loadBrandFonts(); } catch (e) {}
+    for (const [k, fam] of [['fog', 'Foglihten'], ['eddy', 'Eddy Mits']]) {
+      try {
+        const buf = await fontGet('font:' + k); if (!buf) continue;
+        const u = new Uint8Array(buf); let s = ''; for (let i = 0; i < u.length; i += 8192) s += String.fromCharCode.apply(null, u.subarray(i, i + 8192));
+        out.push(`@font-face{font-family:'${fam}';src:url(data:font/otf;base64,${btoa(s)})}`);
+      } catch (e) {}
+    }
+    return out.join('\n');
+  },
+};
+
+ST.deck = (P, opt, fontCss) => {
+  const on = k => opt.slides.includes(k);
+  const club = P.club, T = P.totals;
+  const title = opt.title || club.name;
+  const sub = (P.company ? P.company + ' · ' : '') + ST.per(P.from, P.to);
+  const kp = (v, l) => `<div class="kp"><b>${v}</b><span>${l}</span></div>`;
+  const hb = (list, val, lab, fmt, max) => { const mx = max || Math.max(1, ...list.map(val)); return `<div class="hb">${list.map(x => `<div class="hr"><span>${esc(lab(x))}</span><div class="bar"><i style="width:${val(x) / mx * 100}%"></i></div><b>${fmt(x)}</b></div>`).join('')}</div>`; };
+  const head = (h, s) => `<div class="hd"><h2>${h}</h2>${s ? `<div class="sc">${s}</div>` : ''}</div>`;
+  const out = [];
+  if (on('cover')) out.push(`<section class="s cover"><img class="logo" src="${ST.url('logo.svg')}" alt=""><div class="cv"><div class="sc">${esc(opt.kicker || 'итоги и цифры')}</div><h1>${esc(title)}</h1><div class="per">${esc(sub)}</div></div><img class="dn" src="${ST.url('dancers.jpg')}" alt=""></section>`);
+  if (on('about')) out.push(`<section class="s">${head('О клубе', 'танцуем вместе')}<div class="cols"><div><p class="lead">${esc(opt.about || (club.name + ' — корпоративные спортивные бальные танцы: занятия для сотрудников компаний, турниры, праздники и выступления.'))}</p>
+    <div class="chips">${club.programs.map(p => `<span>${esc(p)}</span>`).join('')}</div></div>
+    <div class="kps v">${club.since ? kp(club.since.slice(0, 4), 'год первых занятий') : ''}${kp(club.trainers.length, 'тренеров')}${club.halls.length ? kp(club.halls.length, 'залов') : ''}${kp(club.clients, 'учеников')}${club.companies ? kp(club.companies, 'компаний-партнёров') : ''}</div></div></section>`);
+  if (on('kpi')) out.push(`<section class="s">${head('Цифры периода', esc(sub))}<div class="kps big">${kp(fh(T.hours), 'часов занятий')}${kp(T.lessons, 'посещений')}${kp(T.people, 'танцоров')}${kp(T.events, 'групповых занятий и событий')}${T.fests ? kp(T.fests, 'мероприятий клуба') : ''}${kp(T.trainers, 'тренеров вели занятия')}</div></section>`);
+  if (on('months') && P.months.length) {
+    const mx = Math.max(1, ...P.months.map(m => m.ind + m.grp)), ms = P.months.slice(-12);
+    out.push(`<section class="s">${head('Посещаемость', 'часы по месяцам')}<div class="mch">${ms.map(m => `<div class="mc"><em>${fh(m.ind + m.grp)}</em><div class="st"><i class="g" style="height:${m.grp / mx * 100}%"></i><i style="height:${m.ind / mx * 100}%"></i></div><span>${ST.mon(m.m)}</span><small>${m.people} чел.</small></div>`).join('')}</div>
+      <div class="lg"><span><i></i>индивидуальные</span><span><i class="g"></i>групповые</span></div></section>`);
+  }
+  if (on('types') && P.types.length) out.push(`<section class="s">${head('Виды занятий', 'часы за период')}${hb(P.types.slice(0, 8), x => x.hours, x => x.name, x => fh(x.hours) + ' ч')}</section>`);
+  if (on('trainers') && P.trainers.length) out.push(`<section class="s">${head('Тренеры', 'часы и ученики за период')}${hb(P.trainers.slice(0, 9), x => x.hours, x => x.name, x => fh(x.hours) + ' ч · ' + x.people + ' уч.')}</section>`);
+  if (on('companies') && P.companies.length) out.push(`<section class="s">${head('Компании', 'кто танцует с нами')}${hb(P.companies.slice(0, 9), x => x.hours, x => x.name, x => fh(x.hours) + ' ч · ' + x.people + ' чел.')}</section>`);
+  if (on('events') && (P.events.length || P.fests.length)) out.push(`<section class="s">${head('Мероприятия и турниры', esc(sub))}<div class="cols">
+    <div>${P.events.length ? `<div class="kps v">${P.events.slice(0, 5).map(e => kp(e.n, esc(e.name) + (e.people ? ' · ' + e.people + ' участий' : ''))).join('')}</div>` : ''}</div>
+    <div class="fl">${P.fests.slice(-6).reverse().map(f => `<div class="fi"><b>${esc(f.title)}</b><span>${fd(f.date)}${f.place ? ' · ' + esc(f.place) : ''}${f.n ? ' · ' + f.n + ' участн.' : ''}</span>${f.results.slice(0, 3).map(r => `<small>🏆 ${esc(r.name)}${r.partner ? ' — ' + esc(r.partner) : ''}: ${esc(r.result)}</small>`).join('')}</div>`).join('') || '<p class="mu">Мероприятий клуба в этот период не было</p>'}</div></div></section>`);
+  if (on('book') && P.bookings.total) { const b = P.bookings; out.push(`<section class="s">${head('Запись на тренировки', 'через приложение и Telegram-бот')}<div class="kps big">${kp(b.total, 'записей')}${kp(b.attended, 'пришли на занятие')}${b.total ? kp(Math.round(b.attended / b.total * 100) + '%', 'доходимость') : ''}${kp(b.cancelled, 'отмен и переносов')}</div></section>`); }
+  if (on('rating') && (P.rating.n || P.grades.n)) out.push(`<section class="s">${head('Оценки', 'качество занятий и прогресс')}<div class="cols">
+    <div class="kps v">${P.rating.n ? kp(fh(P.rating.avg) + ' <small>из 5</small>', 'ученики оценили занятия (' + P.rating.n + ' оценок)') : ''}${P.grades.n ? kp(fh(P.grades.total) + ' <small>из 5</small>', 'средняя оценка учеников тренерами (' + P.grades.n + ')') : ''}</div>
+    <div>${P.grades.n ? hb(P.grades.crit.filter(k => +P.grades.by[k]), k => P.grades.by[k], k => k, k => fh(P.grades.by[k]), 5) : ''}</div></div></section>`);
+  if (on('league') && P.league.length) out.push(`<section class="s">${head('Корпоративная лига', 'лучшие по баллам')}<div class="lgt">${P.league.map((x, i) => `<div><em>${i + 1}</em><b>${esc(x.name)}</b><span>${esc(x.company || '')}</span><strong>${x.points}</strong></div>`).join('')}</div></section>`);
+  if (on('team') && club.trainers.length) out.push(`<section class="s">${head('Команда', 'наши тренеры')}<div class="tm">${club.trainers.slice(0, 12).map(t => `<div><i>${esc(initials(t.name))}</i><b>${esc(t.name)}</b><span>${esc(progs(t.programs).join(' · '))}</span></div>`).join('')}</div></section>`);
+  if (on('final')) out.push(`<section class="s cover fin"><img class="logo" src="${ST.url('logo.svg')}" alt=""><div class="cv"><div class="sc">до встречи на паркете</div><h1>${esc(opt.finalTitle || 'Танцуйте с нами')}</h1><div class="per">ano.dance · corpdance.ru${club.city ? ' · ' + esc(club.city) : ''}</div>${opt.contacts ? `<div class="per">${esc(opt.contacts)}</div>` : ''}</div><img class="dn" src="${ST.url('dancers.jpg')}" alt=""></section>`);
+  const css = `${fontCss || ''}
+*{box-sizing:border-box}html,body{margin:0;background:#0B0F16;color:#F1F2F5;font-family:'Golos Text',Segoe UI,Arial,sans-serif;height:100%;overflow:hidden}
+.s{position:absolute;left:50%;top:50%;width:1280px;height:720px;margin:-360px 0 0 -640px;transform:scale(var(--k,1));background:#121721;padding:64px 72px;overflow:hidden;display:none}
+.s.on{display:block}.s::after{content:'';position:absolute;right:-40px;bottom:-30px;width:520px;height:160px;background:url(${ST.url('brush-dark.webp')}) center/contain no-repeat;opacity:.5;pointer-events:none}
+h1,h2{font-family:Foglihten,'Cormorant Unicase',Georgia,serif;font-weight:400;margin:0;line-height:1.02}
+h1{font-size:92px}h2{font-size:58px}.sc{font-family:'Eddy Mits','Marck Script',cursive;color:#C9B8FF;font-size:34px;margin-top:6px}
+.hd{margin-bottom:34px}.mu{color:#AAAEB6}.lead{font-size:26px;line-height:1.45;color:#D8DAE0;margin:0 0 24px}
+.cover{display:none;padding:80px}.cover.on{display:flex;align-items:center}.cover .cv{position:relative;z-index:2;max-width:760px}.cover .per{font-size:26px;color:#AAAEB6;margin-top:22px}
+.cover .logo{position:absolute;left:80px;top:56px;height:64px}.cover .dn{position:absolute;right:-40px;bottom:0;height:680px;opacity:.9;mask-image:linear-gradient(90deg,transparent,#000 35%);-webkit-mask-image:linear-gradient(90deg,transparent,#000 35%)}
+.cols{display:grid;grid-template-columns:1fr 1fr;gap:48px;align-items:start}
+.kps{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}.kps.v{grid-template-columns:1fr 1fr}
+.kp{background:#1D222A;border-radius:18px;padding:22px 24px;border:1px solid rgba(255,255,255,.06)}.kp b{display:block;font-family:Foglihten,'Cormorant Unicase',Georgia,serif;font-weight:400;font-size:54px;color:#C9B8FF;line-height:1}.kp b small{font-size:24px;color:#AAAEB6}.kp span{display:block;color:#AAAEB6;font-size:19px;margin-top:8px}
+.kps.big .kp b{font-size:72px}
+.chips{display:flex;flex-wrap:wrap;gap:10px}.chips span{border:1px solid rgba(201,184,255,.4);color:#C9B8FF;border-radius:30px;padding:8px 18px;font-size:20px}
+.hb{display:flex;flex-direction:column;gap:14px}.hr{display:grid;grid-template-columns:300px 1fr 190px;align-items:center;gap:18px;font-size:22px}.hr span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.hr b{text-align:right;font-weight:600}
+.cols .hr{grid-template-columns:1fr 200px 56px;font-size:20px}.bar{height:22px;background:#262C36;border-radius:12px;overflow:hidden}.bar i{display:block;height:100%;background:linear-gradient(90deg,#7C5CE6,#C9B8FF);border-radius:12px}
+.mch{display:flex;gap:14px;align-items:flex-end;height:430px}.mc{flex:1;display:flex;flex-direction:column;align-items:center;height:100%;gap:6px}.mc em{font-style:normal;color:#C9B8FF;font-size:18px}
+.mc .st{flex:1;width:100%;max-width:64px;display:flex;flex-direction:column-reverse;background:#1D222A;border-radius:10px;overflow:hidden}.mc .st i{display:block;background:#7C5CE6}.mc .st i.g{background:#C9B8FF}
+.mc span{font-size:17px;color:#D8DAE0}.mc small{font-size:14px;color:#AAAEB6}
+.lg{display:flex;gap:28px;margin-top:18px;color:#AAAEB6;font-size:18px}.lg i{display:inline-block;width:16px;height:16px;border-radius:4px;background:#7C5CE6;margin-right:8px;vertical-align:-2px}.lg i.g{background:#C9B8FF}
+.fl{display:flex;flex-direction:column;gap:12px}.fi{background:#1D222A;border-radius:14px;padding:14px 18px}.fi b{display:block;font-size:22px}.fi span{color:#AAAEB6;font-size:17px}.fi small{display:block;font-size:16px;color:#D8DAE0;margin-top:4px}
+.lgt{display:grid;grid-template-columns:1fr 1fr;gap:10px 36px}.lgt div{display:grid;grid-template-columns:44px 1fr auto;align-items:center;gap:6px 14px;background:#1D222A;border-radius:12px;padding:10px 16px}.lgt em{font-style:normal;font-family:Foglihten,Georgia,serif;font-size:30px;color:#C9B8FF;grid-row:span 2}.lgt b{font-size:20px}.lgt span{grid-column:2;color:#AAAEB6;font-size:15px}.lgt strong{grid-row:1/3;grid-column:3;font-size:26px;color:#C9B8FF}
+.tm{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}.tm div{background:#1D222A;border-radius:16px;padding:18px;text-align:center}.tm i{display:inline-flex;width:72px;height:72px;border-radius:50%;background:#3F3561;color:#fff;align-items:center;justify-content:center;font-style:normal;font-size:26px;margin-bottom:10px}.tm b{display:block;font-size:19px}.tm span{display:block;color:#AAAEB6;font-size:15px;margin-top:4px}
+.nav{position:fixed;left:0;right:0;bottom:10px;display:flex;justify-content:center;gap:10px;z-index:9;opacity:.25;transition:opacity .2s}.nav:hover{opacity:1}.nav button{background:#262C36;color:#fff;border:0;border-radius:20px;padding:6px 16px;font-size:15px;cursor:pointer}.nav span{color:#AAAEB6;padding:6px;font-size:15px}
+@media print{@page{size:1280px 720px;margin:0}html,body{height:auto;overflow:visible;background:#121721;-webkit-print-color-adjust:exact;print-color-adjust:exact}.s,.cover{display:block!important;position:relative;left:0;top:0;margin:0;transform:none;page-break-after:always;break-after:page}.cover{display:flex!important}.nav{display:none}}`;
+  const js = `var S=[].slice.call(document.querySelectorAll('.s')),i=0;function fit(){document.documentElement.style.setProperty('--k',Math.min(innerWidth/1280,innerHeight/720))}
+function show(n){i=Math.max(0,Math.min(S.length-1,n));S.forEach(function(s,j){s.classList.toggle('on',j===i)});var p=document.getElementById('pg');if(p)p.textContent=(i+1)+' / '+S.length}
+addEventListener('resize',fit);addEventListener('keydown',function(e){if(['ArrowRight','PageDown',' ','Enter'].indexOf(e.key)>=0){show(i+1);e.preventDefault()}if(['ArrowLeft','PageUp','Backspace'].indexOf(e.key)>=0){show(i-1);e.preventDefault()}if(e.key==='Home')show(0);if(e.key==='End')show(S.length-1)});
+document.addEventListener('click',function(e){if(e.target.closest('.nav'))return;show(e.clientX>innerWidth/3?i+1:i-1)});
+function fs(){var d=document.documentElement;(d.requestFullscreen||d.webkitRequestFullscreen||function(){}).call(d)}fit();show(0);`;
+  return `<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(title)}</title>
+<link rel="stylesheet" href="${'https:' + '/' + '/fonts.googleapis.com/css2?family=Golos+Text:wght@400;600&family=Cormorant+Unicase&family=Marck+Script&display=swap'}"><style>${css}</style></head><body>
+${out.join('\n')}<div class="nav"><button onclick="show(i-1)">←</button><span id="pg"></span><button onclick="show(i+1)">→</button><button onclick="fs()">⛶ Во весь экран</button></div><script>${js}<` + `/script></body></html>`;
+};
+
+VIEWS.studio = async (tab) => {
+  tab = tab || S.ui.stTab || 'deck'; S.ui.stTab = tab;
+  $('#main').innerHTML = `<div class="head"><h1>Презентации и открытки</h1></div>
+    <div class="tabs"><a data-st="deck" class="${tab === 'deck' ? 'on' : ''}">Презентация клуба</a><a data-st="card" class="${tab === 'card' ? 'on' : ''}">Открытки</a></div><div id="stb"></div>`;
+  $$('[data-st]').forEach(a => a.onclick = () => VIEWS.studio(a.dataset.st));
+  if (tab === 'deck') ST.deckView(); else { $('#stb').innerHTML = empty('Загрузка…'); try { await CL.load(true); } catch (e) {} if (S.ui.stTab === 'card' && $('#stb')) ST.cardView(); }
+};
+
+ST.deckView = () => {
+  const o = S.ui.stDeck || (S.ui.stDeck = {slides: ST.slides.map(x => x[0]), title: '', company: '', about: '', contacts: ''});
+  if (!S.ui.stPer) S.ui.stPer = {from: today().slice(0, 4) + '-01-01', to: today(), preset: 'y'};
+  const pp = periodPicker('stPer', () => ST.deckView());
+  const comps = [...new Set((S.D.clients || []).map(c => String(c.company || '').trim()).filter(Boolean))].sort();
+  $('#stb').innerHTML = `<div class="card sect stack">
+    <div class="small muted">Слайды в стиле сайта ano.dance: статистика посещений, занятий, мероприятий, турниров, записей и оценок за период + информация о клубе. Слайды без данных пропускаются. Готовую презентацию можно показать во весь экран, сохранить в PDF (Печать → «Сохранить как PDF») или скачать файлом.</div>
+    ${pp.html}
+    <div class="fg">
+      ${fld('Заголовок', inp('title', o.title, 'placeholder="' + esc((S.D.settings || {}).clubName || 'Клуб') + '"'), 'full')}
+      ${fld('Для компании', sel('company', [['', 'Весь клуб']].concat(comps.map(c => [c, c])), o.company))}
+      ${fld('Контакты на последнем слайде', inp('contacts', o.contacts, 'placeholder="+7 … · @бот · адрес"'))}
+      ${fld('Текст «О клубе»', txt('about', o.about), 'full')}
+    </div>
+    <div><b>Слайды</b><div class="st-slides">${ST.slides.map(([k, t]) => chk('sl_' + k, t, o.slides.includes(k))).join('')}</div></div>
+    <div class="row"><button class="btn pri" id="stmk">${ic('chart')}Собрать презентацию</button></div>
+  </div><div id="stout" class="sect"></div>`;
+  pp.wire($('#stb'));
+  $('#stmk').onclick = async () => {
+    const v = vals($('#stb'));
+    Object.assign(o, {title: v.title, company: v.company, about: v.about, contacts: v.contacts, slides: ST.slides.map(x => x[0]).filter(k => v['sl_' + k])});
+    if (!o.slides.length) return toast('Выберите слайды', true);
+    try {
+      const P = await call('presentData', {from: S.ui.stPer.from, to: S.ui.stPer.to, company: o.company});
+      const html = ST.deck(P, o, await ST.fonts());
+      const name = (o.title || P.club.name) + ' ' + fd(P.from) + '–' + fd(P.to);
+      $('#stout').innerHTML = `<div class="card stack"><div class="row"><b class="grow">Готово · ${html.split('<section').length - 1} слайдов</b>
+        <button class="btn" id="stfs">⛶ Показать</button><button class="btn" id="stdl">${ic('dl')}Скачать</button><button class="btn pri" id="stpr">${ic('print')}PDF / печать</button></div>
+        <iframe class="st-prev" id="stfr" title="Презентация"></iframe><div class="small muted">Листайте стрелками ← → или кликом по слайду. «Скачать» — файл HTML: откроется в любом браузере и без приложения.</div></div>`;
+      const fr = $('#stfr'); fr.srcdoc = html;
+      $('#stdl').onclick = () => saveBlob(name.replace(/[\\/:*?"<>|]/g, '_') + '.html', new Blob([html], {type: 'text/html'}));
+      $('#stpr').onclick = () => printHtml(name, html, fr);
+      $('#stfs').onclick = () => { try { const d = fr; (d.requestFullscreen || d.webkitRequestFullscreen).call(d).then(() => fr.contentWindow.focus()).catch(() => { const w = window.open('', '_blank'); if (w) { w.document.write(html); w.document.close(); } else toast('Разрешите всплывающие окна', true); }); } catch (e) { toast('Откройте «Скачать» и запустите файл', true); } };
+      fr.scrollIntoView({behavior: 'smooth', block: 'center'});
+    } catch (e) { fail(e); }
+  };
+};
+
+ST.TPL = {
+  bday: {t: '🎂 День рождения', h: 'С днём рождения!', who: 'client'},
+  invite: {t: '💌 Приглашение', h: 'Приглашаем!', who: 'fest'},
+  ny: {t: '🎄 Новый год', h: 'С Новым годом!', text: 'Пусть новый год будет полон музыки, красивых шагов и ярких выступлений!'},
+  m8: {t: '🌷 8 Марта', h: 'С 8 Марта!', text: 'Лёгкости, вдохновения и самых красивых танцев!'},
+  f23: {t: '🎖 23 Февраля', h: 'С 23 Февраля!', text: 'Уверенного ведения — на паркете и в жизни!'},
+  win: {t: '🏆 С победой', h: 'Поздравляем!', text: 'Гордимся вашим выступлением — так держать!'},
+  thx: {t: '💜 Спасибо', h: 'Спасибо!', text: 'Спасибо, что танцуете с нами!'},
+  free: {t: '✏️ Своя', h: 'Заголовок', text: ''},
+};
+ST.SIZES = {post: [1080, 1350, 'Пост 4:5'], sq: [1080, 1080, 'Квадрат'], story: [1080, 1920, 'Сторис 9:16']};
+ST.THEMES = {dark: ['Фирменная тёмная', '#121721', '#C9B8FF', '#F1F2F5', '#AAAEB6'], light: ['Светлая', '#F3F2F7', '#5B45C8', '#121721', '#5E6472'], gold: ['Праздничная', '#1a1410', '#E9C77B', '#FFF6E5', '#CDB993']};
+ST.img = src => new Promise(res => { const i = new Image(); i.crossOrigin = 'anonymous'; i.onload = () => res(i); i.onerror = () => res(null); i.src = src; });
+ST.wrap = (ctx, text, maxW) => {
+  const out = [];
+  String(text || '').split('\n').forEach(par => { let line = ''; par.split(/\s+/).forEach(w => { const t = line ? line + ' ' + w : w; if (ctx.measureText(t).width > maxW && line) { out.push(line); line = w; } else line = t; }); out.push(line); });
+  return out;
+};
+ST.fit = (ctx, text, font, size, maxW, minSize) => { let s = size; do { ctx.font = font.replace('%', s + 'px'); if (ctx.measureText(text).width <= maxW) break; s -= 4; } while (s > (minSize || 30)); return s; };
+ST.draw = async (cv, c, imgs) => {
+  const [W, H] = ST.SIZES[c.size] || ST.SIZES.post, th = ST.THEMES[c.theme] || ST.THEMES.dark;
+  cv.width = W; cv.height = H;
+  const x = cv.getContext('2d');
+  x.fillStyle = th[1]; x.fillRect(0, 0, W, H);
+  const g = x.createRadialGradient(W * .85, H * .1, 10, W * .85, H * .1, W * .9); g.addColorStop(0, c.theme === 'light' ? 'rgba(124,92,230,.18)' : c.theme === 'gold' ? 'rgba(233,199,123,.22)' : 'rgba(124,92,230,.35)'); g.addColorStop(1, 'rgba(0,0,0,0)'); x.fillStyle = g; x.fillRect(0, 0, W, H);
+  if (imgs.dn && c.photo !== false) {
+    const ih = H * (c.size === 'sq' ? .62 : .55), iw = imgs.dn.width / imgs.dn.height * ih;
+    const oc = document.createElement('canvas'); oc.width = W; oc.height = Math.round(ih); const ox = oc.getContext('2d');
+    ox.drawImage(imgs.dn, (W - iw) / 2, 0, iw, ih); ox.globalCompositeOperation = 'destination-in';
+    const gm = ox.createLinearGradient(0, 0, 0, ih); gm.addColorStop(0, 'rgba(0,0,0,0)'); gm.addColorStop(.4, 'rgba(0,0,0,1)'); ox.fillStyle = gm; ox.fillRect(0, 0, W, ih);
+    const gr = ox.createRadialGradient(W / 2, ih * .6, ih * .3, W / 2, ih * .6, W * .55); gr.addColorStop(0, 'rgba(0,0,0,1)'); gr.addColorStop(1, 'rgba(0,0,0,0)'); ox.fillStyle = gr; ox.fillRect(0, 0, W, ih);
+    x.save(); x.globalAlpha = c.theme === 'light' ? .9 : .95; if (c.theme === 'light') x.globalCompositeOperation = 'multiply'; x.drawImage(oc, 0, H - ih); x.restore();
+  }
+  if (imgs.br) { x.save(); x.globalAlpha = c.theme === 'light' ? .18 : .22; const bw = W * .8, bh = imgs.br.height / imgs.br.width * bw; x.drawImage(imgs.br, W * .1, 64 + 84 + 40, bw, bh); x.restore(); }
+  if (imgs.logo) { const lh = 84, lw = imgs.logo.width / imgs.logo.height * lh || lh; x.drawImage(imgs.logo, (W - lw) / 2, 64, lw, lh); }
+  x.textAlign = 'center'; x.textBaseline = 'alphabetic';
+  let y = 64 + 84 + 120;
+  const disp = '% Foglihten, "Cormorant Unicase", Georgia, serif', scr = '% "Eddy Mits", "Marck Script", cursive';
+  if (c.kicker) { x.fillStyle = th[4]; x.font = '600 30px "Golos Text", "Segoe UI", Arial, sans-serif'; x.fillText(c.kicker.toUpperCase(), W / 2, y); y += 80; }
+  const hs = ST.fit(x, c.title, scr, 140, W - 140, 60);
+  x.fillStyle = th[2]; x.font = scr.replace('%', hs + 'px'); x.fillText(c.title, W / 2, y + hs * .4); y += hs * .4 + 40;
+  if (c.name) { x.fillStyle = th[3]; const ns = ST.fit(x, c.name, disp, 96, W - 160, 44); x.font = disp.replace('%', ns + 'px'); x.fillText(c.name, W / 2, y + ns); y += ns + 40; }
+  if (c.info) { x.fillStyle = th[2]; x.font = '600 38px "Golos Text", "Segoe UI", Arial, sans-serif'; ST.wrap(x, c.info, W - 200).slice(0, 3).forEach(l => { y += 50; x.fillText(l, W / 2, y); }); y += 20; }
+  if (c.text) { x.fillStyle = th[3]; x.font = '34px "Golos Text", "Segoe UI", Arial, sans-serif'; ST.wrap(x, c.text, W - 220).slice(0, c.size === 'story' ? 9 : 6).forEach(l => { y += 48; x.fillText(l, W / 2, y); }); }
+  x.fillStyle = th[4]; x.font = '28px "Golos Text", "Segoe UI", Arial, sans-serif';
+  x.fillStyle = c.theme === 'light' ? 'rgba(18,23,33,.65)' : 'rgba(0,0,0,.45)'; const fy = H - 70; x.fillRect(0, fy - 50, W, 120);
+  x.fillStyle = '#fff'; x.fillText(c.footer || ((S.D.settings || {}).clubName || '') + ' · ano.dance', W / 2, fy + 10);
+};
+ST.cardView = () => {
+  const c = S.ui.stCard || (S.ui.stCard = {tpl: 'bday', size: 'post', theme: 'dark', title: ST.TPL.bday.h, text: '', name: '', info: '', kicker: '', clientId: '', festId: '', photo: true});
+  if (!c._init) { c._init = 1; ST.fillBday(c); }
+  const fests = ((S.C && S.C.fests) || []).filter(f => f.status !== 'cancelled').slice(0, 40);
+  const cls = (S.D.clients || []).filter(x => x.active).slice().sort((a, b) => a.name.localeCompare(b.name));
+  const td = today().slice(5);
+  const bdays = cls.filter(x => x.birthDate && x.birthDate.slice(5) >= td).sort((a, b) => a.birthDate.slice(5).localeCompare(b.birthDate.slice(5))).slice(0, 6);
+  $('#stb').innerHTML = `<div class="st-grid sect"><div class="card stack">
+    <div class="st-tpl">${Object.keys(ST.TPL).map(k => `<span class="chip ${c.tpl === k ? 'on' : ''}" data-tp="${k}">${ST.TPL[k].t}</span>`).join('')}</div>
+    <div class="fg">
+      ${c.tpl === 'invite' ? fld('Мероприятие', sel('festId', [['', '— выберите —']].concat(fests.map(f => [f.id, fd(f.date) + ' · ' + f.title])), c.festId), 'full')
+        : fld('Кому (ученик)', sel('clientId', [['', '— без имени / всем —']].concat(cls.map(x => [x.id, x.name])), c.clientId), 'full')}
+      ${c.tpl === 'bday' && bdays.length ? `<div class="full small muted">Ближайшие дни рождения: ${bdays.map(b => `<a class="click" data-bd="${b.id}">${esc(b.name)} (${fd(b.birthDate).slice(0, 5)})</a>`).join(', ')}</div>` : ''}
+      ${fld('Надпись сверху', inp('kicker', c.kicker, 'placeholder="необязательно"'))}
+      ${fld('Заголовок', inp('title', c.title))}
+      ${fld('Имя / название', inp('name', c.name), 'full')}
+      ${c.tpl === 'invite' ? fld('Когда и где', inp('info', c.info), 'full') : ''}
+      ${fld('Текст', txt('text', c.text), 'full')}
+      ${fld('Формат', sel('size', Object.keys(ST.SIZES).map(k => [k, ST.SIZES[k][2]]), c.size))}
+      ${fld('Оформление', sel('theme', Object.keys(ST.THEMES).map(k => [k, ST.THEMES[k][0]]), c.theme))}
+      <div class="full">${chk('photo', 'Фото танцоров', c.photo !== false)}</div>
+    </div>
+    <div class="row"><button class="btn pri" id="stpng">${ic('dl')}Скачать картинку</button><button class="btn" id="sttg">${ic('tgplane')}Отправить в Telegram</button></div>
+    <div class="small muted" id="stnote"></div>
+  </div><div><canvas class="st-cv" id="stcv"></canvas></div></div>`;
+  $$('[data-tp]').forEach(a => a.onclick = () => { const k = a.dataset.tp, T = ST.TPL[k]; Object.assign(c, {tpl: k, title: T.h, text: T.text !== undefined ? T.text : c.text, kicker: '', info: k === 'invite' ? c.info : ''}); if (k === 'bday') ST.fillBday(c); if (k === 'invite') ST.fillFest(c); ST.cardView(); });
+  $$('[data-bd]').forEach(a => a.onclick = () => { c.clientId = a.dataset.bd; ST.fillBday(c); ST.cardView(); });
+  const box = $('#stb');
+  const sync = () => { const v = vals(box); const prevC = c.clientId, prevF = c.festId;
+    if ((v.clientId !== undefined && v.clientId !== prevC) || (v.festId !== undefined && v.festId !== prevF)) Object.assign(c, {size: v.size, theme: v.theme, photo: !!v.photo}); else Object.assign(c, {kicker: v.kicker, title: v.title, name: v.name, text: v.text, size: v.size, theme: v.theme, photo: !!v.photo}); if (v.info !== undefined) c.info = v.info;
+    if (v.clientId !== undefined && v.clientId !== prevC) { c.clientId = v.clientId; if (c.tpl === 'bday') ST.fillBday(c); else { const p = S.m.clients[c.clientId]; c.name = p ? (p.name.split(' ')[1] || p.name) : ''; } return ST.cardView(); }
+    if (v.festId !== undefined && v.festId !== prevF) { c.festId = v.festId; ST.fillFest(c); return ST.cardView(); }
+    ST.render(); };
+  $$('input,select,textarea', box).forEach(e => { e.oninput = sync; e.onchange = sync; });
+  $('#stpng').onclick = async () => { const u = await ST.png(); if (u) saveBlob('Открытка ' + (c.name || c.title).replace(/[\\/:*?"<>|]/g, '_') + '.png', b64Blob(u.split(',')[1], 'image/png')); };
+  $('#sttg').onclick = () => ST.send(c);
+  ST.render();
+};
+ST.fillBday = c => { const p = S.m.clients[c.clientId]; const first = p ? (p.name.split(' ')[1] || p.name) : ''; c.name = first; c.title = ST.TPL.bday.h; c.text = String(((S.C || {}).settings || {}).bday_text || 'Желаем лёгкости в каждом шаге и радости от танца!').replace(/С днём рождения,?\s*\{имя\}!?\s*/i, '').replace(/\{имя\}/g, first).replace(/🎉/g, '').trim(); };
+ST.fillFest = c => { const f = ((S.C && S.C.fests) || []).find(x => x.id === c.festId); if (!f) return; c.name = f.title; c.info = [wd(f.date) + ', ' + fd(f.date) + (f.time ? ' в ' + f.time : ''), f.place].filter(Boolean).join(' · '); c.text = (f.about ? String(f.about).slice(0, 220) + '\n' : '') + 'Регистрация — в приложении клуба и Telegram-боте.'; c.kicker = ((S.C && S.C.kinds) || {})[f.kind] || ''; };
+ST.imgs = null;
+ST.render = async () => {
+  const cv = $('#stcv'); if (!cv) return;
+  if (!ST.imgs) { try { if (typeof loadBrandFonts === 'function') await loadBrandFonts(); await document.fonts.ready; } catch (e) {} const [dn, br, logo] = await Promise.all([ST.img(ST.url('dancers.jpg')), ST.img(ST.url('brush.webp')), ST.img(ST.url('logo.svg'))]); ST.imgs = {dn, br, logo}; }
+  await ST.draw(cv, S.ui.stCard, ST.imgs);
+};
+ST.png = async () => {
+  const cv = $('#stcv');
+  try { return cv.toDataURL('image/png'); } catch (e) {
+    ST.imgs = {}; await ST.draw(cv, S.ui.stCard, ST.imgs); try { toast('Картинки сайта недоступны — открытка без фото'); return cv.toDataURL('image/png'); } catch (e2) { fail(e2); return null; }
+  }
+};
+ST.send = async c => {
+  const opts = [];
+  if (c.tpl === 'invite' && c.festId) opts.push(['fest', 'Участникам мероприятия']);
+  if (c.clientId) opts.push(['client', 'Ученику: ' + cName(c.clientId)]);
+  opts.push(['clients', 'Выбрать учеников…']);
+  const cls = (S.D.clients || []).filter(x => x.active).slice().sort((a, b) => a.name.localeCompare(b.name)).map(x => [x.id, x.name, x.company || '']);
+  const bg = modal('Отправить открытку в Telegram', `<div class="fg">${fld('Кому', sel('to', opts, opts[0][0]), 'full')}
+    <div class="full" data-cl style="display:${opts[0][0] === 'clients' ? '' : 'none'}">${fld('Ученики', multi('clientIds', cls, [], 'Найти ученика…'), 'full')}</div>
+    ${fld('Подпись к картинке', txt('caption', ''), 'full')}<div class="full small muted">Получат те, кто подключил Telegram-бот клуба и не выключил уведомления.</div></div>`, [
+    {t: 'Отмена'},
+    {t: ic('tgplane') + 'Отправить', cls: 'pri', fn: async m => {
+      const v = vals(m); const png = await ST.png(); if (!png) return false;
+      const n = v.to === 'clients' ? [].concat(v.clientIds || []).length : v.to === 'fest' ? '' : 1;
+      if (v.to === 'clients' && !n) { toast('Выберите учеников', true); return false; }
+      if (!(await askYes('Отправить открытку' + (n ? ' (' + n + ' чел.)' : ' участникам') + '?'))) return false;
+      const r = await call('sendCard', {to: v.to, clientId: c.clientId, festId: c.festId, clientIds: v.clientIds, png, caption: v.caption});
+      toast('Отправлено: ' + r.sent + (r.noBot ? ' · без бота: ' + r.noBot : ''));
+    }}], {wide: true});
+  wireMulti(bg);
+  $('[name=to]', bg).onchange = e => { $('[data-cl]', bg).style.display = e.target.value === 'clients' ? '' : 'none'; };
+};
 </script>

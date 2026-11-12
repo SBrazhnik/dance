@@ -22,6 +22,7 @@ const CLUB_DEFAULTS = {
   bday_text: 'С днём рождения, {имя}! 🎉 Желаем лёгкости в каждом шаге, ярких выступлений и радости от танца. Ждём вас на паркете!',
   call_text: 'Здравствуйте, {имя}! Мы скучаем 💃 Давно не виделись на паркете. Хотите, подберём удобное время занятия? Ответьте на это сообщение или запишитесь через «📅 Расписание».',
   pay_link: '', pay_name: '', pay_acc: '', pay_bank: '', pay_bic: '', pay_corr: '', pay_inn: '', pay_kpp: '',
+  grade_crit: 'Техника и работа стоп, Осанка и рамка, Музыкальность и ритм, Работа в паре, Артистизм и подача, Старание и прогресс', bot_grade: 'true',
   exp_cats: 'Аренда помещения, Зарплата сотрудников, Реклама, Костюмы и инвентарь, Налоги и банк, Прочее',
 };
 const FEST_KINDS = { party: 'Корпоративный вечер', tournament: 'Турнир', show: 'Выступление', master: 'Мастер-класс', other: 'Другое' };
@@ -545,6 +546,194 @@ function ratings_(p) {
     .sort((a, b) => b.avg - a.avg || b.n - a.n);
   const all = list.length ? Math.round(list.reduce((a, f) => a + +f.score, 0) / list.length * 10) / 10 : 0;
   return { from, to, total: list.length, avg: all, trainers, low: list.filter(f => +f.score <= 3).sort((a, b) => b.date.localeCompare(a.date)).slice(0, 20) };
+}
+
+// ---------------------------------------------------------------------------
+// Оценки учеников тренером: по критериям 1–5, общая — среднее по выставленным критериям
+// ---------------------------------------------------------------------------
+function gradeCrit_() { return listOf_(clubSettings_().grade_crit).slice(0, 12); }
+function gradeParse_(g) { let sc = {}; try { sc = JSON.parse(g.scores || '{}') || {}; } catch (e) { sc = {}; } return Object.assign({}, g, { scores: sc, total: +g.total || 0 }); }
+function gradeAvg_(list, crit) {
+  const by = {}; crit.forEach(c => { const v = list.map(g => +g.scores[c]).filter(x => x > 0); by[c] = v.length ? Math.round(v.reduce((a, b) => a + b, 0) / v.length * 10) / 10 : 0; });
+  const t = list.map(g => g.total).filter(x => x > 0);
+  return { total: t.length ? Math.round(t.reduce((a, b) => a + b, 0) / t.length * 10) / 10 : 0, by, n: list.length };
+}
+/** Оценки ученика (clientId) или выставленные тренером (trainerId) + оценки занятий от учеников. */
+function gradesOf_(p) {
+  const crit = gradeCrit_();
+  const list = tbl_('grades').rows.filter(g => p.clientId ? g.clientId === p.clientId : g.trainerId === p.trainerId).map(gradeParse_)
+    .sort((a, b) => String(b.date).localeCompare(String(a.date)) || String(b.createdAt).localeCompare(String(a.createdAt)));
+  const crAll = crit.concat([].concat(...list.map(g => Object.keys(g.scores))).filter((c, i, a) => crit.indexOf(c) < 0 && a.indexOf(c) === i));
+  const fb = tbl_('feedback').rows.filter(f => +f.score && (p.clientId ? f.clientId === p.clientId : f.trainerId === p.trainerId))
+    .sort((a, b) => String(b.date).localeCompare(String(a.date)));
+  const fbAvg = fb.length ? Math.round(fb.reduce((a, f) => a + +f.score, 0) / fb.length * 10) / 10 : 0;
+  return { crit, list: list.slice(0, 200), avg: gradeAvg_(list, crAll), recent: gradeAvg_(list.slice(0, 5), crAll),
+    fb: { avg: fbAvg, n: fb.length, list: fb.slice(0, 30).map(f => ({ date: f.date, score: +f.score, comment: f.comment || '', trainerName: f.trainerName, clientName: f.clientName })) } };
+}
+function gradesApi_(user, p) {
+  if (user.role === 'client') return gradesOf_({ clientId: user.clientId });
+  if (p.trainerId) {
+    if (user.role === 'trainer' && p.trainerId !== user.trainerId) throw new Error('Нет доступа');
+    return gradesOf_({ trainerId: p.trainerId });
+  }
+  if (!canSeeClient_(user, p.clientId)) throw new Error('Нет доступа к ученику');
+  return gradesOf_({ clientId: p.clientId });
+}
+function saveGrade_(user, p) {
+  const old = p.id ? must_('grades', p.id, 'Оценка') : null;
+  if (old && user.role === 'trainer' && old.trainerId !== user.trainerId) throw new Error('Можно менять только свои оценки');
+  const lesson = p.lessonId ? find_('lessons', p.lessonId) : null;
+  const cid = (old && old.clientId) || (lesson && lesson.clientId) || p.clientId;
+  const c = must_('clients', cid, 'Ученик');
+  let tid = user.role === 'trainer' ? user.trainerId : (p.trainerId || (old && old.trainerId) || (lesson && lesson.trainerId));
+  if (!tid) throw new Error('Выберите тренера');
+  must_('trainers', tid, 'Тренер');
+  if (user.role === 'trainer' && !canSeeClient_(user, cid)) throw new Error('Это не ваш ученик');
+  if (user.role === 'trainer' && lesson && lesson.trainerId !== user.trainerId) throw new Error('Это занятие другого тренера');
+  const sc = {}; const src = p.scores || {};
+  Object.keys(src).forEach(k => { const v = Math.round(+src[k]); if (v >= 1 && v <= 5) sc[String(k).slice(0, 60)] = v; });
+  const vals = Object.keys(sc).map(k => sc[k]);
+  if (!vals.length) throw new Error('Поставьте оценку хотя бы по одному пункту');
+  const total = Math.round(vals.reduce((a, b) => a + b, 0) / vals.length * 10) / 10;
+  const d = { date: isDate_(p.date) ? p.date : (lesson ? lesson.date : today_()), clientId: cid, clientName: c.name, trainerId: tid, trainerName: nameOf_('trainers', tid),
+    lessonId: lesson ? lesson.id : (old ? old.lessonId : ''), scores: JSON.stringify(sc), total, comment: String(p.comment || '').slice(0, 1000) };
+  const dup = !old && lesson && tbl_('grades').rows.find(g => g.lessonId === lesson.id && g.trainerId === tid);
+  let id;
+  if (old || dup) { id = (old || dup).id; update_('grades', id, d); }
+  else { d.createdBy = user.name; id = insert_('grades', d); }
+  if (!old && !dup && p.notify !== false && isOn_(clubSettings_().bot_grade)) {
+    try {
+      const txt = '📝 <b>' + tgEsc_(d.trainerName) + '</b> оценил(а) занятие ' + tgEsc_(ruDate_(d.date)) + ': <b>' + String(total).replace('.', ',') + ' из 5</b>\n'
+        + Object.keys(sc).map(k => '• ' + tgEsc_(k) + ': ' + '★'.repeat(sc[k]) + '☆'.repeat(5 - sc[k])).join('\n') + (d.comment ? '\n\n💬 ' + tgEsc_(d.comment) : '');
+      tgNotify_('client', cid, txt, null, null, null, true);
+    } catch (e) { /* без бота */ }
+  }
+  return id;
+}
+function deleteGrade_(user, p) {
+  const g = must_('grades', p.id, 'Оценка');
+  if (user.role === 'trainer' && g.trainerId !== user.trainerId) throw new Error('Можно удалять только свои оценки');
+  del_('grades', g.id);
+  return true;
+}
+function saveGradeCrit_(user, p) {
+  const list = String(p.crit || '').split(/[,\n]/).map(x => x.trim()).filter(Boolean).slice(0, 12);
+  if (!list.length) throw new Error('Нужен хотя бы один критерий');
+  setSetting_('grade_crit', list.join(', '));
+  if ('bot_grade' in p) setSetting_('bot_grade', p.bot_grade ? 'true' : 'false');
+  return gradeCrit_();
+}
+/** Сводка оценок учеников по тренерам за период (для «Оценки»). */
+function gradesSummary_(p) {
+  const to = isDate_(p && p.to) ? p.to : today_(), from = isDate_(p && p.from) ? p.from : addDays_(to, -90);
+  const crit = gradeCrit_();
+  const list = tbl_('grades').rows.filter(g => g.date >= from && g.date <= to).map(gradeParse_);
+  const by = {};
+  list.forEach(g => { (by[g.trainerId] = by[g.trainerId] || { id: g.trainerId, name: g.trainerName, list: [] }).list.push(g); });
+  const trainers = Object.keys(by).map(k => Object.assign({ id: k, name: by[k].name }, gradeAvg_(by[k].list, crit))).sort((a, b) => b.n - a.n);
+  const cl = {};
+  list.forEach(g => { (cl[g.clientId] = cl[g.clientId] || { id: g.clientId, name: g.clientName, list: [] }).list.push(g); });
+  const clients = Object.keys(cl).map(k => Object.assign({ id: k, name: cl[k].name }, gradeAvg_(cl[k].list, crit))).sort((a, b) => b.total - a.total || b.n - a.n);
+  return { crit, from, to, all: gradeAvg_(list, crit), trainers, clients, botGrade: isOn_(clubSettings_().bot_grade) };
+}
+
+// ---------------------------------------------------------------------------
+// Презентация клуба: статистика за период (можно по одной компании)
+// ---------------------------------------------------------------------------
+function presentData_(user, p) {
+  p = p || {};
+  const to = isDate_(p.to) ? p.to : today_(), from = isDate_(p.from) ? p.from : addDays_(to, -365);
+  const comp = String(p.company || '').trim();
+  const CL = {}; tbl_('clients').rows.forEach(c => { CL[c.id] = c; });
+  const inComp = cid => !comp || (CL[cid] && companyOf_(CL[cid]) === comp);
+  const r1 = x => Math.round(x * 10) / 10;
+  const lessons = tbl_('lessons').rows.filter(l => l.date >= from && l.date <= to && inComp(l.clientId));
+  const months = {}, trainers = {}, companies = {}, types = {}, people = {};
+  lessons.forEach(l => {
+    const m = months[l.date.slice(0, 7)] || (months[l.date.slice(0, 7)] = { m: l.date.slice(0, 7), ind: 0, grp: 0, n: 0, people: {} });
+    if (l.eventId) m.grp += +l.hours || 0; else m.ind += +l.hours || 0;
+    m.n++; m.people[l.clientId] = 1; people[l.clientId] = 1;
+    const t = trainers[l.trainerId] || (trainers[l.trainerId] = { name: l.trainerName, hours: 0, people: {} });
+    t.hours += +l.hours || 0; t.people[l.clientId] = 1;
+    const cn = CL[l.clientId] ? companyOf_(CL[l.clientId]) || 'Частные ученики' : 'Частные ученики';
+    const co = companies[cn] || (companies[cn] = { name: cn, hours: 0, people: {} });
+    co.hours += +l.hours || 0; co.people[l.clientId] = 1;
+    const ty = typeOf_(l.eventId ? 'group' : (l.type || 'ind'));
+    const tn = l.eventId ? 'Групповые' : (ty.name || 'Индивидуальные');
+    types[tn] = (types[tn] || 0) + (+l.hours || 0);
+  });
+  const hours = lessons.reduce((a, l) => a + (+l.hours || 0), 0);
+  const evs = tbl_('events').rows.filter(e => e.date >= from && e.date <= to && (!comp || ids_(e.clientIds).some(inComp)));
+  const evByType = {};
+  evs.forEach(e => { const t = typeOf_(e.type); const k = t.name || e.type; (evByType[k] = evByType[k] || { name: k, kind: t.kind, color: t.color, n: 0, people: 0 }); evByType[k].n++; evByType[k].people += ids_(e.clientIds).filter(inComp).length; });
+  const regs = tbl_('regs').rows.filter(r => r.status !== 'cancelled' && inComp(r.clientId));
+  const fests = tbl_('fests').rows.filter(f => f.date >= from && f.date <= to).map(f => {
+    const rr = regs.filter(r => r.festId === f.id);
+    return { title: f.title, kind: FEST_KINDS[f.kind] || f.kind || '', date: f.date, place: f.place || '', n: rr.length,
+      results: rr.filter(r => r.result).map(r => ({ name: r.clientName, partner: r.partnerName || '', result: r.result, points: +r.points || 0 })).slice(0, 8) };
+  }).filter(f => !comp || f.n).sort((a, b) => a.date.localeCompare(b.date));
+  const SL = {}; tbl_('slots').rows.forEach(s => { SL[s.id] = s; });
+  const bks = tbl_('bookings').rows.filter(b => SL[b.slotId] && SL[b.slotId].date >= from && SL[b.slotId].date <= to && inComp(b.clientId));
+  const bk = { total: bks.length, attended: bks.filter(b => b.status === 'attended').length, missed: bks.filter(b => b.status === 'missed').length,
+    cancelled: bks.filter(b => b.status === 'cancelled' || b.status === 'declined').length };
+  const fb = tbl_('feedback').rows.filter(f => f.date >= from && f.date <= to && +f.score && inComp(f.clientId));
+  const crit = gradeCrit_();
+  const gr = tbl_('grades').rows.filter(g => g.date >= from && g.date <= to && inComp(g.clientId)).map(gradeParse_);
+  const aw = {}; tbl_('awards').rows.filter(a => a.date >= from && a.date <= to && inComp(a.clientId)).forEach(a => { (aw[a.clientId] = aw[a.clientId] || { name: a.clientName, points: 0, company: CL[a.clientId] ? companyOf_(CL[a.clientId]) : '' }).points += +a.points || 0; });
+  const S = settings_();
+  const trAct = tbl_('trainers').rows.filter(t => t.active);
+  let halls = [];
+  try { halls = hallsList_().filter(h => h.active).map(h => ({ name: h.name, area: h.area, capacity: h.capacity })); } catch (e) { halls = []; }
+  const allLess = tbl_('lessons').rows;
+  const since = allLess.reduce((a, l) => (l.date && (!a || l.date < a) ? l.date : a), '');
+  const clAct = tbl_('clients').rows.filter(c => c.active && inComp(c.id));
+  return {
+    from, to, company: comp,
+    club: { name: clubName_(), city: S.city || '', director: S.director || '', since, site: 'ano.dance',
+      trainers: trAct.map(t => ({ name: t.name, programs: String(t.programs || t.spec || '') })), halls,
+      clients: clAct.length, companies: Object.keys(clAct.reduce((a, c) => { const k = companyOf_(c); if (k) a[k] = 1; return a; }, {})).length,
+      programs: tbl_('dict').rows.filter(d => d.list === 'program' && d.active !== false).sort((a, b) => (+a.order || 99) - (+b.order || 99)).map(d => d.name) },
+    totals: { hours: r1(hours), lessons: lessons.length, people: Object.keys(people).length, events: evs.length, fests: fests.length, trainers: Object.keys(trainers).length },
+    months: Object.keys(months).sort().map(k => ({ m: k, ind: r1(months[k].ind), grp: r1(months[k].grp), n: months[k].n, people: Object.keys(months[k].people).length })),
+    types: Object.keys(types).map(k => ({ name: k, hours: r1(types[k]) })).sort((a, b) => b.hours - a.hours),
+    trainers: Object.keys(trainers).map(k => ({ id: k, name: trainers[k].name, hours: r1(trainers[k].hours), people: Object.keys(trainers[k].people).length })).sort((a, b) => b.hours - a.hours),
+    companies: comp ? [] : Object.keys(companies).map(k => ({ name: k, hours: r1(companies[k].hours), people: Object.keys(companies[k].people).length })).sort((a, b) => b.hours - a.hours),
+    events: Object.keys(evByType).map(k => evByType[k]).sort((a, b) => b.n - a.n), fests, bookings: bk,
+    rating: { avg: fb.length ? r1(fb.reduce((a, f) => a + +f.score, 0) / fb.length) : 0, n: fb.length },
+    grades: Object.assign({ crit }, gradeAvg_(gr, crit)),
+    league: Object.keys(aw).map(k => aw[k]).sort((a, b) => b.points - a.points).slice(0, 10),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Открытки: отправка картинки в Telegram ученику или участникам мероприятия
+// ---------------------------------------------------------------------------
+function tgPhoto_(chatId, blob, caption) {
+  const token = tgToken_();
+  if (!token) throw new Error('Бот не подключён');
+  const r = UrlFetchApp.fetch('https://api.telegram.org/bot' + token + '/sendPhoto', { method: 'post', muteHttpExceptions: true,
+    payload: { chat_id: String(chatId), caption: String(caption || '').slice(0, 1000), parse_mode: 'HTML', photo: blob } });
+  const j = parseJson_(r.getContentText(), {}) || {};
+  return !!j.ok;
+}
+function sendCard_(user, p) {
+  if (!clubCanTg_()) throw new Error('Сначала подключите Telegram-бота');
+  const m = String(p.png || '').match(/^data:image\/(png|jpeg);base64,(.+)$/);
+  if (!m) throw new Error('Нет картинки');
+  const blob = Utilities.newBlob(Utilities.base64Decode(m[2]), 'image/' + m[1], 'card.' + (m[1] === 'png' ? 'png' : 'jpg'));
+  let cids = [];
+  if (p.to === 'client') cids = [must_('clients', p.clientId, 'Ученик').id];
+  else if (p.to === 'fest') { must_('fests', p.festId, 'Мероприятие'); cids = tbl_('regs').rows.filter(r => r.festId === p.festId && r.status !== 'cancelled').map(r => r.clientId); }
+  else if (p.to === 'clients') cids = [].concat(p.clientIds || []);
+  else throw new Error('Кому отправить?');
+  cids = cids.filter((c, i, a) => c && a.indexOf(c) === i).slice(0, 300);
+  let n = 0, miss = 0; const seen = {};
+  cids.forEach(cid => {
+    const chats = tgChats_('client', cid, true);
+    if (!chats.length) { miss++; return; }
+    chats.forEach(r => { if (seen[r.chatId]) return; seen[r.chatId] = 1; if (tgPhoto_(r.chatId, blob, tgEsc_(p.caption || ''))) n++; });
+  });
+  return { sent: n, noBot: miss, total: cids.length };
 }
 
 // ---------------------------------------------------------------------------
@@ -1422,7 +1611,7 @@ function clubSetCommands_() {
 }
 
 const CLUB_HANDLER_TABS = {
-  clubLoad: '*', renewals: ['renew'], renewRemind: ['renew'], savePay: ['renew'], lost: ['lost'], lostCall: ['lost'], ratings: ['rate'],
+  clubLoad: '*', renewals: ['renew'], renewRemind: ['renew'], savePay: ['renew'], lost: ['lost'], lostCall: ['lost'], ratings: ['rate'], saveGradeCrit: ['rate'],
   finance: ['money'], saveExpense: ['money'], deleteExpense: ['money'], shareCreate: ['hr'], shareOff: ['hr'],
   saveFest: ['fests'], deleteFest: ['fests'], saveReg: ['fests'], deleteReg: ['fests'], festInvite: ['fests'], festResults: ['fests'],
   substitute: ['subst'], clubBotSave: ['bot'], clubTickNow: ['bot'],
@@ -1442,7 +1631,13 @@ function clubHandlers_() {
     savePay: { roles: A, write: true, fn: savePay_ },
     lost: { roles: A, fn: (u, p) => lost_(p.days) },
     lostCall: { roles: A, write: true, fn: lostCall_ },
-    ratings: { roles: A, fn: (u, p) => ratings_(p) },
+    ratings: { roles: A, fn: (u, p) => Object.assign(ratings_(p), { grades: gradesSummary_(p) }) },
+    grades: { roles: ['admin', 'manager', 'trainer', 'client'], fn: gradesApi_ },
+    saveGrade: { roles: ['admin', 'manager', 'trainer'], write: true, fn: saveGrade_ },
+    deleteGrade: { roles: ['admin', 'manager', 'trainer'], write: true, fn: deleteGrade_ },
+    saveGradeCrit: { roles: A, write: true, fn: saveGradeCrit_ },
+    presentData: { roles: A, fn: presentData_ },
+    sendCard: { roles: A, write: true, fn: sendCard_ },
     finance: { roles: A, fn: (u, p) => finance_(p) },
     saveExpense: { roles: A, write: true, fn: saveExpense_ },
     deleteExpense: { roles: A, write: true, fn: (u, p) => del_('expenses', must_('expenses', p.id, 'Расход').id) },
