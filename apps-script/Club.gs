@@ -230,7 +230,7 @@ function clubCallback_(cq) {
       const who = mine.map(r => r.kind === 'trainer' && r.refId === sl.trainerId ? { role: 'trainer', trainerId: r.refId, name: nameOf_('trainers', r.refId) }
         : r.kind === 'user' && U[r.refId] && U[r.refId].active && (U[r.refId].role === 'admin' || U[r.refId].role === 'manager') ? U[r.refId] : null).filter(Boolean)[0];
       if (!who) return tgAnswer_(cq, 'Подтверждать может тренер этого занятия или менеджер');
-      try { bookingDecide_(b.id, d[0] === 'ba', who.name || who.login, ''); }
+      try { _auditWho = { id: who.id || '', role: who.role, via: 'Telegram' }; bookingDecide_(b.id, d[0] === 'ba', who.name || who.login, ''); }
       catch (e) { tgAnswer_(cq, e.message); return tgEdit_(cq, { text: tgEsc_(cq.message.text || '') + '\n\nℹ️ ' + tgEsc_(e.message) }); }
       tgAnswer_(cq, d[0] === 'ba' ? '✅ Подтверждено, ученику отправлено сообщение' : 'Заявка отклонена, ученик получил сообщение');
       if (_askClosed[String(cq.message.chat.id) + ':' + cq.message.message_id]) return; // сообщения у всех уже обновлены
@@ -364,6 +364,7 @@ function loginByCode_(p) {
 // Периодические задачи бота: каждые ~10 минут (из botPoll) и раз в день (из botDailyRun_)
 // ---------------------------------------------------------------------------
 function clubTick_() {
+  try { presenceSweep_(); } catch (e) { /* не важно */ }
   const props = PropertiesService.getScriptProperties();
   const last = Number(props.getProperty('clubTick') || 0);
   if (Date.now() - last < 9 * 60 * 1000) return;
@@ -687,7 +688,36 @@ function presentData_(user, p) {
   const allLess = tbl_('lessons').rows;
   const since = allLess.reduce((a, l) => (l.date && (!a || l.date < a) ? l.date : a), '');
   const clAct = tbl_('clients').rows.filter(c => c.active && inComp(c.id));
+  // залы: загрузка за период (расписание + аренда), рабочее окно 9:00–22:00
+  const days = Math.max(1, Math.round((new Date(to + 'T12:00:00Z') - new Date(from + 'T12:00:00Z')) / 864e5) + 1);
+  let hallsAll = []; try { hallsAll = hallsList_().filter(h => h.active); } catch (e) { hallsAll = []; }
+  const HL = {}; hallsAll.forEach(h => { HL[h.name] = { name: h.name, full: h.full || '', address: h.address || '', area: h.area, capacity: h.capacity, floor: h.floor, features: h.features || '', descr: String(h.descr || '').slice(0, 260), price: h.price, parallel: h.parallel || 1, hours: 0, n: 0, rent: 0, wd: [0, 0, 0, 0, 0, 0, 0] }; });
+  const wdOf = d => (new Date(d + 'T12:00:00Z').getUTCDay() + 6) % 7;
+  const heat = []; for (let i = 0; i < 7; i++) heat.push(new Array(15).fill(0));
+  const slotsP = tbl_('slots').rows.filter(x => x.date >= from && x.date <= to && x.status !== 'cancelled');
+  slotsP.forEach(x => {
+    const hr = +x.hours || 1, h = HL[x.hall];
+    if (h) { h.hours += hr; h.n++; h.wd[wdOf(x.date)] += hr; }
+    const m = String(x.time || '').match(/^(\d{1,2})/); if (m) { const k = +m[1] - 8; if (k >= 0 && k < 15) heat[wdOf(x.date)][k] += 1; }
+  });
+  tbl_('rent').rows.forEach(r => {
+    const h = HL[r.hall]; if (!h) return;
+    const end = isDate_(r.endDate) && r.endDate > r.date ? r.endDate : r.date;
+    for (let d = r.date < from ? from : r.date; d <= end && d <= to; d = addDays_(d, 1)) { const hr = r.unit === 'day' && !(+r.hours) ? 13 : (+r.hours || 1); h.hours += hr; h.rent += hr; h.n++; h.wd[wdOf(d)] += hr; }
+  });
+  const WD = ['пн', 'вт', 'ср', 'чт', 'пт', 'сб', 'вс'];
+  const hallsLoad = Object.keys(HL).map(k => HL[k]).map(h => Object.assign(h, { hours: r1(h.hours), rent: r1(h.rent), load: Math.min(100, Math.round(h.hours / (13 * days * h.parallel) * 100)), busy: h.hours ? WD[h.wd.indexOf(Math.max.apply(null, h.wd))] : '' }));
+  // ученики: новые, постоянные, частота
+  const visits = {}; lessons.forEach(l => { visits[l.clientId] = (visits[l.clientId] || 0) + 1; });
+  const vArr = Object.keys(visits).map(k => visits[k]);
+  const monthsBy = {}; lessons.forEach(l => { (monthsBy[l.clientId] = monthsBy[l.clientId] || {})[l.date.slice(0, 7)] = 1; });
+  const newCl = tbl_('clients').rows.filter(c => inComp(c.id) && String(c.createdAt || '').slice(0, 10) >= from && String(c.createdAt || '').slice(0, 10) <= to).length;
+  const subsP = tbl_('subs').rows.filter(x => inComp(x.clientId) && (isDate_(x.startDate) ? x.startDate : String(x.createdAt).slice(0, 10)) >= from && (isDate_(x.startDate) ? x.startDate : String(x.createdAt).slice(0, 10)) <= to);
+  const students = { fresh: newCl, regular: vArr.filter(v => v >= 4).length, avg: vArr.length ? r1(vArr.reduce((a, b) => a + b, 0) / vArr.length) : 0,
+    multiMonth: Object.keys(monthsBy).filter(k => Object.keys(monthsBy[k]).length >= 2).length, subs: subsP.length, subHours: r1(subsP.reduce((a, x) => a + (+x.hours || 0), 0)),
+    money: Math.round(subsP.reduce((a, x) => a + (+x.price || 0), 0)), slots: slotsP.length, hallHours: r1(hallsLoad.reduce((a, h) => a + h.hours, 0)) };
   return {
+    halls: hallsLoad, heat, students, days,
     from, to, company: comp,
     club: { name: clubName_(), city: S.city || '', director: S.director || '', since, site: 'ano.dance',
       trainers: trAct.map(t => ({ name: t.name, programs: String(t.programs || t.spec || '') })), halls,
@@ -734,6 +764,179 @@ function sendCard_(user, p) {
     chats.forEach(r => { if (seen[r.chatId]) return; seen[r.chatId] = 1; if (tgPhoto_(r.chatId, blob, tgEsc_(p.caption || ''))) n++; });
   });
   return { sent: n, noBot: miss, total: cids.length };
+}
+
+// ---------------------------------------------------------------------------
+// Журнал работы сотрудников (только администратор): действия и сеансы в системе
+// ---------------------------------------------------------------------------
+let _auditWho = null; // кто решает заявку (приложение / Telegram) — для журнала
+const AUDIT_ROLES = ['admin', 'manager', 'trainer'];
+const AUDIT_SKIP = ['markSeen', 'saveHome', 'logError', 'decideBooking', 'avatarSet', 'avatarDel', 'clubTickNow', 'botRunNow'];
+const PRESENCE_BG = ['pendingInfo', 'markSeen', 'ping', 'brandFont', 'logError', 'avatarsLoad', 'avatarGet', 'getMessages'];
+const PRESENCE_GAP = 20 * 60 * 1000;
+// [раздел, «что сделал», таблица для поиска объекта по id]
+const AUDIT_LABEL = {
+  logout: ['auth', 'Вышел из приложения'], changePassword: ['auth', 'Сменил пароль'],
+  saveTrainer: ['people', 'Сохранил тренера', 'trainers'], saveClient: ['people', 'Сохранил ученика', 'clients'], savePartner: ['people', 'Сохранил партнёра', 'partners'],
+  deleteTrainer: ['people', 'Удалил тренера', 'trainers'], deleteClient: ['people', 'Удалил ученика', 'clients'], deletePartner: ['people', 'Удалил партнёра', 'partners'], archive: ['people', 'Архив / восстановление'],
+  saveSub: ['subs', 'Сохранил абонемент', 'subs'], deleteSub: ['subs', 'Удалил абонемент', 'subs'], savePay: ['subs', 'Записал оплату'], renewRemind: ['subs', 'Напомнил о продлении'],
+  saveRent: ['money', 'Сохранил аренду', 'rent'], deleteRent: ['money', 'Удалил аренду', 'rent'], saveExpense: ['money', 'Внёс расход', 'expenses'], deleteExpense: ['money', 'Удалил расход', 'expenses'],
+  assignContract: ['docs', 'Присвоил договор'], makeAct: ['docs', 'Сформировал акт'], deleteAct: ['docs', 'Удалил акт'], editAct: ['docs', 'Изменил акт'],
+  saveContract: ['docs', 'Сохранил договор'], deleteContract: ['docs', 'Удалил договор'], uploadContractFile: ['docs', 'Загрузил файл договора'], removeContractFile: ['docs', 'Удалил файл договора'],
+  saveLesson: ['lessons', 'Отметил занятие', 'lessons'], deleteLesson: ['lessons', 'Удалил занятие', 'lessons'], saveEvent: ['lessons', 'Отметил групповое / событие', 'events'], deleteEvent: ['lessons', 'Удалил групповое / событие', 'events'],
+  saveGroup: ['lessons', 'Сохранил группу', 'groups'], deleteGroup: ['lessons', 'Удалил группу', 'groups'],
+  saveSlot: ['sched', 'Сохранил занятие в расписании', 'slots'], cancelSlot: ['sched', 'Отменил занятие в расписании', 'slots'], completeSlot: ['sched', 'Провёл занятие по записи', 'slots'],
+  book: ['book', 'Записал ученика'], cancelBooking: ['book', 'Отменил запись', 'bookings'], bookingSettings: ['settings', 'Изменил настройки записи'], joinWait: ['book', 'Записал в лист ожидания'],
+  saveAvail: ['sched', 'Отметил свободное время'], deleteAvail: ['sched', 'Удалил свободное время'], requestInd: ['book', 'Заявка на индивидуальное'], substitute: ['sched', 'Замена / отмена занятий тренера'],
+  postMessage: ['comm', 'Написал сообщение'], deleteMessage: ['comm', 'Удалил сообщение'], saveNews: ['comm', 'Опубликовал объявление'], lostCall: ['comm', 'Позвал ученика вернуться', 'clients'],
+  sendCard: ['comm', 'Отправил открытку'], festInvite: ['comm', 'Разослал приглашения', 'fests'],
+  saveUser: ['access', 'Сохранил пользователя / доступ'], deleteUser: ['access', 'Удалил пользователя'], saveSettings: ['settings', 'Изменил настройки'], saveDict: ['settings', 'Изменил справочник'], deleteDict: ['settings', 'Удалил из справочника'],
+  backupNow: ['settings', 'Сделал резервную копию'], saveBackup: ['settings', 'Настроил резервные копии'], clubBotSave: ['settings', 'Настройки бота'], botSave: ['settings', 'Подключил бота'], botHook: ['settings', 'Режим бота'], botDisconnect: ['settings', 'Отключил бота'],
+  tgLink: ['comm', 'Подключил к Telegram'], tgSetNotify: ['comm', 'Уведомления Telegram'], tgUnlink: ['comm', 'Отключил Telegram'], tgAssign: ['comm', 'Привязал Telegram'], tgReject: ['comm', 'Отклонил Telegram'],
+  saveFest: ['fests', 'Сохранил мероприятие', 'fests'], deleteFest: ['fests', 'Удалил мероприятие', 'fests'], saveReg: ['fests', 'Записал участника', 'regs'], deleteReg: ['fests', 'Удалил участника', 'regs'], festResults: ['fests', 'Внёс итоги мероприятия', 'fests'],
+  saveGrade: ['grades', 'Оценил ученика', 'grades'], deleteGrade: ['grades', 'Удалил оценку', 'grades'], saveGradeCrit: ['settings', 'Изменил критерии оценки'],
+  shareCreate: ['access', 'Создал ссылку для HR'], shareOff: ['access', 'Отключил ссылку для HR'],
+  mediaAdd: ['media', 'Добавил фото / видео'], mediaSave: ['media', 'Изменил фото / видео'], mediaDel: ['media', 'Удалил фото / видео'],
+  hallSave: ['halls', 'Сохранил зал'], hallDel: ['halls', 'Удалил зал'], hallsImport: ['halls', 'Загрузил залы с сайта'], hallThumb: ['halls', 'Фото зала'], hallPhotoAdd: ['halls', 'Добавил фото зала'], hallPhotoDel: ['halls', 'Удалил фото зала'], hallPhotoMain: ['halls', 'Главное фото зала'],
+  saveDancer: ['league', 'Паспорт танцора'], saveProgress: ['league', 'Прогресс ученика'], deleteProgress: ['league', 'Удалил запись прогресса'], saveDiary: ['league', 'Дневник'], deleteDiary: ['league', 'Удалил запись дневника'],
+  saveAward: ['league', 'Начислил баллы лиги'], deleteAward: ['league', 'Удалил баллы лиги'], saveLeague: ['league', 'Настройки лиги'],
+};
+const AUDIT_CATS = { auth: 'Вход и выход', people: 'Ученики и тренеры', subs: 'Абонементы и оплаты', money: 'Финансы и аренда', docs: 'Договоры и акты', lessons: 'Отметка занятий',
+  sched: 'Расписание', book: 'Записи и заявки', comm: 'Сообщения и рассылки', access: 'Доступ', settings: 'Настройки', fests: 'Мероприятия', grades: 'Оценки', media: 'Фото и видео', halls: 'Залы', league: 'Лига и прогресс', other: 'Прочее' };
+
+/** Дописать строки в лист без чтения всей таблицы (журнал бывает большим). Вызывать под блокировкой. */
+function auditAppend_(key, objs) {
+  if (!objs.length) return;
+  const [name, cols] = TABLES[key];
+  let sh = ss_().getSheetByName(name);
+  if (!sh) { sh = ss_().insertSheet(name); sh.getRange(1, 1, 1, cols.length).setValues([cols.map(c => c[1])]); sh.setFrozenRows(1); }
+  const lc = Math.max(sh.getLastColumn(), 1);
+  const head = sh.getRange(1, 1, 1, lc).getValues()[0].map(String);
+  const byTitle = {}; cols.forEach(c => { byTitle[c[1]] = c[0]; });
+  const rows = objs.map(o => { o.id = o.id || newId_(10); return head.map(h => { const k = byTitle[h]; const v = k ? o[k] : ''; return v === undefined || v === null ? '' : (typeof v === 'number' ? v : String(v).slice(0, 1000)); }); });
+  const last = sh.getLastRow();
+  sh.getRange(last + 1, 1, rows.length, head.length).setValues(rows);
+  if (last > 30000 && sh.deleteRows) sh.deleteRows(2, 5000);
+}
+function auditRows_(key, from, to) {
+  const sh = ss_().getSheetByName(TABLES[key][0]);
+  if (!sh || sh.getLastRow() < 2) return [];
+  const v = sh.getDataRange().getValues(); const head = v[0].map(String);
+  const byTitle = {}; TABLES[key][1].forEach(c => { byTitle[c[1]] = c; });
+  const idx = head.map(h => byTitle[h]);
+  const out = [];
+  for (let i = 1; i < v.length; i++) {
+    const o = {}; idx.forEach((c, j) => { if (c) o[c[0]] = norm_(v[i][j], c[2]); });
+    const d = String(o.date || o.at || o.start || '').slice(0, 10);
+    if ((!from || d >= from) && (!to || d <= to)) out.push(o);
+  }
+  return out;
+}
+function auditAdd_(o) {
+  try { auditAppend_('audit', [Object.assign({ at: now_(), cat: 'other', via: 'приложение' }, o)]); } catch (e) { /* журнал не мешает работе */ }
+}
+function auditName_(key, id) {
+  if (!key || !id) return '';
+  const r = find_(key, id); if (!r) return '';
+  if (key === 'lessons') return r.clientName + ', ' + ruDate_(r.date) + ', ' + r.hours + ' ч';
+  if (key === 'subs') return r.clientName + ': ' + r.title;
+  if (key === 'regs') return r.clientName;
+  if (key === 'slots') return slotTitle_(r) + ', ' + ruDate_(r.date) + ' ' + (r.time || '');
+  if (key === 'bookings') return r.clientName;
+  if (key === 'grades') return r.clientName + ', ' + ruDate_(r.date);
+  if (key === 'events') return r.title + ', ' + ruDate_(r.date);
+  return r.name || r.title || r.clientName || '';
+}
+/** Записать в журнал успешное изменение через приложение (сотрудники). */
+function auditApi_(user, action, p, res) {
+  if (AUDIT_ROLES.indexOf(user.role) < 0 || AUDIT_SKIP.indexOf(action) >= 0) return;
+  try {
+    const L = AUDIT_LABEL[action] || ['other', action];
+    const id = p.id || (typeof res === 'string' && res.length < 40 ? res : '');
+    let target = auditName_(L[2], id) || p.name || p.title || '';
+    const nm = (k, x) => x ? nameOf_(k, x) : '';
+    if (!target && p.clientId) target = nm('clients', p.clientId);
+    if (action === 'saveLesson' && p.clientId) target = nm('clients', p.clientId) + ', ' + ruDate_(p.date || today_()) + ', ' + (p.hours || 1) + ' ч';
+    if (action === 'book') target = nm('clients', p.clientId) + (p.slotId ? ' → ' + auditName_('slots', p.slotId) : '');
+    if (action === 'saveUser') target = (p.login || '') + (p.role ? ' (' + p.role + ')' : '');
+    if (action === 'archive') target = nm(p.kind === 'trainer' ? 'trainers' : 'clients', p.id) + (p.active === false || p.active === 'false' ? ' → в архив' : ' → восстановлен');
+    const det = [];
+    if (p.trainerId && action !== 'saveTrainer') det.push('тренер ' + nm('trainers', p.trainerId));
+    if (p.hours && action !== 'saveLesson') det.push(p.hours + ' ч');
+    if (p.price) det.push('сумма ' + p.price);
+    if (p.paid !== undefined && p.paid !== '' && action === 'saveSub') det.push('оплачено ' + p.paid);
+    if (p.amount) det.push(p.amount + ' ₽');
+    if (p.date && action !== 'saveLesson') det.push(ruDate_(String(p.date).slice(0, 10)));
+    if (p.text && /Message|News/.test(action)) det.push('«' + String(p.text).slice(0, 120) + '»');
+    if (p.id && /^save/.test(action)) det.unshift('изменение'); else if (/^save/.test(action)) det.unshift('новая запись');
+    auditAdd_({ userId: user.id, userName: user.name || user.login, role: user.role, cat: L[0], action, title: L[1], target: String(target).slice(0, 200), details: det.join(' · ').slice(0, 400) });
+  } catch (e) { /* журнал не мешает работе */ }
+}
+function auditLogin_(r, p) {
+  try {
+    const u = r && r.user; if (!u || AUDIT_ROLES.indexOf(u.role) < 0) return;
+    withLock_(() => auditAdd_({ userId: u.id, userName: u.name || u.login, role: u.role, cat: 'auth', action: 'login', title: 'Вошёл в приложение', details: p.code ? 'по ссылке из Telegram' : 'по паролю', via: String(p.__dev || 'приложение').slice(0, 40) }));
+  } catch (e) { /* не важно */ }
+}
+
+/** Сеансы: учёт времени в системе. Состояние открытого сеанса — в кэше, закрытый пишется в «Сеансы работы». */
+function presence_(user, action, p, write) {
+  if (AUDIT_ROLES.indexOf(user.role) < 0) return;
+  try {
+    const nav = [].concat(p.__nav || []).slice(0, 50); delete p.__nav;
+    const dev = String(p.__dev || '').slice(0, 40); delete p.__dev;
+    if (PRESENCE_BG.indexOf(action) >= 0 && !nav.length) return;
+    const C = CacheService.getScriptCache(), k = 'pv_' + user.id, now = Date.now();
+    let st = parseJson_(C.get(k), null);
+    if (st && now - st.l > PRESENCE_GAP) { const old = st; st = null; withLock_(() => presenceClose_(old)); }
+    if (!st) { st = { u: user.id, n: user.name || user.login, r: user.role, s: now, l: now, c: 0, w: 0, p: {}, d: dev }; presenceIdx_(user.id, true); }
+    st.l = now; st.c++; if (write) st.w++; if (dev) st.d = dev;
+    nav.forEach(x => { const pg = String(x || '').slice(0, 30); if (pg) st.p[pg] = (st.p[pg] || 0) + 1; });
+    C.put(k, JSON.stringify(st), 21600);
+  } catch (e) { /* учёт не мешает работе */ }
+}
+function presenceIdx_(uid, add) {
+  const C = CacheService.getScriptCache(); const a = parseJson_(C.get('pv_idx'), []) || [];
+  const i = a.indexOf(uid);
+  if (add && i < 0) a.push(uid); if (!add && i >= 0) a.splice(i, 1);
+  C.put('pv_idx', JSON.stringify(a), 21600);
+  return a;
+}
+function presenceRow_(st) {
+  const f = ms => Utilities.formatDate(new Date(ms), tz_(), 'yyyy-MM-dd HH:mm:ss');
+  return { userId: st.u, userName: st.n, role: st.r, date: f(st.s).slice(0, 10), start: f(st.s), end: f(st.l), minutes: Math.max(1, Math.round((st.l - st.s) / 60000) + 1),
+    calls: st.c, writes: st.w, pages: Object.keys(st.p).map(k => k + '×' + st.p[k]).join(', '), device: st.d || '' };
+}
+function presenceClose_(st) { auditAppend_('visits', [presenceRow_(st)]); }
+/** Закрыть сеансы, где давно нет активности (из clubTick_ под блокировкой). */
+function presenceSweep_() {
+  const C = CacheService.getScriptCache(), now = Date.now();
+  (parseJson_(C.get('pv_idx'), []) || []).slice().forEach(uid => {
+    const st = parseJson_(C.get('pv_' + uid), null);
+    if (!st) return presenceIdx_(uid, false);
+    if (now - st.l > PRESENCE_GAP) { presenceClose_(st); C.remove('pv_' + uid); presenceIdx_(uid, false); }
+  });
+}
+/** Отчёт для администратора. */
+function auditLog_(user, p) {
+  const to = isDate_(p.to) ? p.to : today_(), from = isDate_(p.from) ? p.from : addDays_(to, -6);
+  const uid = String(p.userId || '');
+  const C = CacheService.getScriptCache(), now = Date.now();
+  let acts = auditRows_('audit', from, to), vis = auditRows_('visits', from, to);
+  (parseJson_(C.get('pv_idx'), []) || []).forEach(u => { const st = parseJson_(C.get('pv_' + u), null); if (!st) return; const r = presenceRow_(st); r.open = now - st.l <= PRESENCE_GAP; if (r.date >= from && r.date <= to) vis.push(r); });
+  if (uid) { acts = acts.filter(a => a.userId === uid); vis = vis.filter(v => v.userId === uid); }
+  acts.sort((a, b) => String(b.at).localeCompare(String(a.at)));
+  vis.sort((a, b) => String(b.start).localeCompare(String(a.start)));
+  const S = {};
+  const P = id => S[id] || (S[id] = { id, name: '', role: '', minutes: 0, sessions: 0, days: {}, acts: 0, writes: 0, approved: 0, declined: 0, cats: {}, last: '' });
+  vis.forEach(v => { const o = P(v.userId); o.name = o.name || v.userName; o.role = o.role || v.role; o.minutes += +v.minutes || 0; o.sessions++; o.days[v.date] = (o.days[v.date] || 0) + (+v.minutes || 0); if (String(v.end) > o.last) o.last = String(v.end); });
+  acts.forEach(a => { const o = P(a.userId || a.userName); o.name = o.name || a.userName; o.role = o.role || a.role; if (a.action !== 'login' && a.action !== 'logout') o.acts++; o.cats[a.cat] = (o.cats[a.cat] || 0) + 1;
+    if (a.action === 'bookApprove') o.approved++; if (a.action === 'bookDecline') o.declined++; if (String(a.at) > o.last) o.last = String(a.at); });
+  const U = {}; tbl_('users').rows.forEach(u => { U[u.id] = u; });
+  const users = tbl_('users').rows.filter(u => AUDIT_ROLES.indexOf(u.role) >= 0).map(u => ({ id: u.id, name: u.name || u.login, role: u.role, active: u.active }));
+  const people = Object.keys(S).map(k => S[k]).map(o => Object.assign(o, { name: o.name || (U[o.id] && U[o.id].name) || o.id, days: Object.keys(o.days).sort().map(d => ({ d, m: o.days[d] })) }))
+    .sort((a, b) => b.minutes - a.minutes || b.acts - a.acts);
+  return { from, to, cats: AUDIT_CATS, users, people, actions: acts.slice(0, 1500), total: acts.length, visits: vis.slice(0, 500) };
 }
 
 // ---------------------------------------------------------------------------
@@ -1637,6 +1840,7 @@ function clubHandlers_() {
     deleteGrade: { roles: ['admin', 'manager', 'trainer'], write: true, fn: deleteGrade_ },
     saveGradeCrit: { roles: A, write: true, fn: saveGradeCrit_ },
     presentData: { roles: A, fn: presentData_ },
+    auditLog: { roles: ['admin'], fn: auditLog_ },
     sendCard: { roles: A, write: true, fn: sendCard_ },
     finance: { roles: A, fn: (u, p) => finance_(p) },
     saveExpense: { roles: A, write: true, fn: saveExpense_ },

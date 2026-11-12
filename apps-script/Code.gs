@@ -7,7 +7,7 @@
  */
 
 const CLUB_NAME = 'Клуб корпоративных бальных танцев';
-const APP_VER = '2026-11-12.1'; // меняется при каждом обновлении — открытые страницы предложат перезагрузку
+const APP_VER = '2026-11-12.2'; // меняется при каждом обновлении — открытые страницы предложат перезагрузку
 const STAFF = ['admin', 'manager'];
 const ALL = ['admin', 'manager', 'trainer', 'client'];
 const SESSION_DAYS = 30;
@@ -116,6 +116,12 @@ const TABLES = {
   feedback: ['Оценки занятий', [
     ['id', 'ID'], ['date', 'Дата', 'd'], ['clientId', 'ID ученика'], ['clientName', 'Ученик'], ['trainerId', 'ID тренера'], ['trainerName', 'Тренер'],
     ['lessonId', 'ID занятия'], ['score', 'Оценка', 'n'], ['comment', 'Комментарий'], ['createdAt', 'Создано']]],
+  audit: ['Журнал действий', [
+    ['id', 'ID'], ['at', 'Время'], ['userId', 'ID пользователя'], ['userName', 'Кто'], ['role', 'Роль'], ['cat', 'Раздел'], ['action', 'Действие (код)'],
+    ['title', 'Что сделал'], ['target', 'С чем'], ['details', 'Подробности'], ['via', 'Откуда']]],
+  visits: ['Сеансы работы', [
+    ['id', 'ID'], ['userId', 'ID пользователя'], ['userName', 'Кто'], ['role', 'Роль'], ['date', 'Дата', 'd'], ['start', 'Начало'], ['end', 'Конец'],
+    ['minutes', 'Минут', 'n'], ['calls', 'Запросов', 'n'], ['writes', 'Изменений', 'n'], ['pages', 'Разделы'], ['device', 'Устройство']]],
   grades: ['Оценки учеников', [
     ['id', 'ID'], ['date', 'Дата', 'd'], ['clientId', 'ID ученика'], ['clientName', 'Ученик'], ['trainerId', 'ID тренера'], ['trainerName', 'Тренер'],
     ['lessonId', 'ID занятия'], ['scores', 'Оценки по критериям'], ['total', 'Общая', 'n'], ['comment', 'Комментарий'], ['createdBy', 'Кто оценил'], ['createdAt', 'Создано']]],
@@ -357,9 +363,9 @@ function api_(token, action, payload) {
   try {
     payload = payload || {};
     // лёгким запросам не нужны все листы — они возьмут из кэша только то, что используют
-    if (LIGHT_ACTIONS.indexOf(action) < 0) prefetch_(Object.keys(TABLES).filter(k => (k !== 'messages' || /Message/.test(action)) && (k !== 'errors' || /Error/.test(action))));
-    if (action === 'login') return { ok: true, data: login_(payload) };
-    if (action === 'loginCode' && typeof loginByCode_ === 'function') return { ok: true, data: loginByCode_(payload) };
+    if (LIGHT_ACTIONS.indexOf(action) < 0) prefetch_(Object.keys(TABLES).filter(k => (k !== 'messages' || /Message/.test(action)) && (k !== 'errors' || /Error/.test(action)) && NO_PREFETCH.indexOf(k) < 0));
+    if (action === 'login') { const r = login_(payload); if (typeof auditLogin_ === 'function') auditLogin_(r, payload); return { ok: true, data: r }; }
+    if (action === 'loginCode' && typeof loginByCode_ === 'function') { const r = loginByCode_(payload); if (typeof auditLogin_ === 'function') auditLogin_(r, Object.assign({ code: 1 }, payload)); return { ok: true, data: r }; }
     if (action === 'ping') return { ok: true, data: { club: CLUB_NAME } };
     if (action === 'brandFont' && typeof brandFont_ === 'function') return { ok: true, data: brandFont_(payload) };
     const user = auth_(token);
@@ -367,12 +373,13 @@ function api_(token, action, payload) {
     const h = HANDLERS[action] || (typeof toolHandlers_ === 'function' ? toolHandlers_()[action] : null) || (typeof clubHandlers_ === 'function' ? clubHandlers_()[action] : null);
     if (!h) throw new Error('Неизвестное действие: ' + action);
     if (h.roles.indexOf(user.role) < 0) throw new Error('Недостаточно прав');
+    if (typeof presence_ === 'function') presence_(user, action, payload, !!h.write);
     const data = h.write ? withLock_(() => {
       // внутри блокировки перечитываем версии листов: кто-то мог сохранить данные, пока мы ждали
       Object.keys(_cache).forEach(k => delete _cache[k]);
       Object.keys(_lazy).forEach(k => delete _lazy[k]);
-      if (LIGHT_ACTIONS.indexOf(action) < 0 || payload.__snap) prefetch_(Object.keys(TABLES).filter(k => (k !== 'messages' || /Message/.test(action)) && (k !== 'errors' || /Error/.test(action))));
-      try { return h.fn(user, payload); } finally { flushDirty_(); }
+      if (LIGHT_ACTIONS.indexOf(action) < 0 || payload.__snap) prefetch_(Object.keys(TABLES).filter(k => (k !== 'messages' || /Message/.test(action)) && (k !== 'errors' || /Error/.test(action)) && NO_PREFETCH.indexOf(k) < 0));
+      try { const r = h.fn(user, payload); if (typeof auditApi_ === 'function') auditApi_(user, action, payload, r); return r; } finally { flushDirty_(); }
     }) : h.fn(user, payload);
     if (h.write && payload.__snap) {
       // свежие данные в том же ответе — интерфейсу не нужен второй запрос
@@ -468,7 +475,7 @@ function tz_() { return ss_().getSpreadsheetTimeZone() || Session.getScriptTimeZ
 
 function ensureSchema_() {
   const props = PropertiesService.getScriptProperties();
-  const ver = 'schema-14';
+  const ver = 'schema-15';
   if (props.getProperty('schema') === ver) return;
   const ss = ss_();
   Object.keys(TABLES).forEach(key => {
@@ -515,6 +522,7 @@ function norm_(v, type) {
   return s;
 }
 
+const NO_PREFETCH = ['audit', 'visits'];
 const LIGHT_ACTIONS = ['brandFont', 'ping', 'avatarsLoad', 'avatarGet', 'markSeen', 'logError', 'getMessages', 'mediaList', 'mediaGet', 'pendingInfo'];
 const _lazy = {};
 function tbl_(key) {
@@ -1784,6 +1792,8 @@ function bookingDecide_(id, ok, by, note) {
   }
   note = String(note || '').trim().slice(0, 300);
   update_('bookings', b.id, { status: ok ? 'booked' : 'declined', decidedBy: by, decidedAt: now_(), note });
+  if (typeof auditAdd_ === 'function') auditAdd_({ userId: (_auditWho && _auditWho.id) || '', userName: by, role: (_auditWho && _auditWho.role) || '', cat: 'book', action: ok ? 'bookApprove' : 'bookDecline',
+    title: ok ? 'Подтвердил(а) запись' : 'Отклонил(а) запись', target: b.clientName + ' → ' + slotTitle_(s) + ', ' + ruDate_(s.date) + ' ' + (s.time || ''), details: note ? 'Причина: ' + note : '', via: (_auditWho && _auditWho.via) || 'приложение' });
   bookingCloseAsk_(b, ok ? '✅ Подтвердил(а): ' + tgEsc_(by) : '✖ Отклонил(а): ' + tgEsc_(by) + (note ? ' — «' + tgEsc_(note) + '»' : ''));
   try {
     if (typeof tgNotify_ === 'function') {
@@ -1804,6 +1814,7 @@ function decideBooking_(user, p) {
     const b = must_('bookings', id, 'Заявка');
     if (!bookingCanDecide_(user, must_('slots', b.slotId, 'Занятие'))) throw new Error('Это заявка на чужое занятие');
     if (ids.length > 1 && b.status !== 'pending') return; // массово — пропускаем уже решённые
+    _auditWho = { id: user.id, role: user.role, via: 'приложение' };
     bookingDecide_(id, p.ok === true, user.name || user.login, p.note);
     n++;
   });

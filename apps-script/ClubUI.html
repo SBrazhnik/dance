@@ -1027,8 +1027,10 @@ TLV.media = () => {
 I.gift = '<rect x="3" y="8" width="18" height="13" rx="2"/><path d="M12 8v13M3 12h18M12 8c-2-4-6-4-6-1.5S9 8 12 8c3 0 6 .5 6-1.5S14 4 12 8z"/>';
 const ST = {
   url: p => 'https:' + '/' + '/corpdance.ru/brand/' + p,
-  slides: [['cover', 'Обложка'], ['about', 'О клубе'], ['kpi', 'Цифры периода'], ['months', 'Посещаемость по месяцам'], ['types', 'Виды занятий'], ['trainers', 'Тренеры: часы и ученики'],
-    ['companies', 'Компании'], ['events', 'Мероприятия и турниры'], ['book', 'Запись на тренировки'], ['rating', 'Оценки'], ['league', 'Корпоративная лига'], ['team', 'Команда тренеров'], ['final', 'Контакты']],
+  slides: [['cover', 'Обложка'], ['about', 'О клубе'], ['kpi', 'Цифры периода'], ['students', 'Ученики: постоянство'], ['months', 'Посещаемость по месяцам'], ['types', 'Виды занятий'], ['trainers', 'Тренеры: часы и ученики'],
+    ['companies', 'Компании'], ['halls', 'Залы и их загрузка'], ['heat', 'Когда занимаются (дни и часы)'], ['events', 'Мероприятия и турниры'], ['book', 'Запись на тренировки'], ['rating', 'Оценки'], ['league', 'Корпоративная лига'],
+    ['money', 'Продажи абонементов'], ['team', 'Команда тренеров'], ['final', 'Контакты']],
+  defOff: ['money'],
   mon: m => { const [y, mm] = m.split('-'); return MONTHS[+mm - 1].slice(0, 3) + ' ' + y.slice(2); },
   per: (a, b) => fd(a) + ' — ' + fd(b),
   async fonts() {
@@ -1053,29 +1055,50 @@ ST.deck = (P, opt, fontCss) => {
   const kp = (v, l) => `<div class="kp"><b>${v}</b><span>${l}</span></div>`;
   const hb = (list, val, lab, fmt, max) => { const mx = max || Math.max(1, ...list.map(val)); return `<div class="hb">${list.map(x => `<div class="hr"><span>${esc(lab(x))}</span><div class="bar"><i style="width:${val(x) / mx * 100}%"></i></div><b>${fmt(x)}</b></div>`).join('')}</div>`; };
   const head = (h, s) => `<div class="hd"><h2>${h}</h2>${s ? `<div class="sc">${s}</div>` : ''}</div>`;
-  const out = [];
+  const out = [], pn = [];
+  const add = (k, h, sc, body, half) => { if (on(k)) pn.push({h, sc, body, half: !!half}); };
   if (on('cover')) out.push(`<section class="s cover"><img class="logo" src="${ST.url('logo.svg')}" alt=""><div class="cv"><div class="sc">${esc(opt.kicker || 'итоги и цифры')}</div><h1>${esc(title)}</h1><div class="per">${esc(sub)}</div></div><img class="dn" src="${ST.url('dancers.jpg')}" alt=""></section>`);
-  if (on('about')) out.push(`<section class="s">${head('О клубе', 'танцуем вместе')}<div class="cols"><div><p class="lead">${esc(opt.about || (club.name + ' — корпоративные спортивные бальные танцы: занятия для сотрудников компаний, турниры, праздники и выступления.'))}</p>
-    <div class="chips">${club.programs.map(p => `<span>${esc(p)}</span>`).join('')}</div></div>
-    <div class="kps v">${club.since ? kp(club.since.slice(0, 4), 'год первых занятий') : ''}${kp(club.trainers.length, 'тренеров')}${club.halls.length ? kp(club.halls.length, 'залов') : ''}${kp(club.clients, 'учеников')}${club.companies ? kp(club.companies, 'компаний-партнёров') : ''}</div></div></section>`);
-  if (on('kpi')) out.push(`<section class="s">${head('Цифры периода', esc(sub))}<div class="kps big">${kp(fh(T.hours), 'часов занятий')}${kp(T.lessons, 'посещений')}${kp(T.people, 'танцоров')}${kp(T.events, 'групповых занятий и событий')}${T.fests ? kp(T.fests, 'мероприятий клуба') : ''}${kp(T.trainers, 'тренеров вели занятия')}</div></section>`);
-  if (on('months') && P.months.length) {
-    const mx = Math.max(1, ...P.months.map(m => m.ind + m.grp)), ms = P.months.slice(-12);
-    out.push(`<section class="s">${head('Посещаемость', 'часы по месяцам')}<div class="mch">${ms.map(m => `<div class="mc"><em>${fh(m.ind + m.grp)}</em><div class="st"><i class="g" style="height:${m.grp / mx * 100}%"></i><i style="height:${m.ind / mx * 100}%"></i></div><span>${ST.mon(m.m)}</span><small>${m.people} чел.</small></div>`).join('')}</div>
-      <div class="lg"><span><i></i>индивидуальные</span><span><i class="g"></i>групповые</span></div></section>`);
+  add('about', 'О клубе', 'танцуем вместе', `<p class="lead">${esc(opt.about || (club.name + ' — корпоративные спортивные бальные танцы: занятия для сотрудников компаний, турниры, праздники и выступления.'))}</p>
+    <div class="chips">${club.programs.map(p => `<span>${esc(p)}</span>`).join('')}</div>
+    <div class="kps mini">${club.since ? kp(club.since.slice(0, 4), 'год первых занятий') : ''}${kp(club.trainers.length, 'тренеров')}${club.halls.length ? kp(club.halls.length, 'залов') : ''}${kp(club.clients, 'учеников')}${club.companies ? kp(club.companies, 'компаний') : ''}</div>`, club.programs.length <= 6);
+  add('kpi', 'Цифры периода', esc(sub), `<div class="kps big">${kp(fh(T.hours), 'часов занятий')}${kp(T.lessons, 'посещений')}${kp(T.people, 'танцоров')}${kp(T.events, 'групповых занятий и событий')}${T.fests ? kp(T.fests, 'мероприятий клуба') : kp(P.students.slots, 'занятий в расписании')}${kp(T.trainers, 'тренеров вели занятия')}</div>`);
+  const st = P.students;
+  if (T.people) add('students', 'Ученики', 'кто и как часто ходит', `<div class="kps two2">${kp(fh(st.avg), 'посещений на человека')}${kp(st.regular, 'постоянных (4+ посещения)')}${kp(st.multiMonth, 'занимались 2+ месяца')}${kp(st.fresh, 'новых учеников')}${st.subs ? kp(st.subs, 'абонементов оформлено') + kp(fh(st.subHours), 'часов в абонементах') : ''}</div>`, true);
+  if (P.months.length) { const mx = Math.max(1, ...P.months.map(m => m.ind + m.grp)), ms = P.months.slice(-12);
+    add('months', 'Посещаемость', 'часы по месяцам', `<div class="mch">${ms.map(m => `<div class="mc"><em>${fh(m.ind + m.grp)}</em><div class="st"><i class="g" style="height:${m.grp / mx * 100}%"></i><i style="height:${m.ind / mx * 100}%"></i></div><span>${ST.mon(m.m)}</span><small>${m.people} чел.</small></div>`).join('')}</div>
+      <div class="lg"><span><i></i>индивидуальные</span><span><i class="g"></i>групповые</span></div>`); }
+  if (P.types.length) add('types', 'Виды занятий', 'часы за период', hb(P.types.slice(0, 8), x => x.hours, x => x.name, x => fh(x.hours) + ' ч'), P.types.length <= 4);
+  if (P.trainers.length) add('trainers', 'Тренеры', 'часы и ученики', hb(P.trainers.slice(0, 9), x => x.hours, x => x.name, x => fh(x.hours) + ' ч · ' + x.people + ' уч.'), P.trainers.length <= 4);
+  if (P.companies.length) add('companies', 'Компании', 'кто танцует с нами', hb(P.companies.slice(0, 9), x => x.hours, x => x.name, x => fh(x.hours) + ' ч · ' + x.people + ' чел.'), P.companies.length <= 4);
+  if (P.halls.length) {
+    const hl = P.halls.slice(0, 4);
+    add('halls', 'Залы', 'площадки клуба и их загрузка', `<div class="hls n${hl.length}">${hl.map(h => `<div class="hl"><b>${esc(h.name)}</b>${h.full && h.full !== h.name ? `<span class="mu">${esc(h.full)}</span>` : ''}
+      <div class="hk">${h.area ? `<span><em>${h.area}</em> м²</span>` : ''}${h.capacity ? `<span><em>${h.capacity}</em> чел.</span>` : ''}${h.parallel > 1 ? `<span><em>${h.parallel}</em> пары тренеров</span>` : ''}${h.floor ? `<span>${esc(h.floor)} этаж</span>` : ''}</div>
+      ${h.features ? `<div class="hf">${esc(String(h.features).split(/[,;\n]/).map(x => x.trim()).filter(Boolean).slice(0, 5).join(' · '))}</div>` : ''}
+      <div class="ld"><div class="bar"><i style="width:${Math.max(2, h.load)}%"></i></div><span><b>${h.load}%</b> загрузка · ${fh(h.hours)} ч${h.rent ? ' (аренда ' + fh(h.rent) + ' ч)' : ''}${h.busy ? ' · чаще всего — ' + h.busy : ''}</span></div></div>`).join('')}</div>
+      <div class="mu sm">Загрузка — доля занятых часов в окне 9:00–22:00 за ${P.days} дн. с учётом одновременных занятий${P.halls.length > 4 ? ' · ещё залов: ' + (P.halls.length - 4) : ''}.</div>`);
   }
-  if (on('types') && P.types.length) out.push(`<section class="s">${head('Виды занятий', 'часы за период')}${hb(P.types.slice(0, 8), x => x.hours, x => x.name, x => fh(x.hours) + ' ч')}</section>`);
-  if (on('trainers') && P.trainers.length) out.push(`<section class="s">${head('Тренеры', 'часы и ученики за период')}${hb(P.trainers.slice(0, 9), x => x.hours, x => x.name, x => fh(x.hours) + ' ч · ' + x.people + ' уч.')}</section>`);
-  if (on('companies') && P.companies.length) out.push(`<section class="s">${head('Компании', 'кто танцует с нами')}${hb(P.companies.slice(0, 9), x => x.hours, x => x.name, x => fh(x.hours) + ' ч · ' + x.people + ' чел.')}</section>`);
-  if (on('events') && (P.events.length || P.fests.length)) out.push(`<section class="s">${head('Мероприятия и турниры', esc(sub))}<div class="cols">
-    <div>${P.events.length ? `<div class="kps v">${P.events.slice(0, 5).map(e => kp(e.n, esc(e.name) + (e.people ? ' · ' + e.people + ' участий' : ''))).join('')}</div>` : ''}</div>
-    <div class="fl">${P.fests.slice(-6).reverse().map(f => `<div class="fi"><b>${esc(f.title)}</b><span>${fd(f.date)}${f.place ? ' · ' + esc(f.place) : ''}${f.n ? ' · ' + f.n + ' участн.' : ''}</span>${f.results.slice(0, 3).map(r => `<small>🏆 ${esc(r.name)}${r.partner ? ' — ' + esc(r.partner) : ''}: ${esc(r.result)}</small>`).join('')}</div>`).join('') || '<p class="mu">Мероприятий клуба в этот период не было</p>'}</div></div></section>`);
-  if (on('book') && P.bookings.total) { const b = P.bookings; out.push(`<section class="s">${head('Запись на тренировки', 'через приложение и Telegram-бот')}<div class="kps big">${kp(b.total, 'записей')}${kp(b.attended, 'пришли на занятие')}${b.total ? kp(Math.round(b.attended / b.total * 100) + '%', 'доходимость') : ''}${kp(b.cancelled, 'отмен и переносов')}</div></section>`); }
-  if (on('rating') && (P.rating.n || P.grades.n)) out.push(`<section class="s">${head('Оценки', 'качество занятий и прогресс')}<div class="cols">
-    <div class="kps v">${P.rating.n ? kp(fh(P.rating.avg) + ' <small>из 5</small>', 'ученики оценили занятия (' + P.rating.n + ' оценок)') : ''}${P.grades.n ? kp(fh(P.grades.total) + ' <small>из 5</small>', 'средняя оценка учеников тренерами (' + P.grades.n + ')') : ''}</div>
-    <div>${P.grades.n ? hb(P.grades.crit.filter(k => +P.grades.by[k]), k => P.grades.by[k], k => k, k => fh(P.grades.by[k]), 5) : ''}</div></div></section>`);
-  if (on('league') && P.league.length) out.push(`<section class="s">${head('Корпоративная лига', 'лучшие по баллам')}<div class="lgt">${P.league.map((x, i) => `<div><em>${i + 1}</em><b>${esc(x.name)}</b><span>${esc(x.company || '')}</span><strong>${x.points}</strong></div>`).join('')}</div></section>`);
-  if (on('team') && club.trainers.length) out.push(`<section class="s">${head('Команда', 'наши тренеры')}<div class="tm">${club.trainers.slice(0, 12).map(t => `<div><i>${esc(initials(t.name))}</i><b>${esc(t.name)}</b><span>${esc(progs(t.programs).join(' · '))}</span></div>`).join('')}</div></section>`);
+  if (P.heat && P.students.slots) {
+    const mx = Math.max(1, ...P.heat.map(r => Math.max(...r))), WDN = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
+    add('heat', 'Когда занимаются', 'занятия по дням недели и часам', `<div class="hm"><span></span>${P.heat[0].map((x, i) => `<span class="hh">${i + 8}</span>`).join('')}
+      ${P.heat.map((r, d) => `<span class="hd2">${WDN[d]}</span>${r.map(v => `<i style="background:rgba(201,184,255,${v ? .12 + v / mx * .88 : .04})" title="${v}">${v || ''}</i>`).join('')}`).join('')}</div>`);
+  }
+  if (P.events.length || P.fests.length) add('events', 'Мероприятия и турниры', esc(sub), `${P.events.length ? `<div class="kps two2">${P.events.slice(0, 4).map(e => kp(e.n, esc(e.name) + (e.people ? ' · ' + e.people + ' участий' : ''))).join('')}</div>` : ''}
+    ${P.fests.length ? `<div class="fl">${P.fests.slice(-4).reverse().map(f => `<div class="fi"><b>${esc(f.title)}</b><span>${fd(f.date)}${f.place ? ' · ' + esc(f.place) : ''}${f.n ? ' · ' + f.n + ' участн.' : ''}</span>${f.results.slice(0, 2).map(r => `<small>🏆 ${esc(r.name)}${r.partner ? ' — ' + esc(r.partner) : ''}: ${esc(r.result)}</small>`).join('')}</div>`).join('')}</div>` : ''}`, P.fests.length <= 1);
+  if (P.bookings.total) { const b = P.bookings; add('book', 'Запись на тренировки', 'через приложение и бот', `<div class="kps two2">${kp(b.total, 'записей')}${kp(b.attended, 'пришли на занятие')}${kp(Math.round(b.attended / b.total * 100) + '%', 'доходимость')}${kp(b.cancelled, 'отмен и отказов')}</div>`, true); }
+  if (P.rating.n || P.grades.n) add('rating', 'Оценки', 'качество и прогресс', `<div class="kps two2">${P.rating.n ? kp(fh(P.rating.avg) + ' <small>из 5</small>', 'ученики о занятиях (' + P.rating.n + ')') : ''}${P.grades.n ? kp(fh(P.grades.total) + ' <small>из 5</small>', 'тренеры об учениках (' + P.grades.n + ')') : ''}</div>
+    ${P.grades.n ? hb(P.grades.crit.filter(k => +P.grades.by[k]), k => P.grades.by[k], k => k, k => fh(P.grades.by[k]), 5) : ''}`, true);
+  if (P.league.length) add('league', 'Корпоративная лига', 'лучшие по баллам', `<div class="lgt">${P.league.map((x, i) => `<div><em>${i + 1}</em><b>${esc(x.name)}</b><span>${esc(x.company || '')}</span><strong>${x.points}</strong></div>`).join('')}</div>`, P.league.length <= 4);
+  if (st.money) add('money', 'Абонементы', 'продажи за период', `<div class="kps two2">${kp(st.subs, 'абонементов')}${kp(Math.round(st.money).toLocaleString('ru-RU') + ' ₽', 'на сумму')}${kp(fh(st.subHours), 'часов продано')}${kp(st.subs ? Math.round(st.money / st.subs).toLocaleString('ru-RU') + ' ₽' : '—', 'средний чек')}</div>`, true);
+  if (club.trainers.length) add('team', 'Команда', 'наши тренеры', `<div class="tm">${club.trainers.slice(0, 12).map(t => `<div><i>${esc(initials(t.name))}</i><b>${esc(t.name)}</b><span>${esc(progs(t.programs).join(' · '))}</span></div>`).join('')}</div>`, club.trainers.length <= 4);
+  const box = x => `<div class="hd"><h2>${x.h}</h2>${x.sc ? `<div class="sc">${x.sc}</div>` : ''}</div>${x.body}`;
+  const used = {};
+  pn.forEach((a, i) => {
+    if (used[i]) return; used[i] = 1;
+    const j = a.half ? pn.findIndex((b, k) => k > i && !used[k] && b.half) : -1;
+    if (j > 0) { used[j] = 1; out.push(`<section class="s two"><div>${box(a)}</div><div>${box(pn[j])}</div></section>`); }
+    else out.push(`<section class="s${a.half ? ' one' : ''}">${box(a)}</section>`);
+  });
   if (on('final')) out.push(`<section class="s cover fin"><img class="logo" src="${ST.url('logo.svg')}" alt=""><div class="cv"><div class="sc">до встречи на паркете</div><h1>${esc(opt.finalTitle || 'Танцуйте с нами')}</h1><div class="per">ano.dance · corpdance.ru${club.city ? ' · ' + esc(club.city) : ''}</div>${opt.contacts ? `<div class="per">${esc(opt.contacts)}</div>` : ''}</div><img class="dn" src="${ST.url('dancers.jpg')}" alt=""></section>`);
   const css = `${fontCss || ''}
 *{box-sizing:border-box}html,body{margin:0;background:#0B0F16;color:#F1F2F5;font-family:'Golos Text',Segoe UI,Arial,sans-serif;height:100%;overflow:hidden}
@@ -1089,7 +1112,15 @@ h1{font-size:92px}h2{font-size:58px}.sc{font-family:'Eddy Mits','Marck Script',c
 .cols{display:grid;grid-template-columns:1fr 1fr;gap:48px;align-items:start}
 .kps{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}.kps.v{grid-template-columns:1fr 1fr}
 .kp{background:#1D222A;border-radius:18px;padding:22px 24px;border:1px solid rgba(255,255,255,.06)}.kp b{display:block;font-family:Foglihten,'Cormorant Unicase',Georgia,serif;font-weight:400;font-size:54px;color:#C9B8FF;line-height:1}.kp b small{font-size:24px;color:#AAAEB6}.kp span{display:block;color:#AAAEB6;font-size:19px;margin-top:8px}
-.kps.big .kp b{font-size:72px}
+.kps.big .kp b{font-size:72px}.kps.mini{grid-template-columns:repeat(5,1fr);gap:12px;margin-top:28px}.kps.mini .kp{padding:14px 16px}.kps.mini .kp b{font-size:40px}.kps.mini .kp span{font-size:15px}
+.kps.two2{grid-template-columns:1fr 1fr;margin-bottom:22px}
+.s.two{display:none;grid-template-columns:1fr 1fr;gap:56px}.s.two.on{display:grid}.s.two h2{font-size:44px}.s.two .sc{font-size:28px}.s.two .hd{margin-bottom:24px}.s.two .hr{grid-template-columns:1fr 150px 110px;font-size:18px}.s.two .kp b{font-size:44px}.s.two .kp span{font-size:16px}.s.two .lead{font-size:20px}.s.two .kps.mini{grid-template-columns:repeat(3,1fr)}.s.two .tm{grid-template-columns:1fr 1fr}.s.two .lgt{grid-template-columns:1fr}
+.s.one .hd,.s.one>*{max-width:900px}
+.hls{display:grid;gap:18px}.hls.n1{grid-template-columns:1fr}.hls.n2{grid-template-columns:1fr 1fr}.hls.n3{grid-template-columns:repeat(3,1fr)}.hls.n4{grid-template-columns:1fr 1fr}
+.hl{background:#1D222A;border-radius:18px;padding:18px 22px;display:flex;flex-direction:column;gap:8px}.hl>b{font-size:26px}.hl .mu{font-size:15px}.hk{display:flex;flex-wrap:wrap;gap:8px 18px;font-size:17px;color:#D8DAE0}.hk em{font-style:normal;font-family:Foglihten,Georgia,serif;color:#C9B8FF;font-size:30px}
+.hf{font-size:15px;color:#AAAEB6}.ld span{display:block;font-size:16px;color:#D8DAE0;margin-top:6px}.ld b{color:#C9B8FF}.mu.sm{font-size:14px;margin-top:14px}
+.hm{display:grid;grid-template-columns:50px repeat(15,1fr);gap:5px;font-size:15px}.hm i{display:flex;align-items:center;justify-content:center;height:50px;border-radius:8px;font-style:normal;color:#121721;font-weight:600}.hm .hh{text-align:center;color:#AAAEB6}.hm .hd2{display:flex;align-items:center;color:#D8DAE0;font-size:18px}
+@media print{.s.two{display:grid!important}}
 .chips{display:flex;flex-wrap:wrap;gap:10px}.chips span{border:1px solid rgba(201,184,255,.4);color:#C9B8FF;border-radius:30px;padding:8px 18px;font-size:20px}
 .hb{display:flex;flex-direction:column;gap:14px}.hr{display:grid;grid-template-columns:300px 1fr 190px;align-items:center;gap:18px;font-size:22px}.hr span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.hr b{text-align:right;font-weight:600}
 .cols .hr{grid-template-columns:1fr 200px 56px;font-size:20px}.bar{height:22px;background:#262C36;border-radius:12px;overflow:hidden}.bar i{display:block;height:100%;background:linear-gradient(90deg,#7C5CE6,#C9B8FF);border-radius:12px}
@@ -1121,7 +1152,7 @@ VIEWS.studio = async (tab) => {
 };
 
 ST.deckView = () => {
-  const o = S.ui.stDeck || (S.ui.stDeck = {slides: ST.slides.map(x => x[0]), title: '', company: '', about: '', contacts: ''});
+  const o = S.ui.stDeck || (S.ui.stDeck = {slides: ST.slides.map(x => x[0]).filter(k => !ST.defOff.includes(k)), title: '', company: '', about: '', contacts: ''});
   if (!S.ui.stPer) S.ui.stPer = {from: today().slice(0, 4) + '-01-01', to: today(), preset: 'y'};
   const pp = periodPicker('stPer', () => ST.deckView());
   const comps = [...new Set((S.D.clients || []).map(c => String(c.company || '').trim()).filter(Boolean))].sort();
@@ -1278,5 +1309,50 @@ ST.send = async c => {
     }}], {wide: true});
   wireMulti(bg);
   $('[name=to]', bg).onchange = e => { $('[data-cl]', bg).style.display = e.target.value === 'clients' ? '' : 'none'; };
+};
+</script>
+<script>
+TOOL_TABS.audit = 'Журнал работы';
+TOOL_FOR.admin.push('audit');
+ACC_NOTE.audit = 'действия и время работы сотрудников — только администратор';
+const AU_ROLE = {admin: 'Администратор', manager: 'Менеджер', trainer: 'Тренер'};
+const auMin = m => { m = Math.round(+m || 0); return m >= 60 ? Math.floor(m / 60) + ' ч ' + (m % 60 ? m % 60 + ' мин' : '') : m + ' мин'; };
+const auT = s => { const x = String(s || ''); return x.length > 10 ? fd(x.slice(0, 10)) + ' ' + x.slice(11, 16) : fd(x); };
+TLV.audit = () => {
+  if (role() !== 'admin') { $('#tlb').innerHTML = empty('Только для администратора'); return; }
+  const my = S.pageSeq;
+  if (!S.ui.auPer) S.ui.auPer = {from: addDays(today(), -6), to: today(), preset: 'c'};
+  const f = S.ui.auF || (S.ui.auF = {user: '', cat: '', tab: 'acts', q: ''});
+  const pp = periodPicker('auPer', () => TLV.audit());
+  $('#tlb').innerHTML = `<div class="small muted" style="margin-bottom:8px">Что делали сотрудники: вход и время в системе, какие разделы открывали, что изменили, какие заявки подтвердили или отклонили (в приложении и в Telegram). Видит только администратор. Сеанс — работа без перерыва больше 20 минут.</div>
+    ${pp.html}<div id="aub" class="sect">${empty('Загрузка…')}</div>`;
+  pp.wire($('#tlb'));
+  call('auditLog', {from: S.ui.auPer.from, to: S.ui.auPer.to}, true).then(R => {
+    if (S.pageSeq !== my || !$('#aub')) return;
+    const draw = () => {
+      const pf = p => !f.user || p.id === f.user;
+      const people = R.people.filter(pf);
+      const acts = R.actions.filter(a => (!f.user || a.userId === f.user || (!a.userId && (R.people.find(p => p.id === f.user) || {}).name === a.userName)) && (!f.cat || a.cat === f.cat)
+        && (!f.q || (a.title + ' ' + a.target + ' ' + a.details + ' ' + a.userName).toLowerCase().includes(f.q.toLowerCase())));
+      const vis = R.visits.filter(v => !f.user || v.userId === f.user);
+      const sel2 = (n, o, v) => `<select class="inp" data-au="${n}" style="width:auto">${o.map(x => `<option value="${esc(x[0])}" ${x[0] === v ? 'selected' : ''}>${esc(x[1])}</option>`).join('')}</select>`;
+      const uopts = [['', 'Все сотрудники']].concat(R.users.map(u => [u.id, u.name + ' · ' + (AU_ROLE[u.role] || u.role) + (u.active ? '' : ' (выкл.)')]));
+      $('#aub').innerHTML = `<div class="row" style="gap:8px;flex-wrap:wrap">${sel2('user', uopts, f.user)}</div>
+        <div class="cl-grid sect">${people.length ? people.map(p => `<div class="card"><div class="row"><div class="grow"><b>${esc(p.name)}</b><div class="small muted">${AU_ROLE[p.role] || ''}${p.last ? ' · последний раз ' + auT(p.last) : ''}</div></div><div class="right"><b style="font-size:20px">${auMin(p.minutes)}</b><div class="small muted">в системе</div></div></div>
+          <div class="kv" style="margin-top:8px"><span class="k">Сеансов / дней</span><span>${p.sessions} / ${p.days.length}</span><span class="k">Изменений</span><span>${p.acts}</span>${p.approved || p.declined ? `<span class="k">Заявки</span><span>✅ ${p.approved} · ✖ ${p.declined}</span>` : ''}</div>
+          ${Object.keys(p.cats).length ? `<div class="chips" style="margin-top:8px">${Object.keys(p.cats).sort((a, b) => p.cats[b] - p.cats[a]).map(c => `<span class="badge">${esc(R.cats[c] || c)}: ${p.cats[c]}</span>`).join('')}</div>` : ''}
+          ${p.days.length ? `<div class="hbars" style="margin-top:8px">${p.days.slice(-7).map(d => `<div class="hb"><span>${wd(d.d)}, ${fd(d.d).slice(0, 5)}</span><div class="bar"><i style="width:${Math.min(100, d.m / Math.max(...p.days.map(x => x.m)) * 100)}%"></i></div><span class="right">${auMin(d.m)}</span></div>`).join('')}</div>` : ''}</div>`).join('') : `<div class="card">${empty('За период никто не работал в приложении')}</div>`}</div>
+        <div class="tabs sect"><a data-at="acts" class="${f.tab === 'acts' ? 'on' : ''}">Действия · ${acts.length}</a><a data-at="vis" class="${f.tab === 'vis' ? 'on' : ''}">Сеансы · ${vis.length}</a></div>
+        ${f.tab === 'acts' ? `<div class="row" style="gap:8px;flex-wrap:wrap;margin:8px 0">${sel2('cat', [['', 'Все разделы']].concat(Object.keys(R.cats).map(k => [k, R.cats[k]])), f.cat)}<input class="inp" data-au="q" placeholder="Поиск: ученик, действие…" value="${esc(f.q)}" style="width:auto;min-width:220px"><span class="spacer"></span><button class="btn sm" id="aucsv">${ic('dl')}CSV</button></div>
+          <div class="tw"><table class="t"><thead><tr><th>Когда</th><th>Кто</th><th>Что сделал</th><th>С чем</th><th>Подробности</th></tr></thead><tbody>
+          ${acts.slice(0, 600).map(a => `<tr><td class="nowrap">${auT(a.at)}</td><td>${esc(a.userName)}<div class="small muted">${AU_ROLE[a.role] || ''}</div></td><td><span class="badge ${a.action === 'bookApprove' ? 'ok' : a.action === 'bookDecline' || /^delete/.test(a.action) ? 'bad' : ''}">${esc(a.title)}</span>${a.via && a.via !== 'приложение' ? `<div class="small muted">${esc(a.via)}</div>` : ''}</td><td>${esc(a.target)}</td><td class="small muted">${esc(a.details)}</td></tr>`).join('') || `<tr><td colspan="5">${empty('Нет действий')}</td></tr>`}</tbody></table></div>${acts.length > 600 ? '<div class="small muted">Показаны последние 600 — уточните период или поиск.</div>' : ''}`
+        : `<div class="tw" style="margin-top:8px"><table class="t"><thead><tr><th>Дата</th><th>Кто</th><th>Время</th><th class="n">Длительность</th><th class="n">Изменений</th><th>Разделы</th><th>Устройство</th></tr></thead><tbody>
+          ${vis.map(v => `<tr><td class="nowrap">${wd(v.date)}, ${fd(v.date)}</td><td>${esc(v.userName)}</td><td class="nowrap">${String(v.start).slice(11, 16)}–${String(v.end).slice(11, 16)}${v.open ? ' <span class="badge ok">сейчас</span>' : ''}</td><td class="n">${auMin(v.minutes)}</td><td class="n">${v.writes || 0}</td><td class="small">${esc(v.pages || '—')}</td><td class="small muted">${esc(v.device || '')}</td></tr>`).join('') || `<tr><td colspan="7">${empty('Нет сеансов')}</td></tr>`}</tbody></table></div>`}`;
+      $$('[data-au]', $('#aub')).forEach(e => { const k = e.dataset.au; if (k === 'q') e.oninput = () => { f.q = e.value; clearTimeout(TLV._auq); TLV._auq = setTimeout(() => { draw(); const q = $('[data-au=q]'); if (q) { q.focus(); q.setSelectionRange(q.value.length, q.value.length); } }, 300); }; else e.onchange = () => { f[k] = e.value; draw(); }; });
+      $$('[data-at]', $('#aub')).forEach(a => a.onclick = () => { f.tab = a.dataset.at; draw(); });
+      if ($('#aucsv')) $('#aucsv').onclick = () => tableCsv('Журнал работы', ['Когда', 'Кто', 'Роль', 'Раздел', 'Что сделал', 'С чем', 'Подробности', 'Откуда'], acts.map(a => [a.at, a.userName, AU_ROLE[a.role] || a.role, R.cats[a.cat] || a.cat, a.title, a.target, a.details, a.via]));
+    };
+    draw();
+  }).catch(fail);
 };
 </script>
