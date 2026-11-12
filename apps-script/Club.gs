@@ -319,7 +319,7 @@ function clubCallback_(cq) {
 // ---------------------------------------------------------------------------
 // Вход в приложение без пароля: одноразовая ссылка в Telegram
 // ---------------------------------------------------------------------------
-function appLink_() { return String(settings_().app_link || '').trim().replace(/\/+$/, '') || appUrl_(); }
+function appLink_() { return String(settings_().app_link || '').trim().replace(/\/+$/, '') || 'https://corpdance.ru'; }
 function usersOfTg_(r) {
   const U = tbl_('users').rows.filter(u => u.active);
   if (r.kind === 'user') return U.filter(u => u.id === r.refId);

@@ -5,6 +5,12 @@
 use tauri::{Manager, WebviewUrl, WebviewWindowBuilder};
 use tauri_plugin_opener::OpenerExt;
 
+/// Прячем служебную полосу Google «Это приложение создано пользователем Google Apps Script».
+const HIDE_BANNER: &str = r#"(function(){ if (location.hostname !== 'script.google.com') return;
+  var css = '#warning,.warning-bar{display:none!important}';
+  function add(){ if (document.getElementById('dc-hide')) return; var s = document.createElement('style'); s.id = 'dc-hide'; s.textContent = css; (document.head || document.documentElement).appendChild(s); }
+  add(); document.addEventListener('DOMContentLoaded', add); })();"#;
+
 const APP_URL: &str = "https://script.google.com/macros/s/AKfycbxiFk2Vp8ES7BW8Y6WUnfSHbBkS3w0lxnHS2lmuf2qPfLxGLo5NsJ2rpdlHRA8XDNYI_g/exec";
 
 /// Внутри окна — только приложение клуба и вход Google; остальные ссылки открываются в обычном браузере.
@@ -44,6 +50,7 @@ fn main() {
                 .min_inner_size(380.0, 520.0)
                 .center()
                 .user_agent(&ua)
+                .initialization_script(HIDE_BANNER)
                 .on_navigation(move |url| {
                     if inside(url) {
                         true
