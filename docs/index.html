@@ -6,6 +6,7 @@
 <title>Клуб корпоративных бальных танцев</title>
 <meta name="description" content="Приложение клуба корпоративных бальных танцев: абонементы, запись на занятия, расписание">
 <meta name="theme-color" content="#121721">
+<script>if (location.protocol === 'http:' && !/^(localhost|127\.)/.test(location.hostname)) location.replace('https://' + location.host + location.pathname + location.search + location.hash);</script>
 <link rel="manifest" href="/manifest.webmanifest">
 <link rel="icon" href="/icons/icon-32.png">
 <link rel="apple-touch-icon" href="/icons/icon-180.png">
@@ -39,7 +40,7 @@
   var sp = document.getElementById('splash');
   f.addEventListener('load', function () { setTimeout(function () { sp.classList.add('hide'); }, 600); });
   setTimeout(function () {
-    if (!sp.classList.contains('hide')) document.getElementById('msg').innerHTML = 'Долго грузится… <a href="' + EXEC + q + '">Открыть напрямую</a>';
+    if (!sp.classList.contains('hide')) document.getElementById('msg').innerHTML = 'Долго грузится… <a href="' + EXEC + q + '">Открыть напрямую</a>' + (/Windows/.test(navigator.userAgent) ? '<br>или <a href="/windows/">приложение для Windows</a>' : '');
   }, 15000);
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(function () {});
 </script>

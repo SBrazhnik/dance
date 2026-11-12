@@ -1,0 +1,8 @@
+<!doctype html><html lang="ru"><head><meta charset="utf-8"><title>Клуб танцев</title>
+<style>html,body{height:100%;margin:0;background:#121721;color:#fff;font:16px "Segoe UI",Arial,sans-serif}
+.b{height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;text-align:center;padding:24px}
+button{font:inherit;padding:12px 26px;border:0;border-radius:10px;background:#C9B8FF;color:#121721;font-weight:600;cursor:pointer}small{opacity:.6}</style></head>
+<body><div class="b"><b style="font-size:22px">Нет связи с приложением клуба</b><div>Проверьте интернет и нажмите «Повторить».</div>
+<button id="r">Повторить</button><small id="e"></small></div>
+<script>const q=new URLSearchParams(location.search);document.getElementById('e').textContent=q.get('e')||'';
+document.getElementById('r').onclick=()=>{location.href=q.get('u');};</script></body></html>

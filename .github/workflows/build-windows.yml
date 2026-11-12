@@ -1,0 +1,69 @@
+name: Сборка для Windows
+
+on:
+  push:
+    branches: [main]
+    paths: ['windows/**', '.github/workflows/build-windows.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: windows
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Версия = номер сборки
+        shell: bash
+        run: npm version "1.0.${{ github.run_number }}" --no-git-tag-version --allow-same-version
+
+      - name: Установить зависимости
+        run: npm install --no-audit --no-fund
+
+      - name: Собрать установщик и переносную версию
+        run: npx electron-builder --win nsis portable --x64 --publish never
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+
+      - name: Подготовить файлы
+        shell: bash
+        run: |
+          mkdir -p ../out
+          cp dist/DanceClub-Setup.exe ../out/DanceClub-Setup.exe
+          cp dist/DanceClub-Portable.exe ../out/DanceClub-Portable.exe
+          ls -la ../out
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DanceClub-windows
+          path: out/*.exe
+
+      # постоянная ссылка: релиз «windows» пересоздаётся при каждой сборке
+      - name: Удалить прошлый выпуск для Windows
+        shell: bash
+        working-directory: .
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release delete windows --yes --cleanup-tag || true
+
+      - name: Опубликовать
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: windows
+          name: Клуб танцев для Windows, версия 1.0.${{ github.run_number }}
+          body: |
+            Приложение Клуба корпоративных бальных танцев для Windows 10 и 11.
+            DanceClub-Setup.exe — установщик (ярлык на рабочем столе и в меню «Пуск», права администратора не нужны).
+            DanceClub-Portable.exe — переносная версия, запускается без установки.
+          files: out/*.exe
+          prerelease: true
+          make_latest: false

@@ -1206,6 +1206,9 @@ const ctrBadge = (o, staff) => o.contractNo ? `<span class="badge gold ${staff ?
 // ---------- печать и просмотр документов ----------
 const clubName = () => (S.D && S.D.settings && S.D.settings.clubName) || CLUB;
 const inApp = () => !!(window.AndroidBridge && window.AndroidBridge.print);
+const LINK_WIN = 'https:' + '/' + '/corpdance.ru/windows/';
+I.pc = '<rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/>';
+const isWinPC = () => /Windows NT/i.test(navigator.userAgent) && !/DanceClubWin/i.test(navigator.userAgent);
 const LINK_APK = 'https:' + '/' + '/corpdance.ru/apk/', LINK_BOT = 'https:' + '/' + '/corpdance.ru/bot/', LINK_SITE = 'https:' + '/' + '/ano.dance/';
 I.globe = '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.6 3.8 5.6 3.8 9s-1.3 6.4-3.8 9c-2.5-2.6-3.8-5.6-3.8-9S9.5 5.6 12 3z"/>';
 const isIOS = () => /iPhone|iPad|iPod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
@@ -1213,7 +1216,7 @@ const isIOS = () => /iPhone|iPad|iPod/i.test(navigator.userAgent) || (navigator.
 function appLinks(where) {
   const apk = !inApp() && !isIOS();
   const a = (href, icon, text, title) => `<a class="${where === 'top' ? 'tlink' : 'btn llink'}${icon === 'globe' ? ' tl-site' : ''}" href="${href}" target="_blank" rel="noopener" title="${title}">${ic(icon, where === 'top' ? 18 : 17)}<span>${text}</span></a>`;
-  const html = a(LINK_SITE, 'globe', where === 'top' ? 'Сайт' : 'Сайт клуба', 'Официальный сайт клуба ano.dance') + (apk ? a(LINK_APK, 'phone', where === 'top' ? 'Android' : 'Приложение для Android', 'Скачать приложение для Android') : '') + a(LINK_BOT, 'tgplane', 'Telegram-бот', 'Открыть Telegram-бота клуба');
+  const html = a(LINK_SITE, 'globe', where === 'top' ? 'Сайт' : 'Сайт клуба', 'Официальный сайт клуба ano.dance') + (apk && isWinPC() ? a(LINK_WIN, 'pc', where === 'top' ? 'Windows' : 'Приложение для Windows', 'Скачать приложение для Windows') : '') + (apk ? a(LINK_APK, 'phone', where === 'top' ? 'Android' : 'Приложение для Android', 'Скачать приложение для Android') : '') + a(LINK_BOT, 'tgplane', 'Telegram-бот', 'Открыть Telegram-бота клуба');
   return where === 'top' ? `<div class="tlinks">${html}</div>` : `<div class="llinks">${html}</div>`;
 }
 function docShell(title, body, sub) {
