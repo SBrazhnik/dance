@@ -256,7 +256,7 @@ TLV.rate = () => {
     const fbHtml = `${!r.total ? `<div class="card">${empty(bot.connected ? 'Оценок за период пока нет. Бот сам спрашивает учеников после занятия — включите «Просить оценить занятие» на вкладке «Telegram-бот».' : 'Оценки собирает Telegram-бот после занятия. Подключите бота на вкладке «Telegram-бот».')}</div>` : `
       <div class="kpis"><div class="kpi"><b>${fh(r.avg)} ${CL.stars(r.avg)}</b><span>средняя оценка занятий</span></div><div class="kpi"><b>${r.total}</b><span>оценок за период</span></div>
         <div class="kpi"><b style="color:${r.low.length ? 'var(--bad)' : 'var(--ok)'}">${r.low.length}</b><span>оценок 3 и ниже</span></div></div>
-      <div class="cl-grid sect">${r.trainers.map(t => `<div class="card"><div class="row"><div class="avatar" data-av="trainer:${t.id}">${initials(t.name)}</div><div class="grow"><b>${esc(t.name)}</b><div class="small muted">${t.n} оценок</div></div><div class="right"><b style="font-size:22px">${fh(t.avg)}</b><div>${CL.stars(t.avg)}</div></div></div>
+      <div class="cl-grid sect">${r.trainers.map(t => `<div class="card click" data-fbt="${t.id}" title="Кто из учеников и как оценил"><div class="row"><div class="avatar" data-av="trainer:${t.id}">${initials(t.name)}</div><div class="grow"><b>${esc(t.name)}</b><div class="small muted">${t.n} оценок</div></div><div class="right"><b style="font-size:22px">${fh(t.avg)}</b><div>${CL.stars(t.avg)}</div></div></div>
         <div class="cl-dist">${[5, 4, 3, 2, 1].map(k => `<span>${k}★</span><div class="bar"><i style="width:${t.n ? t.dist[k - 1] / t.n * 100 : 0}%;background:${k >= 4 ? 'var(--ok)' : k === 3 ? 'var(--gold)' : 'var(--bad)'}"></i></div><span class="right">${t.dist[k - 1]}</span>`).join('')}</div>
         ${t.comments.map(c => `<div class="cl-cm">${CL.stars(c.score)} <span class="muted">${fd(c.date)} · ${esc(c.client)}</span><div>${esc(c.text)}</div></div>`).join('')}</div>`).join('')}</div>
       ${r.low.length ? `<h2 class="sect">Низкие оценки — стоит разобраться</h2><div class="tw"><table class="t"><thead><tr><th>Дата</th><th>Ученик</th><th>Тренер</th><th>Оценка</th><th>Комментарий</th></tr></thead><tbody>
@@ -264,7 +264,7 @@ TLV.rate = () => {
 
     const g = r.grades || {crit: [], all: {n: 0, by: {}}, trainers: [], clients: []};
     S.gradeCrit = g.crit;
-    const grHtml = `<h2 class="sect">Оценки учеников тренерами</h2>
+    const grHtml = `<h2 class="sect">Тренеры оценивают учеников — по критериям</h2>
       <div class="small muted" style="margin:4px 0 10px">Тренер оценивает занятие ученика по критериям от 1 до 5 — в карточке ученика («Оценить занятие» или «Оценить» в истории занятий). Общая оценка — среднее по выставленным критериям. Ученик видит свои оценки в приложении${g.botGrade ? ' и получает их в Telegram-боте' : ''}.</div>
       ${g.all.n ? `<div class="kpis"><div class="kpi"><b>${fh(g.all.total)} ${grStars(g.all.total)}</b><span>средняя оценка учеников</span></div><div class="kpi"><b>${g.all.n}</b><span>оценок за период</span></div><div class="kpi"><b>${g.clients.length}</b><span>учеников оценено</span></div></div>
       <div class="cl-grid sect"><div class="card"><h3 style="margin:0 0 8px">По критериям — все тренеры</h3>${grBars(g.all, g.crit)}</div>
@@ -274,7 +274,10 @@ TLV.rate = () => {
       <div class="card sect"><h3 style="margin:0 0 6px">Критерии оценки</h3><div class="small muted" style="margin-bottom:8px">По одному в строке (до 12). Переименование не меняет уже выставленные оценки — старые пункты останутся в истории.</div>
         <textarea class="inp" id="grc" rows="6">${esc(g.crit.join('\n'))}</textarea>
         <div class="row" style="margin-top:8px">${chk('bot_grade', 'Отправлять ученику оценку в Telegram-бот', g.botGrade)}<span class="spacer"></span><button class="btn pri sm" id="grcs">Сохранить критерии</button></div></div>`;
-    $('#clr').innerHTML = `<h2>Оценки занятий от учеников</h2><div class="small muted" style="margin:4px 0 10px">Ученик ставит занятию 1–5 звёзд в Telegram-боте после занятия — это оценка тренера учеником.</div>` + fbHtml + grHtml;
+    $('#clr').innerHTML = `<h2>Ученики оценивают занятия тренеров</h2><div class="small muted" style="margin:4px 0 10px">Ученик ставит занятию 1–5 звёзд в Telegram-боте после занятия, без критериев. Нажмите на тренера — откроется, кто из учеников и как оценил. Ниже — второй вид: <b>тренеры оценивают учеников по критериям</b>.</div>` + fbHtml + grHtml;
+    $$('[data-fbt]', $('#clr')).forEach(c => c.onclick = e => { if (e.target.closest('[data-c]')) return; const t = r.trainers.find(x => x.id === c.dataset.fbt); const L = (r.rows || []).filter(f => f.trainerId === c.dataset.fbt);
+      const bg = modal('Ученики оценили занятия: ' + (t ? t.name : ''), `<div class="small muted" style="margin-bottom:8px">Оценки 1–5 звёзд из Telegram-бота за период, ${L.length}.</div>${fbTable(L, 'trainer')}`, [{t: 'Закрыть', cls: 'pri'}], {wide: true});
+      $$('[data-fbc]', bg).forEach(a => a.onclick = () => { $$('.modal-bg').forEach(m => m.remove()); S.prev = ['tools', 'rate']; go('client', a.dataset.fbc); }); });
     $$('[data-grt]', $('#clr')).forEach(c => c.onclick = async () => { try { const G = await call('grades', {trainerId: c.dataset.grt}); const t = g.trainers.find(x => x.id === c.dataset.grt); const bg = modal('Оценки тренера: ' + (t ? t.name : ''), `<div id="grtm">${gradesHtml(G, 'trainer')}</div>`, [{t: 'Закрыть', cls: 'pri'}], {wide: true}); wireGrades($('#grtm', bg), G); } catch (e) { fail(e); } });
     $('#grcs').onclick = async () => { try { await call('saveGradeCrit', {crit: $('#grc').value, bot_grade: $('[name=bot_grade]', $('#clr')).checked}); toast('Критерии сохранены'); TLV.rate(); } catch (e) { fail(e); } };
     $$('#clr [data-c]').forEach(a => a.onclick = () => { S.prev = ['tools', 'rate']; go('client', a.dataset.c); });

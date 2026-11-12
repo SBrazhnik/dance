@@ -546,7 +546,9 @@ function ratings_(p) {
   const trainers = Object.keys(by).map(k => by[k]).map(o => Object.assign(o, { avg: Math.round(o.sum / o.n * 10) / 10, comments: o.comments.sort((a, b) => b.date.localeCompare(a.date)).slice(0, 8) }))
     .sort((a, b) => b.avg - a.avg || b.n - a.n);
   const all = list.length ? Math.round(list.reduce((a, f) => a + +f.score, 0) / list.length * 10) / 10 : 0;
-  return { from, to, total: list.length, avg: all, trainers, low: list.filter(f => +f.score <= 3).sort((a, b) => b.date.localeCompare(a.date)).slice(0, 20) };
+  const rows = list.slice().sort((a, b) => b.date.localeCompare(a.date) || String(b.createdAt || '').localeCompare(String(a.createdAt || ''))).slice(0, 400)
+    .map(f => ({ date: f.date, clientId: f.clientId, clientName: f.clientName, trainerId: f.trainerId, trainerName: f.trainerName, score: +f.score, comment: f.comment || '' }));
+  return { from, to, total: list.length, avg: all, trainers, rows, low: list.filter(f => +f.score <= 3).sort((a, b) => b.date.localeCompare(a.date)).slice(0, 20) };
 }
 
 // ---------------------------------------------------------------------------
@@ -569,7 +571,7 @@ function gradesOf_(p) {
     .sort((a, b) => String(b.date).localeCompare(String(a.date)));
   const fbAvg = fb.length ? Math.round(fb.reduce((a, f) => a + +f.score, 0) / fb.length * 10) / 10 : 0;
   return { crit, list: list.slice(0, 200), avg: gradeAvg_(list, crAll), recent: gradeAvg_(list.slice(0, 5), crAll),
-    fb: { avg: fbAvg, n: fb.length, list: fb.slice(0, 30).map(f => ({ date: f.date, score: +f.score, comment: f.comment || '', trainerName: f.trainerName, clientName: f.clientName })) } };
+    fb: { avg: fbAvg, n: fb.length, list: fb.slice(0, 100).map(f => ({ date: f.date, score: +f.score, comment: f.comment || '', trainerName: f.trainerName, clientName: f.clientName, clientId: f.clientId })) } };
 }
 function gradesApi_(user, p) {
   if (user.role === 'client') return gradesOf_({ clientId: user.clientId });
