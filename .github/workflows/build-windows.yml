@@ -9,12 +9,13 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: build-windows
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: windows-latest
-    defaults:
-      run:
-        working-directory: windows
     steps:
       - uses: actions/checkout@v5
 
@@ -22,25 +23,25 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Версия = номер сборки
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: windows/src-tauri
+
+      # Лёгкое приложение на встроенном в Windows движке Edge (WebView2): установщик ~3–5 МБ вместо 80 МБ
+      - name: Собрать
+        working-directory: windows
         shell: bash
-        run: npm version "1.0.${{ github.run_number }}" --no-git-tag-version --allow-same-version
-
-      - name: Установить зависимости
-        run: npm install --no-audit --no-fund
-
-      - name: Собрать установщик и переносную версию
-        run: npx electron-builder --win nsis portable --x64 --publish never
-        env:
-          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+        run: npx --yes @tauri-apps/cli@2 build --config "{\"version\":\"1.0.${{ github.run_number }}\"}"
 
       - name: Подготовить файлы
         shell: bash
         run: |
-          mkdir -p ../out
-          cp dist/DanceClub-Setup.exe ../out/DanceClub-Setup.exe
-          cp dist/DanceClub-Portable.exe ../out/DanceClub-Portable.exe
-          ls -la ../out
+          mkdir -p out
+          cp windows/src-tauri/target/release/bundle/nsis/*-setup.exe out/DanceClub-Setup.exe
+          cp windows/src-tauri/target/release/DanceClub.exe out/DanceClub-Portable.exe
+          ls -la out
 
       - uses: actions/upload-artifact@v4
         with:
@@ -50,12 +51,11 @@ jobs:
       # постоянная ссылка: релиз «windows» пересоздаётся при каждой сборке
       - name: Удалить прошлый выпуск для Windows
         shell: bash
-        working-directory: .
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh release delete windows --yes --cleanup-tag || true
 
-      - name: Опубликовать
+      - name: Опубликовать на GitHub
         uses: softprops/action-gh-release@v2
         with:
           tag_name: windows
@@ -63,7 +63,21 @@ jobs:
           body: |
             Приложение Клуба корпоративных бальных танцев для Windows 10 и 11.
             DanceClub-Setup.exe — установщик (ярлык на рабочем столе и в меню «Пуск», права администратора не нужны).
-            DanceClub-Portable.exe — переносная версия, запускается без установки.
+            DanceClub-Portable.exe — переносная версия, запускается без установки (нужен Microsoft Edge WebView2 — он есть в Windows 11 и обновлённой Windows 10).
           files: out/*.exe
           prerelease: true
           make_latest: false
+
+      # копия на corpdance.ru — быстрее скачивается, чем с GitHub
+      - name: Положить на сайт corpdance.ru
+        shell: bash
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@users.noreply.github.com"
+          git fetch origin main && git checkout -B main origin/main
+          mkdir -p docs/windows
+          cp out/DanceClub-Setup.exe docs/windows/DanceClub-Setup.exe
+          cp out/DanceClub-Portable.exe docs/windows/DanceClub-Portable.exe
+          git add docs/windows/*.exe
+          git commit -m "Windows: сборка 1.0.${{ github.run_number }} на сайт" || exit 0
+          for i in 1 2 3; do git pull --rebase origin main && git push origin main && break; sleep 5; done
