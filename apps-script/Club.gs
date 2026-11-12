@@ -606,7 +606,7 @@ function saveGrade_(user, p) {
   else { d.createdBy = user.name; id = insert_('grades', d); }
   if (!old && !dup && p.notify !== false && isOn_(clubSettings_().bot_grade)) {
     try {
-      const txt = '📝 <b>' + tgEsc_(d.trainerName) + '</b> оценил(а) занятие ' + tgEsc_(ruDate_(d.date)) + ': <b>' + String(total).replace('.', ',') + ' из 5</b>\n'
+      const txt = '📝 Тренер <b>' + tgEsc_(d.trainerName) + '</b> оценил(а) ваше занятие ' + tgEsc_(ruDate_(d.date)) + ': <b>' + String(total).replace('.', ',') + ' из 5</b>\n'
         + Object.keys(sc).map(k => '• ' + tgEsc_(k) + ': ' + '★'.repeat(sc[k]) + '☆'.repeat(5 - sc[k])).join('\n') + (d.comment ? '\n\n💬 ' + tgEsc_(d.comment) : '');
       tgNotify_('client', cid, txt, null, null, null, true);
     } catch (e) { /* без бота */ }
