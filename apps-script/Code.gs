@@ -7,7 +7,7 @@
  */
 
 const CLUB_NAME = 'Клуб корпоративных бальных танцев';
-const APP_VER = '2026-11-12.4'; // меняется при каждом обновлении — открытые страницы предложат перезагрузку
+const APP_VER = '2026-11-12.5'; // меняется при каждом обновлении — открытые страницы предложат перезагрузку
 const STAFF = ['admin', 'manager'];
 const ALL = ['admin', 'manager', 'trainer', 'client'];
 const SESSION_DAYS = 30;
@@ -432,6 +432,7 @@ const HANDLERS = {
   decideBooking: { roles: ['admin', 'manager', 'trainer'], write: true, fn: decideBooking_ },
   bookingSettings: { roles: ['admin'], write: true, fn: bookingSettings_ },
   pendingInfo: { roles: ['admin', 'manager', 'trainer'], fn: pendingInfo_ },
+  apkInfo: { roles: ['admin', 'manager', 'trainer', 'client'], fn: () => apkLatest_() },
 
   getMessages: { roles: ALL, fn: getMessages_ },
   postMessage: { roles: ALL, write: true, fn: postMessage_ },
@@ -523,7 +524,7 @@ function norm_(v, type) {
 }
 
 const NO_PREFETCH = ['audit', 'visits'];
-const LIGHT_ACTIONS = ['brandFont', 'ping', 'avatarsLoad', 'avatarGet', 'markSeen', 'logError', 'getMessages', 'mediaList', 'mediaGet', 'pendingInfo'];
+const LIGHT_ACTIONS = ['apkInfo', 'brandFont', 'ping', 'avatarsLoad', 'avatarGet', 'markSeen', 'logError', 'getMessages', 'mediaList', 'mediaGet', 'pendingInfo'];
 const _lazy = {};
 function tbl_(key) {
   if (_cache[key]) return _cache[key];
@@ -620,7 +621,7 @@ function onEdit(e) {
 /** Последняя сборка приложения для Android (релиз build-N на GitHub). Кэш 30 минут — проверка почти ничего не стоит. */
 const APK_REPO = 'SBrazhnik/dance';
 function apkLatest_() {
-  const c = cache_(), k = 'apk_latest';
+  const c = cache_(), k = 'apk_latest2';
   const hit = c.get(k);
   if (hit) return hit === '0' ? null : JSON.parse(hit);
   let res = null;
@@ -631,7 +632,7 @@ function apkLatest_() {
     const m = loc.match(/\/tag\/build-(\d+)/);
     if (m) res = { v: +m[1], url: 'https://github.com/' + APK_REPO + '/releases/download/build-' + m[1] + '/DanceClub.apk' };
   } catch (e) { /* GitHub недоступен — проверим позже */ }
-  c.put(k, res ? JSON.stringify(res) : '0', res ? 1800 : 600);
+  c.put(k, res ? JSON.stringify(res) : '0', 600);
   return res;
 }
 /** Если меняли структуру таблицы (удаляли строки, сортировали) — запустите, чтобы приложение перечитало всё. */

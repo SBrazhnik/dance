@@ -772,7 +772,7 @@ function sendCard_(user, p) {
 let _auditWho = null; // кто решает заявку (приложение / Telegram) — для журнала
 const AUDIT_ROLES = ['admin', 'manager', 'trainer'];
 const AUDIT_SKIP = ['markSeen', 'saveHome', 'logError', 'decideBooking', 'avatarSet', 'avatarDel', 'clubTickNow', 'botRunNow'];
-const PRESENCE_BG = ['pendingInfo', 'markSeen', 'ping', 'brandFont', 'logError', 'avatarsLoad', 'avatarGet', 'getMessages'];
+const PRESENCE_BG = ['pendingInfo', 'apkInfo', 'markSeen', 'ping', 'brandFont', 'logError', 'avatarsLoad', 'avatarGet', 'getMessages'];
 const PRESENCE_GAP = 20 * 60 * 1000;
 // [раздел, «что сделал», таблица для поиска объекта по id]
 const AUDIT_LABEL = {
